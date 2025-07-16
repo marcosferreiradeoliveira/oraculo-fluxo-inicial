@@ -12,6 +12,11 @@ import Podcast from "./pages/Podcast";
 import Infograficos from "./pages/Infograficos";
 import Conta from "./pages/Conta";
 import Suporte from "./pages/Suporte";
+import Cadastro from "./pages/Cadastro";
+import CriarProjeto from "./pages/CriarProjeto";
+import Projeto from "./pages/Projeto";
+import AlterarComIA from "./pages/AlterarComIA";
+import EditarEdital from './pages/EditarEdital';
 
 const queryClient = new QueryClient();
 
@@ -29,6 +34,11 @@ const App = () => (
           <Route path="/infograficos" element={<Infograficos />} />
           <Route path="/conta" element={<Conta />} />
           <Route path="/suporte" element={<Suporte />} />
+          <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/criar-projeto" element={<CriarProjeto />} />
+          <Route path="/projeto/:id" element={<Projeto />} />
+          <Route path="/projeto/:id/alterar-com-ia" element={<AlterarComIA />} />
+          <Route path="/editar-edital/:id" element={<EditarEdital />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
