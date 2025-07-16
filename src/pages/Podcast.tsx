@@ -106,9 +106,11 @@ const Podcast = () => {
                   Insights semanais sobre o universo dos editais e projetos culturais, direto dos especialistas.
                 </p>
               </div>
-              <Button className="bg-oraculo-blue text-white" onClick={() => navigate('/cadastrar-episodio')}>
-                + Cadastrar Episódio
-              </Button>
+              {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
+                <Button className="bg-oraculo-blue text-white" onClick={() => navigate('/cadastrar-episodio')}>
+                  + Cadastrar Episódio
+                </Button>
+              )}
             </div>
 
             {loading ? (
