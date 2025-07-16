@@ -127,26 +127,18 @@ const OraculoAI = () => {
         textoExtraido = textoExtraido.slice(0, 10000);
       }
 
-      setEtapaLog(log => [...log, "Gerando análise dos aprovados com IA..."]);
-      // Criar instância do OpenAI antes de qualquer uso
-      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
-      // 2b. Gerar análise dos aprovados com a IA
-      let analiseAprovadosTextoFinal = '';
-      const promptAprovados = `Com base no edital abaixo, gere uma análise simulada de projetos aprovados, destacando os principais pontos que costumam ser valorizados, exemplos de boas práticas e estratégias vencedoras. Seja objetivo e use linguagem de avaliador de editais.\n\nEDITAL:\n${textoExtraido}`;
-      const completionAprovados = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'Você é um avaliador de editais culturais.' },
-          { role: 'user', content: promptAprovados },
-        ],
-        max_tokens: 800,
-        temperature: 0.3,
-      });
-      analiseAprovadosTextoFinal = completionAprovados.choices[0].message?.content || '';
+      // Remover geração e etapa de análise dos aprovados com IA
+      // setEtapaLog(log => [...log, "Gerando análise dos aprovados com IA..."]);
+      // const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
+      // let analiseAprovadosTextoFinal = '';
+      // const promptAprovados = `...`;
+      // const completionAprovados = await openai.chat.completions.create({ ... });
+      // analiseAprovadosTextoFinal = completionAprovados.choices[0].message?.content || '';
 
       setEtapaLog(log => [...log, "Extraindo campos do edital com IA..."]);
       // Novo prompt detalhado conforme instruções do usuário
       const prompt = `Extraia do texto do edital abaixo apenas as seguintes informações cruciais, no formato JSON com as chaves: nome, escopo, criterios, categorias, data_encerramento, textos_exigidos (array), valor_maximo_premiacao.\n\nRegras para extração:\n- O campo 'data_encerramento' geralmente está no artigo ou seção chamada 'Inscrição', mas também pode aparecer como 'Período de inscrições', 'Prazo para inscrição', 'Datas importantes', 'Cronograma', ou menções a datas finais para envio de propostas.\n- Os 'criterios' geralmente estão em 'Critérios de avaliação', mas também podem aparecer como 'Avaliação', 'Julgamento', 'Parâmetros de avaliação', 'Pontuação', ou tabelas/listas de critérios.\n- O 'valor_maximo_premiacao' geralmente está em 'Recursos Financeiros', mas pode aparecer como 'Valor total disponível', 'Valor máximo por projeto', 'Premiação', 'Recursos destinados', 'Montante', ou menções a valores em reais (R$).\n- O campo 'nome' não pode ser 'Edital de chamada pública' ou similar, mas sim o nome subsequente, mais específico.\n- Para 'textos_exigidos', coloque automaticamente: Resumo, Objetivos, Justificativa, Plano de Divulgação, Plano de Acessibilidade, Plano de Democratização do Acesso, Medidas de Sustentabilidade.\n- Se algum campo não for encontrado, retorne uma string vazia.\n\nExemplo de saída:\n{\n  "nome": "Prêmio Cultura Viva 2024",\n  "escopo": "Fomento a projetos culturais de impacto social",\n  "criterios": "Adequação ao tema, relevância social, viabilidade técnica, originalidade",\n  "categorias": "Artes Visuais, Música, Teatro",\n  "data_encerramento": "15/08/2024",\n  "textos_exigidos": ["Resumo", "Objetivos", "Justificativa", "Plano de Divulgação", "Plano de Acessibilidade", "Plano de Democratização do Acesso", "Medidas de Sustentabilidade"],\n  "valor_maximo_premiacao": "R$ 100.000,00"\n}\n\nTexto do edital:\n${textoExtraido}`;
+      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
       const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -167,20 +159,17 @@ const OraculoAI = () => {
       // 4. Salvar no Firestore
       const docRef = await addDoc(collection(db, 'editais'), {
         pdf_url: pdfUrl,
-        analise_aprovados_texto: analiseAprovadosTextoFinal,
+        // analise_aprovados_texto: analiseAprovadosTextoFinal, // Remover este campo
         ...dadosExtraidos,
         criado_em: new Date(),
       });
       setEtapaLog(log => [...log, "Cadastro concluído!"]);
       setResumoEdital({
         ...dadosExtraidos,
-        analise_aprovados_texto: analiseAprovadosTextoFinal,
+        // analise_aprovados_texto: analiseAprovadosTextoFinal, // Remover este campo
         pdf_url: pdfUrl,
       });
-      // Não fecha o modal nem redireciona imediatamente
       setPdfEdital(null);
-      // Remover o navigate daqui, só redirecionar se o usuário clicar em editar
-      // navigate(`/editar-edital/${docRef.id}`);
     } catch (e) {
       setEtapaLog(log => [...log, 'Erro: ' + (e as any).message]);
       alert('Erro ao cadastrar edital: ' + (e as any).message);
@@ -448,9 +437,6 @@ const OraculoAI = () => {
                   <div><span className="font-semibold">Data de Encerramento:</span> {resumoEdital.data_encerramento || <span className="text-gray-400">(não encontrado)</span>}</div>
                   <div><span className="font-semibold">Valor Máximo de Premiação:</span> {resumoEdital.valor_maximo_premiacao || <span className="text-gray-400">(não encontrado)</span>}</div>
                   <div><span className="font-semibold">Textos Exigidos:</span> {Array.isArray(resumoEdital.textos_exigidos) ? resumoEdital.textos_exigidos.join(', ') : resumoEdital.textos_exigidos || <span className="text-gray-400">(não encontrado)</span>}</div>
-                  <div><span className="font-semibold">Análise dos Aprovados (IA):</span>
-                    <div className="bg-white border rounded p-2 mt-1 text-sm text-gray-700 whitespace-pre-line">{resumoEdital.analise_aprovados_texto || <span className="text-gray-400">(não gerada)</span>}</div>
-                  </div>
                   <div className="mt-2 flex gap-2">
                     <a href={resumoEdital.pdf_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">Ver PDF do Edital</a>
                     <Button size="sm" variant="outline" onClick={() => navigate(`/editar-edital/${resumoEdital.id || ''}`)}>Editar Edital</Button>
