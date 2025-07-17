@@ -20,6 +20,7 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Remover qualquer configuração do workerSrc para o CDN
 // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { useAuthState } from 'react-firebase-hooks/auth';
 
 const OraculoAI = () => {
   // Novo state para os editais vindos do Firestore
@@ -39,6 +40,8 @@ const OraculoAI = () => {
   // const [analiseAprovadosTexto, setAnaliseAprovadosTexto] = useState('');
   const [etapaLog, setEtapaLog] = useState<string[]>([]);
   const [resumoEdital, setResumoEdital] = useState<any | null>(null);
+  const [user] = useAuthState(auth);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     const fetchEditais = async () => {
@@ -205,7 +208,13 @@ const OraculoAI = () => {
                   Meus Projetos Culturais
                 </h2>
                 {meusProjetos.length > 0 && (
-                  <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => navigate('/criar-projeto')}>
+                  <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => {
+                    if (!user) {
+                      setShowAuthModal(true);
+                    } else {
+                      navigate('/criar-projeto');
+                    }
+                  }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Novo Projeto
                   </Button>
@@ -219,7 +228,13 @@ const OraculoAI = () => {
                   <div className="flex flex-col items-start gap-1">
                     <span>Nenhum projeto ainda.</span>
                     <span className="text-base font-bold">Crie seu primeiro projeto com a ajuda da IA</span>
-                    <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => navigate('/criar-projeto')}>
+                    <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => {
+                      if (!user) {
+                        setShowAuthModal(true);
+                      } else {
+                        navigate('/criar-projeto');
+                      }
+                    }}>
                       <Plus className="h-4 w-4 mr-2" />
                       Novo Projeto
                     </Button>
@@ -227,7 +242,13 @@ const OraculoAI = () => {
                 ) : meusProjetos.length === 0 ? (
                   <div className="flex flex-col items-start gap-2">
                     <p>Projetos não encontrados. Crie seu primeiro projeto</p>
-                    <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => navigate('/criar-projeto')}>
+                    <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => {
+                      if (!user) {
+                        setShowAuthModal(true);
+                      } else {
+                        navigate('/criar-projeto');
+                      }
+                    }}>
                       <Plus className="h-4 w-4 mr-2" />
                       Criar Projeto
                     </Button>
@@ -273,9 +294,13 @@ const OraculoAI = () => {
                 <Button variant="outline">
                   Ver todos os editais
                 </Button>
-                <Button className="ml-2 bg-oraculo-blue text-white" onClick={() => setOpenCadastro(true)}>
-                  Cadastrar Edital
-                </Button>
+                {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
+                  <>
+                    <Button className="ml-2 bg-oraculo-blue text-white" onClick={() => setOpenCadastro(true)}>
+                      Cadastrar Edital
+                    </Button>
+                  </>
+                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -355,6 +380,13 @@ const OraculoAI = () => {
                         <CardContent className="pt-0">
                           <Button variant="outline" className="w-full">
                             Escrever com IA para este Edital
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full mt-2"
+                            onClick={() => navigate(`/editar-edital/${edital.id}`)}
+                          >
+                            Editar Edital
                           </Button>
                         </CardContent>
                       </Card>
@@ -489,6 +521,23 @@ const OraculoAI = () => {
             )}
             {/* Não exibir resumo do edital extraído dentro do Dialog/modal */}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
+        <DialogContent className="max-w-xs text-center">
+          <DialogHeader>
+            <DialogTitle>Crie sua conta</DialogTitle>
+            <DialogDescription>
+              Para criar um novo projeto, é preciso estar logado.
+            </DialogDescription>
+          </DialogHeader>
+          <Button className="mt-4 w-full bg-oraculo-blue text-white" onClick={() => {
+            setShowAuthModal(false);
+            navigate('/cadastro');
+          }}>
+            OK
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

@@ -18,7 +18,7 @@ const menuItems = [
   { title: 'Biblioteca de Guias', url: '/biblioteca', icon: BookOpen },
   { title: 'Podcast', url: '/podcast', icon: Headphones },
   { title: 'Infográficos', url: '/infograficos', icon: BarChart3 },
-  { title: 'Minha Conta', url: '/conta', icon: User },
+  { title: 'Conta', url: '/conta', icon: User },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle },
 ];
 

@@ -4,6 +4,8 @@ import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { DashboardSidebar } from '@/components/DashboardSidebar';
+import { DashboardHeader } from '@/components/DashboardHeader';
 
 const EditarEdital = () => {
   const { id } = useParams();
@@ -53,26 +55,68 @@ const EditarEdital = () => {
 
   if (loading || !edital) return <div className="p-8">Carregando...</div>;
 
+  // Conversão para exibir deadline como string yyyy-mm-dd
+  const deadlineStr = edital.deadline
+    ? (edital.deadline.seconds
+        ? new Date(edital.deadline.seconds * 1000)
+        : new Date(edital.deadline)
+      ).toISOString().slice(0, 10)
+    : '';
+
   return (
-    <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-4">Editar/Edital</h1>
-      <div className="space-y-4">
-        <label className="block font-medium mb-1">Nome</label>
-        <Input value={edital.nome || ''} onChange={e => handleChange('nome', e.target.value)} />
-        <label className="block font-medium mb-1">Escopo</label>
-        <Input value={edital.escopo || ''} onChange={e => handleChange('escopo', e.target.value)} />
-        <label className="block font-medium mb-1">Critérios</label>
-        <Input value={edital.criterios || ''} onChange={e => handleChange('criterios', e.target.value)} />
-        <label className="block font-medium mb-1">Categorias</label>
-        <Input value={edital.categorias || ''} onChange={e => handleChange('categorias', e.target.value)} />
-        <label className="block font-medium mb-1">Data de Encerramento</label>
-        <Input value={edital.data_encerramento || ''} onChange={e => handleChange('data_encerramento', e.target.value)} />
-        <label className="block font-medium mb-1">Valor Máximo de Premiação</label>
-        <Input value={edital.valor_maximo_premiacao || ''} onChange={e => handleChange('valor_maximo_premiacao', e.target.value)} />
-        {/* Removido: Documentos Exigidos, Modelo de Orçamento, Cronograma, Carta de Anuência */}
-        <label className="block font-medium mb-1">Textos Exigidos</label>
-        <Input value={Array.isArray(edital.textos_exigidos) ? edital.textos_exigidos.join(', ') : edital.textos_exigidos || ''} onChange={e => handleChange('textos_exigidos', e.target.value.split(','))} />
-        <Button className="mt-4" onClick={handleSalvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar Alterações'}</Button>
+    <div className="flex min-h-screen bg-gray-50">
+      <DashboardSidebar />
+      <div className="flex-1 flex flex-col">
+        <DashboardHeader />
+        <main className="flex-1 flex items-start justify-start p-8 gap-8 animate-fade-in">
+          <div className="w-full max-w-md">
+            {/* Breadcrumb ao estilo CriarProjeto */}
+            <nav className="mb-8">
+              <ol className="flex flex-wrap items-center gap-2 text-sm">
+                <li>
+                  <a href="/" className="text-oraculo-blue hover:underline">Início</a>
+                </li>
+                <li className="text-gray-400">/</li>
+                <li>
+                  <a href="/oraculo-ai" className="text-oraculo-blue hover:underline">Oráculo AI</a>
+                </li>
+                <li className="text-gray-400">/</li>
+                <li className="font-semibold text-gray-700">Editar Edital</li>
+              </ol>
+            </nav>
+            <h1 className="text-2xl font-bold text-gray-900 mb-6 text-left">Editar Edital</h1>
+            <div className="space-y-4 text-left">
+              <label className="block font-medium mb-1">Nome</label>
+              <Input value={edital.nome || ''} onChange={e => handleChange('nome', e.target.value)} />
+              <label className="block font-medium mb-1">Escopo</label>
+              <Input value={edital.escopo || ''} onChange={e => handleChange('escopo', e.target.value)} />
+              <label className="block font-medium mb-1">Critérios</label>
+              <Input value={edital.criterios || ''} onChange={e => handleChange('criterios', e.target.value)} />
+              <label className="block font-medium mb-1">Categorias</label>
+              <Input value={edital.categorias || ''} onChange={e => handleChange('categorias', e.target.value)} />
+              <label className="block font-medium mb-1">Data de Encerramento</label>
+              <Input
+                type="date"
+                value={deadlineStr}
+                onChange={e => {
+                  const date = new Date(e.target.value);
+                  handleChange('deadline', date);
+                }}
+              />
+              <label className="block font-medium mb-1">Valor Máximo de Premiação</label>
+              <Input
+                type="number"
+                value={edital.value || ''}
+                onChange={e => handleChange('value', Number(e.target.value))}
+                min={0}
+                step={1}
+              />
+              <label className="block font-medium mb-1">Textos Exigidos</label>
+              <Input value={Array.isArray(edital.textos_exigidos) ? edital.textos_exigidos.join(', ') : edital.textos_exigidos || ''} onChange={e => handleChange('textos_exigidos', e.target.value.split(','))} />
+              <Button className="mt-4" onClick={handleSalvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar Alterações'}</Button>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );

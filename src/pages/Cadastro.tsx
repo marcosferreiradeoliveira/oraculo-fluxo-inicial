@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 
 const Cadastro = () => {
@@ -131,17 +131,18 @@ const Cadastro = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2">
+        <Link to="/" className="flex flex-col items-center mb-6 group cursor-pointer">
+          <div className="w-14 h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2 group-hover:scale-105 transition">
             <Sparkles className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+          <span className="text-lg font-bold text-oraculo-blue group-hover:underline">Oráculo Cultural</span>
+        </Link>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">
             {isLogin ? 'Entrar na sua conta' : 'Criar conta'}
           </h1>
           <p className="text-gray-500 text-sm">
             {isLogin ? 'Acesse sua área exclusiva' : 'Comece a usar o Oráculo Cultural'}
           </p>
-        </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-700">E-mail</label>

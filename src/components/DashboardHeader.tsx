@@ -69,9 +69,9 @@ export function DashboardHeader() {
               <>
                 <div className="text-right">
                   <p className="text-sm font-medium text-gray-900">
-                    Olá, {nomeUsuario ? nomeUsuario : 'usuário'}! 👋
+                    Olá{nomeUsuario ? `, ${nomeUsuario}` : ','}
                   </p>
-                  <p className="text-xs text-gray-500">Bem-vinda de volta</p>
+                  <p className="text-xs text-gray-500">Bem-vindo de volta</p>
                 </div>
                 <button
                   className="focus:outline-none"
