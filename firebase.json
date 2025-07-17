@@ -6,15 +6,12 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
-    "public": "oraculo-fluxo-inicial/dist",
+    "public": "dist",
     "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      { "source": "**", "destination": "/index.html" }
-    ]
+          "firebase.json",
+          "**/.*",
+          "**/node_modules/**"
+        ]
   },
   "storage": {
     "rules": "storage.rules"
