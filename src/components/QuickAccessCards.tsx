@@ -3,6 +3,7 @@ import React from 'react';
 import { Brain, Headphones, BookOpen, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const quickActions = [
   {
@@ -29,6 +30,7 @@ const quickActions = [
 ];
 
 export function QuickAccessCards() {
+  const navigate = useNavigate();
   return (
     <section className="mb-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Por onde vamos começar?</h2>
@@ -41,13 +43,33 @@ export function QuickAccessCards() {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">{action.title}</h3>
               <p className="text-gray-600 text-sm mb-4">{action.description}</p>
-              <Button 
-                variant="ghost" 
-                className="p-0 h-auto text-oraculo-blue hover:text-oraculo-purple group"
-              >
-                Começar agora
-                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              {action.title === 'Ouvir o Último Podcast' ? (
+                <Button
+                  variant="ghost"
+                  className="p-0 h-auto text-oraculo-blue hover:text-oraculo-purple group"
+                  onClick={() => navigate('/podcast')}
+                >
+                  Começar agora
+                  <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              ) : action.title === 'Explorar a Biblioteca de Guias' ? (
+                <Button
+                  variant="ghost"
+                  className="p-0 h-auto text-oraculo-blue hover:text-oraculo-purple group"
+                  onClick={() => navigate('/biblioteca')}
+                >
+                  Começar agora
+                  <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              ) : (
+                <Button 
+                  variant="ghost" 
+                  className="p-0 h-auto text-oraculo-blue hover:text-oraculo-purple group"
+                >
+                  Começar agora
+                  <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}

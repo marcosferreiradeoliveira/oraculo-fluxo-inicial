@@ -14,10 +14,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/analisar-projeto",
-        "function": "analisarProjeto"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

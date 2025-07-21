@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
@@ -103,11 +104,11 @@ export function DashboardHeader() {
             ) : (
               <div className="text-right flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-oraculo-blue" />
-                <a href="/cadastro">
+                <Link to="/cadastro">
                   <Button size="sm" className="mt-0.5 bg-oraculo-blue text-white hover:bg-oraculo-purple">
                     Criar conta
                   </Button>
-                </a>
+                </Link>
               </div>
             )}
           </div>

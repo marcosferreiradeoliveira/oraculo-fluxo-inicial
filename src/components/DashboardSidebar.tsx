@@ -17,7 +17,6 @@ const menuItems = [
   { title: 'Oráculo AI', url: '/oraculo-ai', icon: Brain },
   { title: 'Biblioteca de Guias', url: '/biblioteca', icon: BookOpen },
   { title: 'Podcast', url: '/podcast', icon: Headphones },
-  { title: 'Infográficos', url: '/infograficos', icon: BarChart3 },
   { title: 'Conta', url: '/conta', icon: User },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle },
 ];
