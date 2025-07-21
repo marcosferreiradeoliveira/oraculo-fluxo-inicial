@@ -27,6 +27,8 @@ const Projeto = () => {
   const [analise, setAnalise] = useState<string | null>(null);
   const [erroIA, setErroIA] = useState<string | null>(null);
   const [etapaAtual, setEtapaAtual] = useState<number>(1); // 1 = Avaliar com IA
+  const [statusIA, setStatusIA] = useState<string>('');
+  const [subEtapasIA, setSubEtapasIA] = useState<string[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,9 +43,9 @@ const Projeto = () => {
       const ref = doc(db, 'projetos', id);
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        const data = { id: snap.id, ...snap.data() };
+        const data = { id: snap.id, ...(snap.data() as any) };
         setProjeto(data);
-        setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
+        setEtapaAtual(typeof (data as any).etapa_atual === 'number' ? (data as any).etapa_atual : 1);
       }
       setLoading(false);
     };
@@ -69,10 +71,11 @@ const Projeto = () => {
       const editalDoc = editalSnap.docs[0].data();
       return {
         texto_edital: editalDoc.texto_edital || '',
+        criterios: editalDoc.criterios || '',
         texto_selecionados: editalDoc.texto_selecionados || '',
       };
     }
-    return { texto_edital: '', texto_selecionados: '' };
+    return { texto_edital: '', criterios: '', texto_selecionados: '' };
   };
 
   // Função para analisar com IA
@@ -80,45 +83,86 @@ const Projeto = () => {
     setAnalisando(true);
     setAnalise(null);
     setErroIA(null);
+    setSubEtapasIA([]);
     try {
-      // Busca textos do edital e selecionados
-      let texto_edital = '';
-      let texto_selecionados = '';
+      setStatusIA('Coletando dados do projeto e edital...');
+      setSubEtapasIA(['Lendo o texto do projeto...', 'Lendo o edital...', 'Lendo critérios do edital...']);
+      let dadosConsolidados = {
+        texto_edital: '',
+        criterios: '',
+        texto_selecionados: '',
+        nome_edital: projeto.edital_associado || '',
+        resumo_projeto: projeto.resumo || projeto.descricao?.slice(0, 2000) || '',
+      };
       if (projeto.edital_associado) {
         const res = await fetchEditalESelecionados(projeto.edital_associado);
-        texto_edital = res.texto_edital;
-        texto_selecionados = res.texto_selecionados;
+        console.log('[Oraculo] Dados do edital associado:', res);
+        dadosConsolidados.texto_edital = res.texto_edital;
+        dadosConsolidados.criterios = res.criterios;
+        dadosConsolidados.texto_selecionados = res.texto_selecionados;
       }
-      // Monta o prompt
-      const prompt = `Você é um avaliador de projetos culturais. Analise o projeto abaixo:\n\nPROJETO:\n${projeto.descricao?.slice(0, 2000)}\n\nConsiderando:\nCRITÉRIOS DO EDITAL:\n${texto_edital ? texto_edital.slice(0, 4000) : 'Nenhum texto de edital fornecido.'}\n\nPROJETOS SELECIONADOS ANTERIORES (para contexto comparativo):\n${texto_selecionados ? texto_selecionados.slice(0, 3000) : 'Nenhum texto de projetos selecionados fornecido.'}\n\nForneça uma análise detalhada com:\n1. Adequação aos critérios do edital (✅/❌)\n2. Pontos fortes do projeto\n3. Pontos fracos do projeto\n4. Sugestões de melhoria: Liste as sugestões para aumentar a chance de aprovação, cada uma começando explicitamente com \"Sugestão: \".\n5. Nota estimada (0-100)\n\nANÁLISE DETALHADA:`;
-
-      // Chama a OpenAI
-      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'Você é um avaliador de projetos culturais.' },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 1200,
-        temperature: 0.2,
+      // Validação e fallback dos critérios
+      if (!dadosConsolidados.criterios) {
+        // Tenta extrair critérios do texto do edital (simplesmente pega um trecho, pode ser melhorado com IA no futuro)
+        if (dadosConsolidados.texto_edital) {
+          // Exemplo: tenta pegar linhas que contenham "critério" ou "avaliação"
+          const possiveis = dadosConsolidados.texto_edital.split('\n').filter(l => /crit[eé]rio|avalia[cç][aã]o|pontua[cç][aã]o/i.test(l));
+          if (possiveis.length > 0) {
+            dadosConsolidados.criterios = possiveis.join(' ');
+          }
+        }
+        if (!dadosConsolidados.criterios) {
+          alert('Atenção: O campo CRITÉRIOS do edital está vazio ou não foi encontrado. O resultado da IA pode ser prejudicado. Verifique o cadastro do edital no Firestore.');
+        }
+      }
+      setStatusIA('Construindo prompt para análise...');
+      setSubEtapasIA(prev => [...prev, 'Cruzando projeto com critérios do edital...', 'Comparando com projetos selecionados anteriores...', 'Preparando dados para IA...']);
+      // Monta o prompt só agora, com todos os dados já consolidados
+      const prompt = `Você é um avaliador de projetos culturais. Avalie o projeto abaixo considerando especialmente o edital selecionado: "${dadosConsolidados.nome_edital}". Utilize os critérios desse edital de forma recorrente em sua análise, citando-os explicitamente sempre que possível.\n\nPROJETO:\n${dadosConsolidados.resumo_projeto}\n\nEDITAL SELECIONADO: ${dadosConsolidados.nome_edital || 'Nenhum'}\nCRITÉRIOS DO EDITAL:\n${dadosConsolidados.criterios || dadosConsolidados.texto_edital || 'Nenhum critério de edital fornecido.'}\n\nPROJETOS SELECIONADOS ANTERIORES (para contexto comparativo):\n${dadosConsolidados.texto_selecionados ? dadosConsolidados.texto_selecionados.slice(0, 3000) : 'Nenhum texto de projetos selecionados fornecido.'}\n\nForneça uma análise detalhada com:\n1. Adequação aos critérios do edital (✅/❌) - cite o edital e os critérios\n2. Pontos fortes do projeto\n3. Pontos fracos do projeto\n4. Sugestões de melhoria: Liste as sugestões para aumentar a chance de aprovação, cada uma começando explicitamente com \"Sugestão: \" e relacionando com o edital quando possível\n5. Nota estimada (0-100)\n\nANÁLISE DETALHADA:`;
+      setStatusIA('Enviando para análise da IA...');
+      setSubEtapasIA(prev => [...prev, 'Enviando dados para IA...', 'Aguardando resposta da IA...']);
+      const endpoint = '/api/analisar-projeto';
+      const payload = { prompt };
+      console.log('[Oraculo] Chamando endpoint:', endpoint);
+      console.log('[Oraculo] Payload enviado:', payload);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      const analiseIA = completion.choices[0].message?.content || 'Sem resposta da IA.';
+      console.log('[Oraculo] Status da resposta:', response.status);
+      let data;
+      const text = await response.text();
+      console.log('[Oraculo] Texto da resposta:', text);
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        console.error('[Oraculo] Erro ao fazer parse do JSON:', text);
+        throw new Error('Resposta inválida do servidor: ' + text);
+      }
+      if (!response.ok) {
+        console.error('[Oraculo] Erro HTTP:', response.status, data && data.error);
+        throw new Error((data && data.error) || `Erro HTTP: ${response.status}`);
+      }
+      setSubEtapasIA(prev => [...prev, 'Recebendo análise da IA...', 'Processando resultado...']);
+      const analiseIA = data.analise;
       setAnalise(analiseIA);
-      // Salva a análise no Firestore
+      setStatusIA('Análise concluída!');
+      setSubEtapasIA(prev => [...prev, 'Análise concluída!']);
       if (id) {
         const db = getFirestore();
         const ref = doc(db, 'projetos', id);
         await updateDoc(ref, { analise_ia: analiseIA });
-        // Avança para a próxima etapa (Alterar com IA)
         if (etapaAtual < 2) await avancarEtapa(2);
-        // Redireciona para a página Alterar com IA
+        setAnalise(null); // Limpa a análise antes de redirecionar
         navigate(`/projeto/${id}/alterar-com-ia`);
       }
     } catch (e: any) {
-      setErroIA(e.message || 'Erro ao analisar com IA.');
+      setErroIA(e.message || 'Ocorreu um erro desconhecido ao processar a análise.');
+      console.error(e);
     } finally {
       setAnalisando(false);
+      setStatusIA('');
     }
   };
 
@@ -194,8 +238,8 @@ const Projeto = () => {
               )}
             </div>
             <div className="mb-8">
-              <h2 className="text-lg font-semibold mb-1">Descrição</h2>
-              <p className="text-gray-700 whitespace-pre-line">{projeto.descricao}</p>
+              <h2 className="text-lg font-semibold mb-1">Resumo do Projeto</h2>
+              <p className="text-gray-700 whitespace-pre-line">{projeto.resumo || projeto.descricao}</p>
             </div>
           </div>
           <aside className="hidden lg:block w-full max-w-sm ml-8">
@@ -213,6 +257,16 @@ const Projeto = () => {
                 <Brain className="h-6 w-6" />
                 {analisando ? 'Analisando...' : 'Analisar com IA'}
               </Button>
+              {analisando && statusIA && (
+                <div className="mt-4 mb-2 bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
+                  {statusIA}
+                  <ul className="mt-2 text-left text-xs text-gray-600 list-disc list-inside">
+                    {subEtapasIA.map((etapa, idx) => (
+                      <li key={idx}>{etapa}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {analise && (
                 <div className="mt-6 bg-white border rounded-lg p-4 text-gray-800 whitespace-pre-line text-sm shadow">
                   <strong className="block text-oraculo-blue mb-2">Análise do Oráculo:</strong>

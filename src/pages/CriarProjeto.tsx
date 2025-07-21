@@ -6,6 +6,7 @@ import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
 import { Link } from 'react-router-dom';
+import OpenAI from 'openai';
 
 const categorias = [
   'Audiovisual',
@@ -40,6 +41,15 @@ const CriarProjeto = () => {
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [resumo, setResumo] = useState('');
+  const [showResumo, setShowResumo] = useState(false);
+  const [etapasIA] = useState([
+    'Lendo projeto',
+    'Extraindo pontos-chave',
+    'Resumindo',
+    'Salvando projeto',
+  ]);
+  const [etapaAtualIA, setEtapaAtualIA] = useState<number>(0);
 
   useEffect(() => {
     const fetchEditais = async () => {
@@ -54,6 +64,7 @@ const CriarProjeto = () => {
     e.preventDefault();
     setErro('');
     setLoading(true);
+    setEtapaAtualIA(0);
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -61,18 +72,41 @@ const CriarProjeto = () => {
         setLoading(false);
         return;
       }
+      setEtapaAtualIA(1); // Extraindo pontos-chave
+      // (Simulação de extração, pode ser expandido no futuro)
+      setEtapaAtualIA(2); // Resumindo
+      // Chama a OpenAI para gerar o resumo
+      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
+      const prompt = `Resuma de forma objetiva o projeto cultural abaixo, destacando: objetivo, justificativa, público-alvo, orçamento estimado, cronograma e diferenciais. O resumo deve ser claro, direto e útil para avaliação em editais.\n\nTEXTO DO PROJETO:\n${descricao}`;
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: 'Você é um especialista em projetos culturais.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 800,
+        temperature: 0.3,
+      });
+      const resumoGerado = completion.choices[0].message?.content || '';
+      setResumo(resumoGerado);
+      setShowResumo(true);
+      setEtapaAtualIA(3); // Salvando projeto
+      // Salva no Firestore
       const db = getFirestore();
-      await addDoc(collection(db, 'projetos'), {
+      const docRef = await addDoc(collection(db, 'projetos'), {
         nome,
         descricao,
+        resumo: resumoGerado,
         categoria,
         edital_associado: editalAssociado,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
         user_id: user.uid,
+        etapa_atual: 1, // já vai para Avaliar com IA
       });
-      navigate('/oraculo-ai');
-    } catch (err: any) {
+      // Redireciona para Avaliar com IA
+      navigate(`/projeto/${docRef.id}`);
+    } catch (err) {
       setErro('Erro ao criar projeto.');
     } finally {
       setLoading(false);
@@ -150,6 +184,13 @@ const CriarProjeto = () => {
                 />
               </div>
               {erro && <div className="text-red-500 text-sm text-center">{erro}</div>}
+              {loading && (
+                <div className="mb-4">
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
+                    {etapasIA[etapaAtualIA]}
+                  </div>
+                </div>
+              )}
               <button
                 type="submit"
                 className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition"
@@ -158,6 +199,13 @@ const CriarProjeto = () => {
                 {loading ? 'Salvando...' : 'Criar projeto'}
               </button>
             </form>
+            {showResumo && resumo && (
+              <div className="bg-white border rounded-lg p-4 shadow mb-4">
+                <h2 className="text-lg font-bold text-oraculo-blue mb-2">Resumo gerado pela IA</h2>
+                <div className="whitespace-pre-line text-gray-800 text-sm">{resumo}</div>
+                <div className="text-xs text-gray-500 mt-2">Você será redirecionado em instantes...</div>
+              </div>
+            )}
           </div>
           <aside className="hidden lg:block w-full max-w-sm ml-8">
             <div className="bg-gradient-to-br from-oraculo-blue/10 to-oraculo-purple/10 border-l-4 border-oraculo-blue rounded-xl p-6 shadow flex flex-col gap-2">
