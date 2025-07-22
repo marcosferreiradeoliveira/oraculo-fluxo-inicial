@@ -1,3 +1,4 @@
+require('dotenv').config();
 /**
  * Import function triggers from their respective submodules:
  *
@@ -10,6 +11,9 @@
 // Forçar novo deploy e garantir apenas v2
 const { onRequest } = require("firebase-functions/v2/https");
 const { OpenAI } = require("openai");
+const mercadopago = require("mercadopago");
+const mp = new mercadopago.MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+const preference = new mercadopago.Preference(mp);
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -37,6 +41,30 @@ exports.analisarProjeto = onRequest(async (req, res) => {
     console.error('Error calling OpenAI API:', error);
     // Garante que sempre retorna JSON válido, mesmo em erro inesperado
     return res.status(500).json({ error: error && error.message ? error.message : 'Failed to get analysis from AI.' });
+  }
+});
+
+exports.criarCheckoutPremium = onRequest(async (req, res) => {
+  try {
+    const preferenceData = {
+      items: [
+        {
+          title: "Assinatura Oráculo Premium",
+          unit_price: 97,
+          quantity: 1,
+        },
+      ],
+      back_urls: {
+        success: "https://oraculocultural.com.br/cadastro-premium?status=success",
+        failure: "https://oraculocultural.com.br/cadastro-premium?status=failure",
+        pending: "https://oraculocultural.com.br/cadastro-premium?status=pending",
+      },
+      auto_return: "approved",
+    };
+    const response = await preference.create(preferenceData);
+    res.status(200).json({ init_point: response.init_point });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

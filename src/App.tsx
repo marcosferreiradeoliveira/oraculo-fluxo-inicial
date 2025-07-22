@@ -20,6 +20,7 @@ import EditarEdital from './pages/EditarEdital';
 import CadastrarEpisodio from './pages/CadastrarEpisodio';
 import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
+import CadastroPremium from './pages/CadastroPremium';
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/conta" element={<Conta />} />
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/cadastro-premium" element={<CadastroPremium />} />
           <Route path="/criar-projeto" element={<CriarProjeto />} />
           <Route path="/projeto/:id" element={<Projeto />} />
           <Route path="/projeto/:id/alterar-com-ia" element={<AlterarComIA />} />

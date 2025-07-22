@@ -121,7 +121,7 @@ const Projeto = () => {
       const prompt = `Você é um avaliador de projetos culturais. Avalie o projeto abaixo considerando especialmente o edital selecionado: "${dadosConsolidados.nome_edital}". Utilize os critérios desse edital de forma recorrente em sua análise, citando-os explicitamente sempre que possível.\n\nPROJETO:\n${dadosConsolidados.resumo_projeto}\n\nEDITAL SELECIONADO: ${dadosConsolidados.nome_edital || 'Nenhum'}\nCRITÉRIOS DO EDITAL:\n${dadosConsolidados.criterios || dadosConsolidados.texto_edital || 'Nenhum critério de edital fornecido.'}\n\nPROJETOS SELECIONADOS ANTERIORES (para contexto comparativo):\n${dadosConsolidados.texto_selecionados ? dadosConsolidados.texto_selecionados.slice(0, 3000) : 'Nenhum texto de projetos selecionados fornecido.'}\n\nForneça uma análise detalhada com:\n1. Adequação aos critérios do edital (✅/❌) - cite o edital e os critérios\n2. Pontos fortes do projeto\n3. Pontos fracos do projeto\n4. Sugestões de melhoria: Liste as sugestões para aumentar a chance de aprovação, cada uma começando explicitamente com \"Sugestão: \" e relacionando com o edital quando possível\n5. Nota estimada (0-100)\n\nANÁLISE DETALHADA:`;
       setStatusIA('Enviando para análise da IA...');
       setSubEtapasIA(prev => [...prev, 'Enviando dados para IA...', 'Aguardando resposta da IA...']);
-      const endpoint = '/api/analisar-projeto';
+      const endpoint = 'https://analisarprojeto-665760404958.us-central1.run.app/analisarProjeto';
       const payload = { prompt };
       console.log('[Oraculo] Chamando endpoint:', endpoint);
       console.log('[Oraculo] Payload enviado:', payload);

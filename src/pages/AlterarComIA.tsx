@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Brain, Loader2 } from 'lucide-react';
 import AnalisarImg from '@/assets/Analisar.jpeg';
 import OpenAI from 'openai';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '../lib/firebase';
 
 const steps = [
   'Criar Projeto',
@@ -21,6 +23,8 @@ const currentStep = 2; // Alterar com IA
 
 const AlterarComIA = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [analise, setAnalise] = useState<string | null>(null);
@@ -29,10 +33,39 @@ const AlterarComIA = () => {
   const [aprovacoes, setAprovacoes] = useState<boolean[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
     document.title = 'Alterar com IA - Oráculo Cultural';
   }, []);
+
+  // Verificar status premium do usuário
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      if (!user) return;
+      try {
+        const db = getFirestore();
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          setIsPremium(userData.isPremium || false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status premium:', error);
+      }
+    };
+    checkPremiumStatus();
+  }, [user]);
+
+  // Função para verificar premium e redirecionar se necessário
+  const checkPremiumAccess = () => {
+    if (!isPremium) {
+      navigate('/cadastro-premium');
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -68,6 +101,11 @@ const AlterarComIA = () => {
   }, [analise]);
 
   const handleAprovar = async (idx: number) => {
+    // Verificar se o usuário é premium
+    if (!checkPremiumAccess()) {
+      return;
+    }
+    
     // Marca sugestão como aprovada
     const novasAprovacoes = [...aprovacoes];
     novasAprovacoes[idx] = true;
@@ -102,6 +140,11 @@ const AlterarComIA = () => {
   };
 
   const handleSalvar = async () => {
+    // Verificar se o usuário é premium
+    if (!checkPremiumAccess()) {
+      return;
+    }
+    
     if (!id) return;
     setSalvando(true);
     const db = getFirestore();
@@ -223,8 +266,16 @@ const AlterarComIA = () => {
               <p className="text-gray-700 text-sm mb-2">
                 Utilize as sugestões da análise para aprimorar seu projeto antes de avançar para os próximos passos.
               </p>
-              <Button size="lg" className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-lg px-8 py-4 flex items-center gap-2 mt-2" asChild>
-                <Link to={`/projeto/${id}/gerar-textos`}>Gerar Textos</Link>
+              <Button 
+                size="lg" 
+                className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-lg px-8 py-4 flex items-center gap-2 mt-2"
+                onClick={() => {
+                  if (checkPremiumAccess()) {
+                    navigate(`/projeto/${id}/gerar-textos`);
+                  }
+                }}
+              >
+                Gerar Textos
               </Button>
             </div>
           </aside>

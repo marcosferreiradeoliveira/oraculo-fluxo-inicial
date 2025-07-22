@@ -6,11 +6,14 @@ import { QuickAccessCards } from '@/components/QuickAccessCards';
 import { FeaturedGuides } from '@/components/FeaturedGuides';
 import { RecentContent } from '@/components/RecentContent';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Brain, Download, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '../lib/firebase';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -18,6 +21,9 @@ const Index = () => {
   const [loadingGuias, setLoadingGuias] = useState(true);
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [loadingPodcasts, setLoadingPodcasts] = useState(true);
+  const [user] = useAuthState(auth);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [redirectPremium, setRedirectPremium] = useState(false);
 
   useEffect(() => {
     const fetchGuias = async () => {
@@ -52,6 +58,44 @@ const Index = () => {
     };
     fetchPodcasts();
   }, []);
+
+  const handleDownloadGuia = async (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, guiaId: string, pdfUrl: string) => {
+    if (!user) {
+      e.preventDefault();
+      setShowAuthModal(true);
+      return;
+    }
+    try {
+      const userRef = doc(db, 'usuarios', user.uid);
+      const userSnap = await getDoc(userRef);
+      let guiasBaixados: string[] = [];
+      let isPremium = false;
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        guiasBaixados = data.guiasBaixados || [];
+        isPremium = data.isPremium || false;
+      }
+      // Se não for premium e já baixou 1 guia diferente
+      if (!isPremium && guiasBaixados.length >= 1 && !guiasBaixados.includes(guiaId)) {
+        e.preventDefault();
+        setRedirectPremium(true);
+        return;
+      }
+      // Registra o guia baixado
+      if (!guiasBaixados.includes(guiaId)) {
+        if (userSnap.exists()) {
+          await updateDoc(userRef, { guiasBaixados: arrayUnion(guiaId) });
+        } else {
+          await setDoc(userRef, { guiasBaixados: [guiaId] });
+        }
+      }
+      // Permite o download
+    } catch (err) {
+      e.preventDefault();
+      alert('Erro ao registrar download do guia. Tente novamente.');
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
@@ -110,7 +154,12 @@ const Index = () => {
                       </CardHeader>
                       <CardContent className="pt-0">
                         <Button className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" asChild>
-                          <a href={guia.pdfUrl} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={guia.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => handleDownloadGuia(e, guia.id, guia.pdfUrl)}
+                          >
                             <Download className="h-4 w-4 mr-2" />
                             Baixar Guia
                           </a>
@@ -172,6 +221,26 @@ const Index = () => {
           </div>
         </main>
       </div>
+      <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
+        <DialogContent className="max-w-xs text-center">
+          <DialogHeader>
+            <DialogTitle>Crie sua conta</DialogTitle>
+            <DialogDescription>
+              Para acessar este conteúdo, é preciso se cadastrar ou fazer login.
+            </DialogDescription>
+          </DialogHeader>
+          <Button className="mt-4 w-full bg-oraculo-blue text-white" onClick={() => {
+            setShowAuthModal(false);
+            navigate('/cadastro');
+          }}>
+            OK
+          </Button>
+        </DialogContent>
+      </Dialog>
+      {/* Redirecionamento para premium */}
+      {redirectPremium && (
+        navigate('/cadastro-premium'), null
+      )}
     </div>
   );
 };
