@@ -2,14 +2,14 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy server package files
+COPY server-package.json package.json
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --only=production
 
-# Copy source code
-COPY . .
+# Copy server source code
+COPY server.js .
 
 # Expose port
 EXPOSE 8080

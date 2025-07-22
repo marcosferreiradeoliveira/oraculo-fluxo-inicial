@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import OraculoAI from "./pages/OraculoAI";
@@ -24,12 +24,29 @@ import CadastroPremium from './pages/CadastroPremium';
 
 const queryClient = new QueryClient();
 
+import { useEffect } from "react";
+import { analytics } from "./lib/firebase";
+import { logEvent } from "firebase/analytics";
+
+function AnalyticsListener() {
+  const location = useLocation();
+  useEffect(() => {
+    if (analytics) {
+      logEvent(analytics, 'page_view', {
+        page_path: location.pathname + location.search,
+      });
+    }
+  }, [location]);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AnalyticsListener />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/oraculo-ai" element={<OraculoAI />} />

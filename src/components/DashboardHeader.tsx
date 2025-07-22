@@ -6,17 +6,26 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+          if (firebaseUser) {
+            const db = getFirestore();
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+              setIsPremium(userDoc.data().isPremium === true);
+            }
+          }
       if (firebaseUser) {
         // Buscar nome na collection usuarios
         try {
@@ -70,7 +79,10 @@ export function DashboardHeader() {
               <>
                 <div className="text-right">
                   <p className="text-sm font-medium text-gray-900">
-                    Olá{nomeUsuario ? `, ${nomeUsuario}` : ','}
+                    <div className="flex items-center">
+                    <span>Olá{nomeUsuario ? `, ${nomeUsuario}` : ','}</span>
+                    {isPremium && <span className="ml-2 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>}
+                  </div>
                   </p>
                   <p className="text-xs text-gray-500">Bem-vindo de volta</p>
                 </div>
@@ -84,7 +96,7 @@ export function DashboardHeader() {
                       <AvatarImage src={user.photoURL} />
                     ) : (
                       <AvatarFallback className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
-                        {nomeUsuario ? nomeUsuario[0] : (user.displayName ? user.displayName[0] : 'U')}
+                        {nomeUsuario ? nomeUsuario[0] : (user.displayName || user.email)[0]}
                       </AvatarFallback>
                     )}
                   </Avatar>

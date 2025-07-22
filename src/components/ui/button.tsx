@@ -39,16 +39,40 @@ export interface ButtonProps
   asChild?: boolean
 }
 
+import { analytics } from "@/lib/firebase";
+import { logEvent } from "firebase/analytics";
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, onClick, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+      if (analytics) {
+        logEvent(analytics, "button_click", {
+          button_text:
+            typeof children === "string"
+              ? children
+              : (Array.isArray(children) && typeof children[0] === "string"
+                  ? children[0]
+                  : undefined),
+          variant,
+          size,
+          page_path: window.location.pathname + window.location.search,
+        });
+      }
+      if (onClick) onClick(e);
+    };
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        onClick={handleClick}
         {...props}
-      />
-    )
+      >
+        {children}
+      </Comp>
+    );
   }
 )
 Button.displayName = "Button"
