@@ -2,6 +2,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { EnvDebug } from "./components/EnvDebug";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
@@ -45,6 +46,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <EnvDebug />
       <BrowserRouter>
         <AnalyticsListener />
         <Routes>
