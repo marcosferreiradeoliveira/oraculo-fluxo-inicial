@@ -53,20 +53,30 @@ if (import.meta.env.DEV) {
 }
 
 // Analytics (only available in browser)
-export let analytics: ReturnType<typeof getAnalytics> | undefined = undefined;
-if (typeof window !== 'undefined') {
-  isSupported()
-    .then((supported) => {
+let analytics: ReturnType<typeof getAnalytics> | undefined = undefined;
+
+// Only initialize analytics in production and if window is defined
+if (import.meta.env.PROD && typeof window !== 'undefined') {
+  const initAnalytics = async () => {
+    try {
+      const supported = await isSupported();
       if (supported) {
         analytics = getAnalytics(app);
+        // Disable automatic page view tracking since we're using GTM
+        // analytics.setAnalyticsCollectionEnabled(false);
         console.log('Firebase Analytics initialized');
       } else {
         console.log('Firebase Analytics not supported in this browser');
       }
-    })
-    .catch((error) => {
+    } catch (error) {
       console.error('Firebase Analytics initialization error:', error);
-    });
+    }
+  };
+  
+  // Initialize after a short delay to prevent blocking the main thread
+  setTimeout(initAnalytics, 1000);
 }
+
+export { analytics };
 
 export { auth, db, storage };

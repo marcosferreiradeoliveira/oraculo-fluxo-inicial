@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EnvDebug } from "./components/EnvDebug";
+import GoogleTagManager from "./components/GoogleTagManager";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
@@ -22,6 +23,7 @@ import CadastrarEpisodio from './pages/CadastrarEpisodio';
 import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
 import CadastroPremium from './pages/CadastroPremium';
+import GerarTextos from './pages/GerarTextos';
 
 const queryClient = new QueryClient();
 
@@ -44,6 +46,7 @@ function AnalyticsListener() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <GoogleTagManager />
       <Toaster />
       <Sonner />
       <EnvDebug />
@@ -62,6 +65,7 @@ const App = () => (
           <Route path="/criar-projeto" element={<CriarProjeto />} />
           <Route path="/projeto/:id" element={<Projeto />} />
           <Route path="/projeto/:id/alterar-com-ia" element={<AlterarComIA />} />
+          <Route path="/projeto/:id/gerar-textos" element={<GerarTextos />} />
           <Route path="/editar-edital/:id" element={<EditarEdital />} />
           <Route path="/cadastrar-episodio" element={<CadastrarEpisodio />} />
           <Route path="/podcast/:id" element={<PodcastDetalhes />} />

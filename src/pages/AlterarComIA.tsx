@@ -45,11 +45,13 @@ const AlterarComIA = () => {
       if (!user) return;
       try {
         const db = getFirestore();
-        const userRef = doc(db, 'users', user.uid);
+        // Changed from 'users' to 'usuarios' to match the webhook
+        const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          setIsPremium(userData.isPremium || false);
+          console.log('User data from Firestore:', userData);
+          setIsPremium(userData.isPremium === true);
         }
       } catch (error) {
         console.error('Erro ao verificar status premium:', error);

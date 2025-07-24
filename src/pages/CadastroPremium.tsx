@@ -1,23 +1,71 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
+import { doc, getDoc, getFirestore } from 'firebase/firestore';
 
 const CadastroPremium = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [userData, setUserData] = useState({ email: '', userId: '' });
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (user) {
+        try {
+          const db = getFirestore();
+          const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUserData({
+              email: user.email || '',
+              userId: user.uid
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const handlePremium = async () => {
+    if (!userData.email || !userData.userId) {
+      alert('Por favor, faça login para assinar o plano premium.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await fetch('https://analisarprojeto-665760404958.us-central1.run.app/criarCheckoutPremium', { method: 'POST' });
+      const res = await fetch('https://analisarprojeto-665760404958.us-central1.run.app/criarAssinaturaPremium', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: userData.email,
+          userId: userData.userId
+        })
+      });
+      
       const data = await res.json();
       if (data.init_point) {
         window.location.href = data.init_point;
       } else {
-        alert('Erro ao iniciar pagamento. Tente novamente.');
+        throw new Error('Resposta inválida do servidor');
       }
     } catch (e) {
-      alert('Erro ao iniciar pagamento. Tente novamente.');
+      console.error('Erro ao criar assinatura:', e);
+      alert('Erro ao processar sua assinatura. Por favor, tente novamente.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -39,8 +87,12 @@ const CadastroPremium = () => {
               <li>✔️ Suporte premium</li>
               <li>✔️ E muito mais!</li>
             </ul>
-            <Button className="w-full bg-oraculo-gold text-white text-lg py-3 font-semibold mb-2" onClick={handlePremium}>
-              Quero ser Premium
+            <Button 
+              className="w-full bg-oraculo-gold hover:bg-oraculo-gold/90 text-white text-lg py-3 font-semibold mb-2" 
+              onClick={handlePremium}
+              disabled={loading || !userData.email}
+            >
+              {loading ? 'Processando...' : 'Assinar Plano Premium - R$29,90/mês'}
             </Button>
             <p className="text-sm text-gray-500 mt-2">
               Já é premium? Faça login normalmente para acessar todos os recursos.
