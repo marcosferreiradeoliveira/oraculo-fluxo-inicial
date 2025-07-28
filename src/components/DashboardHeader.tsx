@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Search, Bell, Sparkles, LogOut } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -78,12 +77,12 @@ export function DashboardHeader() {
             {user ? (
               <>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-gray-900">
                     <div className="flex items-center">
-                    <span>Olá{nomeUsuario ? `, ${nomeUsuario}` : ','}</span>
-                    {isPremium && <span className="ml-2 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>}
+                      <span>Olá{nomeUsuario ? `, ${nomeUsuario}` : ','}</span>
+                      {isPremium && <span className="ml-2 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>}
+                    </div>
                   </div>
-                  </p>
                   <p className="text-xs text-gray-500">Bem-vindo de volta</p>
                 </div>
                 <button

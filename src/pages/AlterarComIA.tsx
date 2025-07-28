@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, DocumentData } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -19,13 +19,22 @@ const steps = [
   'Gerar Cronograma',
   'Gerar Cartas de anuência'
 ];
-const currentStep = 2; // Alterar com IA
+const currentStep: number = 2; // Alterar com IA
+
+interface Projeto extends DocumentData {
+  id: string;
+  descricao?: string;
+  edital_associado?: string;
+  analise_ia?: string;
+  // Add other properties as needed
+}
 
 const AlterarComIA = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
-  const [projeto, setProjeto] = useState<any>(null);
+  const [projeto, setProjeto] = useState<Projeto | null>(null);
+  const [editalNome, setEditalNome] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [analise, setAnalise] = useState<string | null>(null);
   const [sugestoes, setSugestoes] = useState<string[]>([]);
@@ -74,20 +83,65 @@ const AlterarComIA = () => {
       if (!id) return;
       setLoading(true);
       const db = getFirestore();
-      const ref = doc(db, 'projetos', id);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const data = { id: snap.id, ...snap.data() };
+      try {
+        console.log('Fetching project with ID:', id);
+        const ref = doc(db, 'projetos', id);
+        const snap = await getDoc(ref);
+        
+        if (!snap.exists()) {
+          console.error('Project not found');
+          setLoading(false);
+          return;
+        }
+
+        const data = { id: snap.id, ...snap.data() } as Projeto;
+        console.log('Project data:', data);
         setProjeto(data);
         setAnalise((data as any).analise_ia || null);
         setDescricaoEditada(data.descricao || '');
-        // Recupera aprovações salvas
+        
+        // Fetch edital name if edital_associado exists
+        if (data.edital_associado) {
+          console.log('Fetching edital with ID:', data.edital_associado);
+          try {
+            const editalRef = doc(db, 'editais', data.edital_associado);
+            console.log('Edital ref path:', editalRef.path);
+            const editalSnap = await getDoc(editalRef);
+            
+            console.log('Edital document exists:', editalSnap.exists());
+            if (editalSnap.exists()) {
+              const editalData = editalSnap.data();
+              console.log('Edital document data:', editalData);
+              
+              // Check all possible name fields
+              const possibleNameFields = ['nome', 'titulo', 'name', 'title', 'editalName'];
+              const nameField = possibleNameFields.find(field => field in editalData);
+              console.log('Available fields in edital document:', Object.keys(editalData));
+              
+              const name = nameField ? editalData[nameField] : `Edital: ${data.edital_associado}`;
+              console.log('Using field for name:', nameField, 'Value:', name);
+              setEditalNome(name);
+            } else {
+              console.warn('Edital document not found, using ID as fallback');
+              setEditalNome(`Edital: ${data.edital_associado}`);
+            }
+          } catch (error) {
+            console.error('Error fetching edital:', error);
+            setEditalNome(`Edital: ${data.edital_associado}`);
+          }
+        }
+        
+        // Load saved approvals
         if (Array.isArray(data.sugestoes_aprovadas)) {
           setAprovacoes(data.sugestoes_aprovadas);
         }
+      } catch (error) {
+        console.error('Error in fetchProjeto:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+    
     fetchProjeto();
   }, [id]);
 
@@ -217,7 +271,7 @@ const AlterarComIA = () => {
               </span>
               {projeto.edital_associado && (
                 <span className="inline-block bg-oraculo-purple/10 text-oraculo-purple px-3 py-1 rounded-full text-xs font-semibold">
-                  Edital: {projeto.edital_associado}
+                  {editalNome || `Edital: ${projeto.edital_associado}`}
                 </span>
               )}
             </div>
@@ -277,7 +331,7 @@ const AlterarComIA = () => {
                   }
                 }}
               >
-                Gerar Textos
+                {analise ? 'Gerar Textos' : 'Avaliar com IA'}
               </Button>
             </div>
           </aside>
