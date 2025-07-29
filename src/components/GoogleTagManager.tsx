@@ -1,5 +1,7 @@
+// src/components/GoogleTagManager.tsx
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+
 
 declare global {
   interface Window {
@@ -44,7 +46,7 @@ const initializeGTM = () => {
     
     // Insert script before the first script tag or at the end of head
     const firstScript = document.getElementsByTagName('script')[0];
-    if (firstScript && firstScript.parentNode) {
+    if (firstScript?.parentNode) {
       firstScript.parentNode.insertBefore(gtmScript, firstScript);
     } else {
       document.head.insertBefore(gtmScript, null);
@@ -62,29 +64,9 @@ export const GoogleTagManager = () => {
       initialized.current = true;
     }
   }, []);
-  
-  // Try to use location if Router is available
-  try {
-    // This will only work if inside a Router
-    const location = useLocation();
-    
-    // Track page views on route change
-    useEffect(() => {
-      if (window.dataLayer) {
-        window.dataLayer.push({
-          event: 'pageview',
-          page: location.pathname + location.search,
-        });
-      }
-    }, [location]);
-  } catch (e) {
-    // If useLocation throws, we're not in a Router context
-    // We'll just initialize GTM without route tracking
-    console.log('GTM: Not in Router context, initializing without route tracking');
-  }
 
   // Add noscript fallback
-  const GTMNoScript = () => (
+  return (
     <noscript>
       <iframe
         src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}
@@ -95,13 +77,23 @@ export const GoogleTagManager = () => {
       />
     </noscript>
   );
+};
 
-  return (
-    <>
-      {/* GTM Script */}
-      <GTMNoScript />
-    </>
-  );
+// New component for route tracking
+export const GoogleTagManagerRouteTracker = () => {
+  const location = useLocation();
+  
+  // Track page views on route change
+  useEffect(() => {
+    if (window.dataLayer) {
+      window.dataLayer.push({
+        event: 'pageview',
+        page: location.pathname + location.search,
+      });
+    }
+  }, [location]);
+
+  return null;
 };
 
 export default GoogleTagManager;

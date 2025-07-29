@@ -40,10 +40,7 @@ const GerarTextos = () => {
     'Criar Projeto',
     'Avaliar com IA',
     'Alterar com IA',
-    'Gerar Textos',
-    'Gerar Orçamento',
-    'Gerar Cronograma',
-    'Gerar Cartas de anuência'
+    'Gerar Textos'
   ];
   const currentStep: number = 3; 
 
@@ -266,7 +263,11 @@ const GerarTextos = () => {
     }
   };
 
-  const copiarTexto = async () => {
+  const handleGerarTexto = async () => {
+    await gerarTexto(textoSelecionado);
+  };
+
+  const handleCopiarTexto = async () => {
     try {
       await navigator.clipboard.writeText(textos[textoSelecionado]);
       alert('Texto copiado para a área de transferência!');
@@ -276,7 +277,7 @@ const GerarTextos = () => {
     }
   };
 
-  const baixarTexto = () => {
+  const handleDownloadTexto = () => {
     const element = document.createElement('a');
     const file = new Blob([textos[textoSelecionado]], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
@@ -303,135 +304,131 @@ const GerarTextos = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
+        
         <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
-            <nav className="mb-6">
-              <ol className="flex flex-wrap items-center gap-2 text-sm">
-                {steps.map((step, idx) => (
-                  <li key={step} className="flex items-center gap-2">
-                    {idx === 0 ? (
-                      <Link to="/criar-projeto" className={`px-3 py-1 rounded-full font-medium ${idx === currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-700'} hover:underline`}>
-                        {step}
-                      </Link>
-                    ) : idx === 1 ? (
-                      <Link to={`/projeto/${id}`} className={`px-3 py-1 rounded-full font-medium ${idx === currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-700'} hover:underline`}>
-                        {step}
-                      </Link>
-                    ) : idx === 2 ? (
-                      <Link to={`/projeto/${id}/alterar-ia`} className={`px-3 py-1 rounded-full font-medium ${idx === currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-700'} hover:underline`}>
-                        {step}
-                      </Link>
-                    ) : (
-                      <span className={`px-3 py-1 rounded-full font-medium ${idx === currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-700'}`}>
-                        {step}
-                      </span>
-                    )}
-                    {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
-                  </li>
-                ))}
-              </ol>
-            </nav>
-
+          <div className="max-w-5xl mx-auto">
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Gerar Textos</h1>
-              <p className="text-gray-600 mt-1">
-                Gere textos para o projeto: <span className="font-medium">{projeto?.nome || 'Carregando...'}</span>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                Gerar Textos
+              </h1>
+              <p className="text-gray-600 text-sm md:text-base">
+                Gere textos para as diferentes seções do seu projeto cultural
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="space-y-2">
+            {/* Barra de progresso */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-2">
+                {steps.map((step, index) => (
+                  <div key={index} className="flex flex-col items-center">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
+                      {index + 1}
+                    </div>
+                    <span className={`text-xs mt-1 text-center ${index === currentStep ? 'font-medium text-oraculo-blue' : 'text-gray-500'}`}>
+                      {step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${(currentStep + 1) * 25}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <div className="p-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-800">Selecione o tipo de texto</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                 {Object.entries({
                   justificativa: 'Justificativa',
                   objetivos: 'Objetivos',
                   metodologia: 'Metodologia',
                   resultados_esperados: 'Resultados Esperados',
                   cronograma: 'Cronograma'
-                }).map(([key, label]) => {
-                  const tipo = key as TextoTipo;
-                  const temTexto = !!textos[tipo];
-                  
-                  return (
-                    <button
-                      key={tipo}
-                      onClick={() => setTextoSelecionado(tipo)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-2 ${
-                        textoSelecionado === tipo
-                          ? 'bg-oraculo-blue text-white'
-                          : 'bg-white hover:bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      <FileText className="h-5 w-5" />
-                      <span>{label}</span>
-                      {temTexto && <CheckCircle className="h-4 w-4 ml-auto text-green-500" />}
-                    </button>
-                  );
-                })}
+                }).map(([tipo, titulo]) => (
+                  <button
+                    key={tipo}
+                    onClick={() => setTextoSelecionado(tipo as TextoTipo)}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      textoSelecionado === tipo
+                        ? 'border-oraculo-blue bg-oraculo-blue/5'
+                        : 'border-gray-200 hover:border-oraculo-blue/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-oraculo-blue" />
+                      <span className="font-medium text-gray-800">{titulo}</span>
+                      {textos[tipo as TextoTipo] && (
+                        <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                  </button>
+                ))}
               </div>
 
-              <div className="lg:col-span-3 space-y-4">
-                <div className="bg-white rounded-xl shadow-sm border p-6 min-h-[500px]">
+              <div className="p-4 border-t">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <Button
+                    onClick={handleGerarTexto}
+                    disabled={!!gerando}
+                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+                  >
+                    {gerando === textoSelecionado ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Gerando...
+                      </>
+                    ) : (
+                      'Gerar Texto'
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={handleCopiarTexto}
+                    className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copiar Texto
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadTexto}
+                    className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10 ml-auto"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar .TXT
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="p-4 border-t bg-gray-50">
+                <div className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 bg-white border rounded-lg">
                   {textos[textoSelecionado] ? (
-                    <div className="h-full flex flex-col">
-                      <div className="flex-1 overflow-auto whitespace-pre-wrap mb-4">
-                        {textos[textoSelecionado]}
-                      </div>
-                      <div className="flex gap-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          onClick={copiarTexto}
-                          className="flex items-center gap-2"
-                        >
-                          <Copy className="h-4 w-4" />
-                          Copiar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={baixarTexto}
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          Baixar
-                        </Button>
-                        <Button
-                          onClick={() => gerarTexto(textoSelecionado)}
-                          className="ml-auto bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
-                          disabled={gerando === textoSelecionado}
-                        >
-                          {gerando === textoSelecionado ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Gerando...
-                            </>
-                          ) : (
-                            'Regenerar'
-                          )}
-                        </Button>
-                      </div>
+                    <div className="prose max-w-none">
+                      {textos[textoSelecionado].split('\n').map((paragraph, idx) => (
+                        <p key={idx}>{paragraph}</p>
+                      ))}
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-8 text-gray-500">
-                      <FileText className="h-12 w-12 text-gray-300 mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum texto gerado</h3>
-                      <p className="mb-6 max-w-md">
-                        Clique no botão abaixo para gerar um texto para esta seção.
-                      </p>
-                      <Button
-                        onClick={() => gerarTexto(textoSelecionado)}
-                        className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
-                        disabled={!!gerando}
-                      >
-                        {gerando === textoSelecionado ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Gerando...
-                          </>
-                        ) : (
-                          'Gerar Texto'
-                        )}
-                      </Button>
+                    <div className="h-full flex items-center justify-center text-gray-400">
+                      {gerando === textoSelecionado ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-8 w-8 animate-spin text-oraculo-blue" />
+                          <p>Gerando texto, aguarde...</p>
+                        </div>
+                      ) : (
+                        <p>Clique em "Gerar Texto" para criar o conteúdo.</p>
+                      )}
                     </div>
                   )}
                 </div>

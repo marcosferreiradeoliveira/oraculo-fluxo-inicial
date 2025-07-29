@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -38,18 +37,18 @@ const Suporte = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
         
-        <main className="flex-1 p-8 animate-fade-in">
+        <main className="flex-1 p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                 <HelpCircle className="h-8 w-8 text-oraculo-blue" />
                 Centro de Suporte
               </h1>
-              <p className="text-gray-600">
-                Estamos aqui para ajudar! Encontre respostas rápidas ou entre em contato conosco.
+              <p className="text-gray-600 text-sm md:text-base">
+                Estamos aqui para ajudar. Encontre respostas para suas dúvidas ou entre em contato com nossa equipe.
               </p>
             </div>
 

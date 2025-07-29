@@ -4,16 +4,7 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
-// Debug log for environment variables
-console.log('Firebase Config:', {
-  apiKey: import.meta.env.VITE_API_KEY ? '✅ Set' : '❌ Missing',
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN ? '✅ Set' : '❌ Missing',
-  projectId: import.meta.env.VITE_PROJECT_ID ? '✅ Set' : '❌ Missing',
-  storageBucket: import.meta.env.VITE_STORAGE_BUCKET ? '✅ Set' : '❌ Missing',
-  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID ? '✅ Set' : '❌ Missing',
-  appId: import.meta.env.VITE_APP_ID ? '✅ Set' : '❌ Missing',
-});
-
+// Firebase configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -23,60 +14,64 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID,
 };
 
-// Initialize Firebase
-let app;
-try {
-  // Check if Firebase app is already initialized
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  console.log('Firebase initialized successfully');
-} catch (error) {
-  console.error('Firebase initialization error:', error);
-  throw error; // Re-throw to prevent the app from starting with a broken Firebase config
-}
-
-// Initialize services
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-// Enable Firebase Emulator Suite in development
-if (import.meta.env.DEV) {
+// Initialize Firebase services
+export const firebaseInit = () => {
   try {
-    // Uncomment these lines if you want to use Firebase Emulator
-    // connectAuthEmulator(auth, 'http://localhost:9099');
-    // connectFirestoreEmulator(db, 'localhost', 8080);
-    // connectStorageEmulator(storage, 'localhost', 9199);
-    console.log('Firebase running in development mode');
-  } catch (error) {
-    console.warn('Failed to connect to Firebase Emulator:', error);
-  }
-}
+    // Check if Firebase app is already initialized
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    console.log('Firebase initialized successfully');
+    
+    // Initialize services
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    let analytics: ReturnType<typeof getAnalytics> | null = null;
 
-// Analytics (only available in browser)
-let analytics: ReturnType<typeof getAnalytics> | undefined = undefined;
-
-// Only initialize analytics in production and if window is defined
-if (import.meta.env.PROD && typeof window !== 'undefined') {
-  const initAnalytics = async () => {
-    try {
-      const supported = await isSupported();
-      if (supported) {
-        analytics = getAnalytics(app);
-        // Disable automatic page view tracking since we're using GTM
-        // analytics.setAnalyticsCollectionEnabled(false);
-        console.log('Firebase Analytics initialized');
-      } else {
-        console.log('Firebase Analytics not supported in this browser');
-      }
-    } catch (error) {
-      console.error('Firebase Analytics initialization error:', error);
+    // Initialize analytics if in browser
+    if (typeof window !== 'undefined') {
+      const initAnalytics = async () => {
+        const analyticsSupported = await isSupported();
+        if (analyticsSupported) {
+          try {
+            analytics = getAnalytics(app);
+            console.log('Firebase Analytics initialized');
+          } catch (error) {
+            console.error('Firebase Analytics initialization error:', error);
+          }
+        } else {
+          console.log('Firebase Analytics not supported in this environment');
+        }
+      };
+      // Initialize after a short delay to prevent blocking the main thread
+      setTimeout(initAnalytics, 1000);
     }
-  };
-  
-  // Initialize after a short delay to prevent blocking the main thread
-  setTimeout(initAnalytics, 1000);
+
+    // Enable Firebase Emulator Suite in development
+    if (import.meta.env.DEV) {
+      try {
+        // Uncomment these lines if you want to use Firebase Emulator
+        // connectAuthEmulator(auth, 'http://localhost:9099');
+        // connectFirestoreEmulator(db, 'localhost', 8080);
+        // connectStorageEmulator(storage, 'localhost', 9199);
+        console.log('Firebase running in development mode');
+      } catch (error) {
+        console.error('Firebase emulator connection error:', error);
+      }
+    }
+
+    return { app, auth, db, storage, analytics };
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    throw error;
+  }
+};
+
+// Initialize Firebase and export services
+const { app, auth, db, storage, analytics } = firebaseInit();
+
+export { app, auth, db, storage, analytics };
+
+// Make analytics available globally for debugging
+if (typeof window !== 'undefined') {
+  (window as any).FIREBASE_ANALYTICS = analytics;
 }
-
-export { analytics };
-
-export { auth, db, storage };

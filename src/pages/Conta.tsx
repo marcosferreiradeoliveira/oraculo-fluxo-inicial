@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -15,17 +14,17 @@ const Conta = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
         
-        <main className="flex-1 p-8 animate-fade-in">
+        <main className="flex-1 p-4 md:p-8 animate-fade-in">
           <div className="max-w-4xl mx-auto">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                 <User className="h-8 w-8 text-oraculo-blue" />
                 Minha Conta
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 text-sm md:text-base">
                 Gerencie suas informações pessoais, assinatura e preferências da plataforma.
               </p>
             </div>

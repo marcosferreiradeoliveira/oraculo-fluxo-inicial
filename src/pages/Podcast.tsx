@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -91,26 +90,19 @@ const Podcast = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
         
-        <main className="flex-1 p-8 animate-fade-in">
+        <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-8 flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                  <Headphones className="h-8 w-8 text-oraculo-blue" />
-                  Podcast Oráculo Cultural
-                </h1>
-                <p className="text-gray-600">
-                  Insights semanais sobre o universo dos editais e projetos culturais, direto dos especialistas.
-                </p>
-              </div>
-              {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
-                <Button className="bg-oraculo-blue text-white" onClick={() => navigate('/cadastrar-episodio')}>
-                  + Cadastrar Episódio
-                </Button>
-              )}
+            <div className="mb-8">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                <Headphones className="h-8 w-8 text-oraculo-blue" />
+                Podcast Oráculo Cultural
+              </h1>
+              <p className="text-gray-600 text-sm md:text-base">
+                Acompanhe nossos episódios e fique por dentro das novidades do mundo cultural.
+              </p>
             </div>
 
             {loading ? (

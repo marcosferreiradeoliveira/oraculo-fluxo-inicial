@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -185,18 +184,18 @@ const OraculoAI = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
         
-        <main className="flex-1 p-8 animate-fade-in">
+        <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                 <Brain className="h-8 w-8 text-oraculo-blue" />
                 Oráculo AI
               </h1>
-              <p className="text-gray-600">
-                Sua inteligência artificial especializada em projetos culturais. Analise editais, desenvolva propostas e otimize suas estratégias.
+              <p className="text-gray-600 text-sm md:text-base">
+                Utilize nossa inteligência artificial para analisar editais e maximizar suas chances de aprovação.
               </p>
             </div>
 
@@ -433,29 +432,6 @@ const OraculoAI = () => {
                 </CardHeader>
               </Card>
             </div>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Chat com o Oráculo AI</CardTitle>
-                <CardDescription>
-                  Faça perguntas sobre seu projeto ou cole um edital para análise
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="Cole aqui o texto do edital ou faça sua pergunta sobre projetos culturais..."
-                  className="min-h-[150px] resize-none"
-                />
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">
-                    Máximo 10.000 caracteres
-                  </p>
-                  <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90">
-                    Analisar com IA
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Exibir resumo do edital extraído diretamente na página, fora do Dialog */}
             {resumoEdital && (

@@ -1,11 +1,22 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Headphones, BookText, BarChart3, Clock } from 'lucide-react';
 
-const recentContent = [
+interface ContentItem {
+  id: string;
+  title: string;
+  type: string;
+  icon: React.ElementType;
+  duration: string;
+  date: string;
+  color: string;
+}
+
+const recentContent: ContentItem[] = [
   {
+    id: 'p3uoC5mDd4Sib1r8cBzL', 
     title: 'Acessibilidade Atitudinal: O Diferencial na Avaliação',
     type: 'PODCAST',
     icon: Headphones,
@@ -14,6 +25,7 @@ const recentContent = [
     color: 'text-oraculo-purple'
   },
   {
+    id: '1',
     title: 'O Guia do Orçamento Perfeito',
     type: 'EBOOK',
     icon: BookText,
@@ -22,6 +34,7 @@ const recentContent = [
     color: 'text-oraculo-blue'
   },
   {
+    id: '2',
     title: 'O Ecossistema do Fomento no Brasil',
     type: 'INFOGRÁFICO',
     icon: BarChart3,
@@ -30,6 +43,7 @@ const recentContent = [
     color: 'text-oraculo-magenta'
   },
   {
+    id: '3',
     title: 'Contrapartidas Sociais que Fazem a Diferença',
     type: 'PODCAST',
     icon: Headphones,
@@ -38,6 +52,7 @@ const recentContent = [
     color: 'text-oraculo-purple'
   },
   {
+    id: '4',
     title: 'Prestação de Contas: Guia Prático',
     type: 'EBOOK',
     icon: BookText,
@@ -46,6 +61,7 @@ const recentContent = [
     color: 'text-oraculo-blue'
   },
   {
+    id: '5',
     title: 'Mapeamento de Editais 2024',
     type: 'INFOGRÁFICO',
     icon: BarChart3,
@@ -56,13 +72,25 @@ const recentContent = [
 ];
 
 export function RecentContent() {
+  const navigate = useNavigate();
+
+  const handleItemClick = (item: ContentItem) => {
+    if (item.type === 'PODCAST') {
+      navigate(`/podcast/${item.id}`);
+    }
+  };
+
   return (
     <section>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Novidades na Plataforma</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {recentContent.map((item) => (
-          <Card key={item.title} className="card-hover cursor-pointer group">
+          <Card 
+            key={item.id} 
+            className={`card-hover cursor-pointer group ${item.type === 'PODCAST' ? 'hover:border-oraculo-purple' : ''}`}
+            onClick={() => handleItemClick(item)}
+          >
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className={`p-2 rounded-lg bg-gray-50 group-hover:bg-gray-100 transition-colors`}>

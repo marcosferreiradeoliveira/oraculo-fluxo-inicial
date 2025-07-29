@@ -84,21 +84,21 @@ const Cadastro = () => {
 
   if (showExtra) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-14 h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2">
-              <Sparkles className="h-8 w-8 text-white" />
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2">
+              <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1 text-center">Precisamos de mais algumas informações suas</h1>
-            <p className="text-gray-500 text-sm text-center">Preencha para completar seu cadastro</p>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1 text-center">Precisamos de mais algumas informações suas</h1>
+            <p className="text-gray-500 text-xs md:text-sm text-center">Preencha para completar seu cadastro</p>
           </div>
-          <form onSubmit={handleExtraSubmit} className="space-y-5">
+          <form onSubmit={handleExtraSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1 text-gray-700">Nome completo</label>
               <input
                 type="text"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={nomeCompleto}
                 onChange={e => setNomeCompleto(e.target.value)}
                 required
@@ -108,7 +108,7 @@ const Cadastro = () => {
               <label className="block text-sm font-medium mb-1 text-gray-700">Empresa</label>
               <input
                 type="text"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={empresa}
                 onChange={e => setEmpresa(e.target.value)}
                 required
@@ -117,7 +117,7 @@ const Cadastro = () => {
             {erro && <div className="text-red-500 text-sm text-center">{erro}</div>}
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition"
+              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
               disabled={loading}
             >
               {loading ? 'Salvando...' : 'Finalizar cadastro'}
@@ -129,104 +129,92 @@ const Cadastro = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
         <Link to="/" className="flex flex-col items-center mb-6 group cursor-pointer">
-          <div className="w-14 h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2 group-hover:scale-105 transition">
-            <Sparkles className="h-8 w-8 text-white" />
+          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center mb-2 group-hover:scale-105 transition">
+            <Sparkles className="h-6 w-6 md:h-8 md:w-8 text-white" />
           </div>
-          <span className="text-lg font-bold text-oraculo-blue group-hover:underline">Oráculo Cultural</span>
+          <span className="text-base md:text-lg font-bold text-oraculo-blue group-hover:underline">Oráculo Cultural</span>
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-            {isLogin ? 'Entrar na sua conta' : 'Criar conta'}
-          </h1>
-          <p className="text-gray-500 text-sm">
-            {isLogin ? 'Acesse sua área exclusiva' : 'Comece a usar o Oráculo Cultural'}
-          </p>
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1">
+          {isLogin ? 'Entrar na sua conta' : 'Criar conta'}
+        </h1>
+        <p className="text-gray-500 text-xs md:text-sm mb-6">
+          {isLogin ? 'Acesse sua área exclusiva' : 'Comece a usar o Oráculo Cultural'}
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-700">E-mail</label>
             <input
               type="email"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              autoFocus
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-700">Senha</label>
             <input
               type="password"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
               value={senha}
               onChange={e => setSenha(e.target.value)}
               required
             />
-            {!isLogin && (
-              <ul className="text-xs text-gray-500 mt-1 ml-1 list-disc list-inside space-y-0.5">
-                <li>Mínimo 8 caracteres</li>
-                <li>Pelo menos uma letra maiúscula</li>
-                <li>Pelo menos uma letra minúscula</li>
-                <li>Pelo menos um número</li>
-                <li>Pelo menos um caractere especial</li>
-              </ul>
-            )}
           </div>
           {!isLogin && (
             <div>
               <label className="block text-sm font-medium mb-1 text-gray-700">Repita a senha</label>
               <input
                 type="password"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={repitaSenha}
                 onChange={e => setRepitaSenha(e.target.value)}
-                required
+                required={!isLogin}
               />
             </div>
           )}
           {!isLogin && (
-            <div className="flex items-start gap-2 mt-2">
-              <input
-                type="checkbox"
-                id="termos"
-                checked={aceitaTermos}
-                onChange={e => setAceitaTermos(e.target.checked)}
-                className="mt-1"
-                required
-              />
-              <label htmlFor="termos" className="text-xs text-gray-600 select-none">
-                Estou de acordo com o
-                <a href="/termo-de-uso" target="_blank" rel="noopener noreferrer" className="text-oraculo-blue underline mx-1">Termo de Uso</a>
-                e
-                <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-oraculo-blue underline mx-1">Política de Privacidade</a>.
-              </label>
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  id="termos"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-oraculo-blue focus:ring-oraculo-blue"
+                  checked={aceitaTermos}
+                  onChange={e => setAceitaTermos(e.target.checked)}
+                />
+              </div>
+              <div className="ml-3 text-sm">
+                <label htmlFor="termos" className="text-gray-600">
+                  Concordo com o <a href="/termos" className="text-oraculo-blue hover:underline">Termo de Uso</a> e a <a href="/privacidade" className="text-oraculo-blue hover:underline">Política de Privacidade</a>.
+                </label>
+              </div>
             </div>
           )}
           {erro && <div className="text-red-500 text-sm text-center">{erro}</div>}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition"
+            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
             disabled={loading}
           >
-            {loading ? 'Aguarde...' : isLogin ? 'Entrar' : 'Criar conta'}
+            {loading ? 'Processando...' : isLogin ? 'Entrar' : 'Criar conta'}
           </button>
         </form>
-        {!isLogin && (
-          <div className="mt-4 text-center text-xs text-gray-500">
-            Ao criar uma conta, você concorda com o
-            <a href="/termo-de-uso" target="_blank" rel="noopener noreferrer" className="text-oraculo-blue underline mx-1">Termo de Uso</a>
-            e a
-            <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-oraculo-blue underline mx-1">Política de Privacidade</a>.
-          </div>
-        )}
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center text-sm">
+          <span className="text-gray-600">
+            {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}{' '}
+          </span>
           <button
-            className="text-oraculo-blue hover:underline text-sm font-medium"
-            onClick={() => { setIsLogin(!isLogin); setErro(''); }}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setErro('');
+            }}
+            className="text-oraculo-blue font-medium hover:underline"
           >
-            {isLogin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
+            {isLogin ? 'Criar conta' : 'Fazer login'}
           </button>
         </div>
       </div>
@@ -234,4 +222,4 @@ const Cadastro = () => {
   );
 };
 
-export default Cadastro; 
+export default Cadastro;

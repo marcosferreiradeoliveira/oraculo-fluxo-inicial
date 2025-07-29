@@ -55,66 +55,106 @@ const EditarEdital = () => {
 
   if (loading || !edital) return <div className="p-8">Carregando...</div>;
 
-  // Conversão para exibir deadline como string yyyy-mm-dd
-  const deadlineStr = edital.deadline
-    ? (edital.deadline.seconds
-        ? new Date(edital.deadline.seconds * 1000)
-        : new Date(edital.deadline)
-      ).toISOString().slice(0, 10)
-    : '';
-
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
-        <main className="flex-1 flex items-start justify-start p-8 gap-8 animate-fade-in">
-          <div className="w-full max-w-md">
-            {/* Breadcrumb ao estilo CriarProjeto */}
-            <nav className="mb-8">
-              <ol className="flex flex-wrap items-center gap-2 text-sm">
-                <li>
-                  <a href="/" className="text-oraculo-blue hover:underline">Início</a>
-                </li>
-                <li className="text-gray-400">/</li>
-                <li>
-                  <a href="/oraculo-ai" className="text-oraculo-blue hover:underline">Oráculo AI</a>
-                </li>
-                <li className="text-gray-400">/</li>
-                <li className="font-semibold text-gray-700">Editar Edital</li>
-              </ol>
-            </nav>
-            <h1 className="text-2xl font-bold text-gray-900 mb-6 text-left">Editar Edital</h1>
-            <div className="space-y-4 text-left">
-              <label className="block font-medium mb-1">Nome</label>
-              <Input value={edital.nome || ''} onChange={e => handleChange('nome', e.target.value)} />
-              <label className="block font-medium mb-1">Escopo</label>
-              <Input value={edital.escopo || ''} onChange={e => handleChange('escopo', e.target.value)} />
-              <label className="block font-medium mb-1">Critérios</label>
-              <Input value={edital.criterios || ''} onChange={e => handleChange('criterios', e.target.value)} />
-              <label className="block font-medium mb-1">Categorias</label>
-              <Input value={edital.categorias || ''} onChange={e => handleChange('categorias', e.target.value)} />
-              <label className="block font-medium mb-1">Data de Encerramento</label>
-              <Input
-                type="date"
-                value={deadlineStr}
-                onChange={e => {
-                  const date = new Date(e.target.value);
-                  handleChange('deadline', date);
-                }}
-              />
-              <label className="block font-medium mb-1">Valor Máximo de Premiação</label>
-              <Input
-                type="number"
-                value={edital.value || ''}
-                onChange={e => handleChange('value', Number(e.target.value))}
-                min={0}
-                step={1}
-              />
-              <label className="block font-medium mb-1">Textos Exigidos</label>
-              <Input value={Array.isArray(edital.textos_exigidos) ? edital.textos_exigidos.join(', ') : edital.textos_exigidos || ''} onChange={e => handleChange('textos_exigidos', e.target.value.split(','))} />
-              <Button className="mt-4" onClick={handleSalvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar Alterações'}</Button>
+        
+        <main className="flex-1 p-4 md:p-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                {loading ? 'Carregando...' : `Editar Edital: ${edital?.nome || ''}`}
+              </h1>
+              <p className="text-gray-600 text-sm md:text-base">
+                Atualize as informações do edital conforme necessário
+              </p>
             </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-oraculo-blue"></div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-md overflow-hidden p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Nome do Edital</label>
+                    <Input
+                      value={edital?.nome || ''}
+                      onChange={(e) => handleChange('nome', e.target.value)}
+                      placeholder="Nome do edital"
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Data de Encerramento</label>
+                    <Input
+                      type="date"
+                      value={edital?.dataEncerramento || ''}
+                      onChange={(e) => handleChange('dataEncerramento', e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                  <textarea
+                    value={edital?.descricao || ''}
+                    onChange={(e) => handleChange('descricao', e.target.value)}
+                    placeholder="Descrição do edital"
+                    className="w-full border rounded-md p-2 min-h-[100px] focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FileUpload
+                    label="Arquivo de Orçamento"
+                    file={orcamentoFile}
+                    setFile={setOrcamentoFile}
+                    currentFileUrl={edital?.orcamentoUrl}
+                    onUpload={() => orcamentoFile && handleUpload('orcamentoUrl', orcamentoFile)}
+                  />
+
+                  <FileUpload
+                    label="Cronograma"
+                    file={cronogramaFile}
+                    setFile={setCronogramaFile}
+                    currentFileUrl={edital?.cronogramaUrl}
+                    onUpload={() => cronogramaFile && handleUpload('cronogramaUrl', cronogramaFile)}
+                  />
+
+                  <FileUpload
+                    label="Carta de Anuência"
+                    file={cartaFile}
+                    setFile={setCartaFile}
+                    currentFileUrl={edital?.cartaAprovacaoUrl}
+                    onUpload={() => cartaFile && handleUpload('cartaAprovacaoUrl', cartaFile)}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.history.back()}
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSalvar}
+                    disabled={salvando}
+                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+                  >
+                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -122,4 +162,37 @@ const EditarEdital = () => {
   );
 };
 
-export default EditarEdital; 
+// Componente auxiliar para upload de arquivos
+const FileUpload = ({ label, file, setFile, currentFileUrl, onUpload }: any) => (
+  <div className="space-y-2">
+    <label className="block text-sm font-medium text-gray-700">{label}</label>
+    <div className="flex items-center gap-2">
+      <Input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-oraculo-blue/10 file:text-oraculo-blue hover:file:bg-oraculo-blue/20"
+      />
+      {file && (
+        <Button
+          type="button"
+          onClick={onUpload}
+          className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white text-sm"
+        >
+          Upload
+        </Button>
+      )}
+    </div>
+    {currentFileUrl && (
+      <a
+        href={currentFileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm text-oraculo-blue hover:underline inline-block mt-1"
+      >
+        Ver arquivo atual
+      </a>
+    )}
+  </div>
+);
+
+export default EditarEdital;

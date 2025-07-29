@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Brain, Headphones, BookOpen, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -65,6 +64,7 @@ export function QuickAccessCards() {
                 <Button 
                   variant="ghost" 
                   className="p-0 h-auto text-oraculo-blue hover:text-oraculo-purple group"
+                  onClick={() => navigate(action.href)}
                 >
                   Começar agora
                   <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />

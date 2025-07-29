@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -102,19 +101,19 @@ const Index = () => {
       <DashboardSidebar />
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col md:ml-64">
         {/* Header */}
         <DashboardHeader />
         
         {/* Main Content */}
-        <main className="flex-1 p-8 animate-fade-in">
+        <main className="flex-1 p-4 md:p-8 animate-fade-in">
           <div className="max-w-7xl mx-auto">
             {/* Welcome Message */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                 Bem-vinda ao seu Oráculo Cultural! ✨
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 text-sm md:text-base">
                 Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.
               </p>
             </div>

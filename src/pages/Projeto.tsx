@@ -14,12 +14,9 @@ const steps = [
   'Criar Projeto',
   'Avaliar com IA',
   'Alterar com IA',
-  'Gerar Textos',
-  'Gerar Orçamento',
-  'Gerar Cronograma',
-  'Gerar Cartas de anuência'
+  'Gerar Textos'
 ];
-const currentStep = 1; // Avaliar com IA
+const currentStep: number = 1; // Avaliar com IA
 
 const Projeto = () => {
   const { id } = useParams();
@@ -352,159 +349,194 @@ const Projeto = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      
+      <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
-        <main className="flex-1 p-8 animate-fade-in flex gap-8 items-start justify-start">
-          <div className="max-w-3xl mx-0 flex-1">
-            {/* Breadcrumbs/Stepper */}
-            <nav className="mb-8">
-              <ol className="flex flex-wrap items-center gap-2 text-sm">
-                {steps.map((step, idx) => (
-                  <li key={step} className="flex items-center gap-2">
-                    {idx < etapaAtual ? (
-                      <span className={`px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1`}>
-                        <span className="font-bold">✓</span> {step}
-                      </span>
-                    ) : idx === etapaAtual ? (
-                      idx === 0 ? (
-                        <Link to="/criar-projeto" className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
-                      ) : idx === 2 ? (
-                        <Link to={`/projeto/${id}/alterar-com-ia`} className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
-                      ) : (
-                        <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">{step}</span>
-                      )
-                    ) : (
-                      <span className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700">{step}</span>
-                    )}
-                    {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
-                  </li>
-                ))}
-              </ol>
-            </nav>
-            <h1 className="text-3xl font-bold text-gray-900 mb-4 text-left">{projeto.nome}</h1>
-            <div className="mb-4">
-              <span className="inline-block bg-oraculo-blue/10 text-oraculo-blue px-3 py-1 rounded-full text-xs font-semibold mr-2">
-                {projeto.categoria}
-              </span>
-              {projeto.edital_associado && (
-                <span className="inline-block bg-oraculo-purple/10 text-oraculo-purple px-3 py-1 rounded-full text-xs font-semibold">
-                  Edital: {projeto.edital_associado}
-                </span>
-              )}
+        
+        <main className="flex-1 p-4 md:p-8">
+          <div className="max-w-5xl mx-auto">
+            <div className="mb-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                {projeto?.nome || 'Carregando projeto...'}
+              </h1>
+              <p className="text-gray-600 text-sm md:text-base">
+                {projeto?.descricao ? 'Gerenciamento do projeto' : 'Carregando detalhes...'}
+              </p>
             </div>
+
+            {/* Barra de progresso */}
             <div className="mb-8">
-              <h2 className="text-lg font-semibold mb-1">Resumo do Projeto</h2>
-              {mostrarAlterarIA ? (
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-xl font-semibold text-oraculo-blue">Editor de Texto</h2>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={toggleAlterarIA}
-                        className="text-gray-700"
-                      >
-                        Voltar para visualização
-                      </Button>
-                      <Button 
-                        onClick={handleSalvar} 
-                        disabled={salvando}
-                        className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
-                      >
-                        {salvando ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Salvando...
-                          </>
-                        ) : 'Salvar alterações'}
-                      </Button>
+              <div className="flex items-center justify-between mb-2">
+                {steps.map((step, index) => (
+                  <div key={index} className="flex flex-col items-center">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
+                      {index + 1}
                     </div>
+                    <span className={`text-xs mt-1 text-center ${index === currentStep ? 'font-medium text-oraculo-blue' : 'text-gray-500'}`}>
+                      {step}
+                    </span>
                   </div>
-                  
-                  <div className="border border-gray-200 rounded-lg p-4 mb-6 bg-white">
-                    <textarea
-                      value={descricaoEditada}
-                      onChange={(e) => setDescricaoEditada(e.target.value)}
-                      className="w-full min-h-[300px] p-3 border rounded-md focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
-                      placeholder="Digite o texto do seu projeto aqui..."
-                    />
-                  </div>
-                  
-                  {sugestoes.length > 0 && (
-                    <div className="mt-8">
-                      <h3 className="text-lg font-semibold mb-3 text-oraculo-blue">Sugestões de Melhoria</h3>
-                      <div className="space-y-4">
-                        {sugestoes.map((sugestao, idx) => (
-                          <div key={idx} className={`p-4 border rounded-lg ${aprovacoes[idx] ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
-                            <div className="flex justify-between items-start">
-                              <p className="flex-1 text-gray-800">
-                                <span className="font-medium">Sugestão {idx + 1}:</span> {sugestao}
-                              </p>
-                              <div className="ml-4 flex-shrink-0">
-                                {aprovacoes[idx] ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    <Check className="h-3 w-3 mr-1" /> Aprovada
-                                  </span>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleAprovar(idx)}
-                                    disabled={gerando}
-                                    className="text-oraculo-blue border-oraculo-blue/50 hover:bg-oraculo-blue/10"
-                                  >
-                                    {gerando ? (
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                      <Check className="h-4 w-4 mr-1" />
-                                    )}
-                                    Aplicar
-                                  </Button>
-                                )}
+                ))}
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${(currentStep + 1) * 25}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8">
+              {/* Breadcrumbs/Stepper */}
+              <nav className="mb-8">
+                <ol className="flex flex-wrap items-center gap-2 text-sm">
+                  {steps.map((step, idx) => (
+                    <li key={step} className="flex items-center gap-2">
+                      {idx < etapaAtual ? (
+                        <span className={`px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1`}>
+                          <span className="font-bold">✓</span> {step}
+                        </span>
+                      ) : idx === etapaAtual ? (
+                        idx === 0 ? (
+                          <Link to="/criar-projeto" className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
+                        ) : idx === 2 ? (
+                          <Link to={`/projeto/${id}/alterar-com-ia`} className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">{step}</span>
+                        )
+                      ) : (
+                        <span className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700">{step}</span>
+                      )}
+                      {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+              <h1 className="text-3xl font-bold text-gray-900 mb-4 text-left">{projeto.nome}</h1>
+              <div className="mb-4">
+                <span className="inline-block bg-oraculo-blue/10 text-oraculo-blue px-3 py-1 rounded-full text-xs font-semibold mr-2">
+                  {projeto.categoria}
+                </span>
+                {projeto.edital_associado && (
+                  <span className="inline-block bg-oraculo-purple/10 text-oraculo-purple px-3 py-1 rounded-full text-xs font-semibold">
+                    Edital: {projeto.edital_associado}
+                  </span>
+                )}
+              </div>
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold mb-1">Resumo do Projeto</h2>
+                {mostrarAlterarIA ? (
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <h2 className="text-xl font-semibold text-oraculo-blue">Editor de Texto</h2>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={toggleAlterarIA}
+                          className="text-gray-700"
+                        >
+                          Voltar para visualização
+                        </Button>
+                        <Button 
+                          onClick={handleSalvar} 
+                          disabled={salvando}
+                          className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+                        >
+                          {salvando ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Salvando...
+                            </>
+                          ) : 'Salvar alterações'}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="border border-gray-200 rounded-lg p-4 mb-6 bg-white">
+                      <textarea
+                        value={descricaoEditada}
+                        onChange={(e) => setDescricaoEditada(e.target.value)}
+                        className="w-full min-h-[300px] p-3 border rounded-md focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
+                        placeholder="Digite o texto do seu projeto aqui..."
+                      />
+                    </div>
+                    
+                    {sugestoes.length > 0 && (
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-3 text-oraculo-blue">Sugestões de Melhoria</h3>
+                        <div className="space-y-4">
+                          {sugestoes.map((sugestao, idx) => (
+                            <div key={idx} className={`p-4 border rounded-lg ${aprovacoes[idx] ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                              <div className="flex justify-between items-start">
+                                <p className="flex-1 text-gray-800">
+                                  <span className="font-medium">Sugestão {idx + 1}:</span> {sugestao}
+                                </p>
+                                <div className="ml-4 flex-shrink-0">
+                                  {aprovacoes[idx] ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      <Check className="h-3 w-3 mr-1" /> Aprovada
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleAprovar(idx)}
+                                      disabled={gerando}
+                                      className="text-oraculo-blue border-oraculo-blue/50 hover:bg-oraculo-blue/10"
+                                    >
+                                      {gerando ? (
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      ) : (
+                                        <Check className="h-4 w-4 mr-1" />
+                                      )}
+                                      Aplicar
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-gray-700 whitespace-pre-line mb-6">{projeto.resumo || projeto.descricao}</p>
+                    
+                    {/* Seção de Análise */}
+                    {projeto.analise_ia && !analisando && (
+                      <div className="mt-6">
+                        <h2 className="text-xl font-semibold text-oraculo-blue mb-3 flex items-center gap-2">
+                          <Brain className="h-5 w-5" /> Análise do Oráculo
+                        </h2>
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow">
+                          <div className="whitespace-pre-line text-gray-800 text-sm">
+                            {projeto.analise_ia}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <p className="text-gray-700 whitespace-pre-line mb-6">{projeto.resumo || projeto.descricao}</p>
-                  
-                  {/* Seção de Análise */}
-                  {projeto.analise_ia && !analisando && (
-                    <div className="mt-6">
-                      <h2 className="text-xl font-semibold text-oraculo-blue mb-3 flex items-center gap-2">
-                        <Brain className="h-5 w-5" /> Análise do Oráculo
-                      </h2>
-                      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow">
-                        <div className="whitespace-pre-line text-gray-800 text-sm">
-                          {projeto.analise_ia}
-                        </div>
-                        <div className="mt-3 text-xs text-gray-500 flex justify-end">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={toggleAlterarIA}
-                            className="text-oraculo-blue hover:bg-oraculo-blue/10"
-                          >
-                            Ver sugestões de melhoria →
-                          </Button>
+                          <div className="mt-3 text-xs text-gray-500 flex justify-end">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={toggleAlterarIA}
+                              className="text-oraculo-blue hover:bg-oraculo-blue/10"
+                            >
+                              Ver sugestões de melhoria →
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <aside className="hidden lg:block w-full max-w-sm ml-8">
             <div className="bg-gradient-to-br from-oraculo-blue/10 to-oraculo-purple/10 border-l-4 border-oraculo-blue rounded-xl p-6 shadow flex flex-col gap-2">
               <img src={AnalisarImg} alt="Análise do Oráculo" className="rounded-lg mb-3 w-full object-cover max-h-40" />
-              <h2 className="text-lg font-semibold text-oraculo-blue mb-2 flex items-center gap-2">
+              <h2 className="text-lg font-semibold mb-2 text-oraculo-blue flex items-center gap-2">
                 <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
               </h2>
               <p className="text-gray-700 text-sm mb-2">
