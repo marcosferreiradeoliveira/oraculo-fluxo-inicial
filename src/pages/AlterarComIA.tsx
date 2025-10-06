@@ -296,9 +296,17 @@ const AlterarComIA = () => {
                     Produzindo o texto...
                   </div>
                 )}
-                <Button onClick={handleSalvar} disabled={salvando || gerando} className="mb-4">
-                  {salvando ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleSalvar} disabled={salvando || gerando} className="mb-4">
+                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                  <Button 
+                    onClick={() => id && navigate(`/projeto/${id}/gerar-textos`)}
+                    className="mb-4 bg-oraculo-blue hover:bg-oraculo-blue/90"
+                  >
+                    Gerar Textos
+                  </Button>
+                </div>
               </div>
               {sugestoes.length > 0 && (
                 <div className="p-4">

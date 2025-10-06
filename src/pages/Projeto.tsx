@@ -227,10 +227,17 @@ const Projeto = () => {
 
   // Função para analisar com IA
   const analisarComIA = async () => {
-    setAnalisando(true);
+    // Reset states first to ensure clean start
     setAnalise(null);
     setErroIA(null);
+    setStatusIA('');
     setSubEtapasIA([]);
+    
+    // Set loading to true to show the loading state
+    setAnalisando(true);
+    
+    // Small delay to ensure UI updates
+    await new Promise(resolve => setTimeout(resolve, 50));
     try {
       await updateStatusWithDelay('Iniciando análise do projeto...', ['Preparando ambiente de análise...']);
       await updateStatusWithDelay('Coletando dados do projeto e edital...', 
@@ -320,7 +327,10 @@ const Projeto = () => {
 
   // Function to handle step navigation
   const navigateToStep = (stepIndex: number) => {
-    if (stepIndex > etapaAtual) return; // Only allow navigation to previous or current steps
+    // Allow navigation to next step if current step is 'Alterar com IA' (step 2) and target is 'Gerar textos' (step 3)
+    if (stepIndex > etapaAtual && !(etapaAtual === 2 && stepIndex === 3)) {
+      return; // Only allow navigation to previous, current, or next step from 'Alterar com IA'
+    }
     
     const routes = [
       '/criar-projeto',
@@ -465,30 +475,80 @@ const Projeto = () => {
               <div className="mb-8">
                 {/* Seção de Análise */}
                 {projeto.analise_ia && !analisando && (
-                  <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-oraculo-blue mb-3 flex items-center gap-2">
-                      <Brain className="h-5 w-5" /> Análise do Oráculo
-                    </h2>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow">
-                      <div className="whitespace-pre-line text-gray-800 text-sm">
-                        {projeto.analise_ia}
+                  <div className="mb-8">
+                    <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white px-6 py-4 rounded-t-lg flex items-center gap-3">
+                      <Brain className="h-6 w-6 text-white" />
+                      <h2 className="text-xl font-bold">Análise do Oráculo</h2>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-b-lg shadow-lg overflow-hidden">
+                      <div className="p-6 space-y-6">
+                        {projeto.analise_ia.split('\n\n').map((section, index) => {
+                          // Check for section headers (lines ending with :)
+                          const isSectionHeader = section.trim().endsWith(':');
+                          const isNumberedItem = /^\d+[\.\)]/.test(section.trim());
+                          
+                          if (isSectionHeader) {
+                            return (
+                              <div key={index} className="border-b border-gray-100 pb-2 mb-4">
+                                <h3 className="text-lg font-semibold text-oraculo-blue">
+                                  {section.replace(':', '')}
+                                </h3>
+                              </div>
+                            );
+                          } else if (isNumberedItem) {
+                            return (
+                              <div key={index} className="flex gap-3">
+                                <div className="flex-shrink-0 h-6 w-6 rounded-full bg-oraculo-blue/10 text-oraculo-blue flex items-center justify-center text-sm font-medium">
+                                  {section.match(/^\d+/)?.[0]}
+                                </div>
+                                <p className="text-gray-700">
+                                  {section.replace(/^\d+[\.\)]\s*/, '')}
+                                </p>
+                              </div>
+                            );
+                          } else if (section.startsWith('Sugestão:')) {
+                            return (
+                              <div key={index} className="bg-oraculo-blue/5 p-4 rounded-lg border-l-4 border-oraculo-blue">
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium text-oraculo-blue">💡 {section.replace('Sugestão:', '').trim()}</span>
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <p key={index} className="text-gray-700 leading-relaxed">
+                              {section}
+                            </p>
+                          );
+                        })}
                       </div>
-                      <div className="mt-3 text-xs text-gray-500 flex justify-end">
+                      <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                        <div className="flex gap-2">
                         <Button 
-                          variant="ghost" 
+                          variant="outline" 
                           size="sm" 
                           onClick={toggleAlterarIA}
-                          className="text-oraculo-blue hover:bg-oraculo-blue/10"
+                          className="text-oraculo-blue border-oraculo-blue/50 hover:bg-oraculo-blue/5 hover:border-oraculo-blue/80 transition-colors"
                         >
-                          Ver sugestões de melhoria →
+                          Ver sugestões de melhoria <span className="ml-1">→</span>
                         </Button>
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          onClick={() => navigateToStep(3)}
+                          className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                        >
+                          Gerar textos <span className="ml-1">→</span>
+                        </Button>
+                      </div>
                       </div>
                     </div>
                   </div>
                 )}
-                <h2 className="text-lg font-semibold mb-1">Resumo do Projeto</h2>
+                <h2 className="text-lg font-semibold mb-4 text-gray-800">Resumo do Projeto</h2>
                 {mostrarAlterarIA ? (
-                  <div className="mb-6">
+                  <div className="mb-8 p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
                     <div className="flex justify-between items-center mb-3">
                       <h2 className="text-xl font-semibold text-oraculo-blue">Editor de Texto</h2>
                       <div className="flex gap-2">
@@ -564,47 +624,47 @@ const Projeto = () => {
                     )}
                   </div>
                 ) : (
-                  <p className="text-gray-700 whitespace-pre-line mb-6">{projeto.resumo || projeto.descricao}</p>
+                  <>
+                    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm mb-6">
+                      <p className="text-gray-700 whitespace-pre-line leading-relaxed">{projeto.resumo || projeto.descricao}</p>
+                    </div>
+                    
+                    {!projeto.analise_ia && !analisando && (
+                      <div className="mb-8 p-6 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-l-4 border-oraculo-blue rounded-xl shadow-sm">
+                        <h2 className="text-lg font-semibold mb-3 text-oraculo-blue flex items-center gap-2">
+                          <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
+                        </h2>
+                        <p className="text-gray-700 text-sm mb-4">
+                          Agora chegou a hora de avaliar seu projeto. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
+                        </p>
+                        <Button 
+                          size="lg" 
+                          className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-lg px-8 py-4 flex items-center gap-2 w-full justify-center" 
+                          onClick={analisarComIA} 
+                          disabled={analisando}
+                        >
+                          <Brain className="h-6 w-6" />
+                          {analisando ? 'Analisando...' : 'Analisar com IA'}
+                        </Button>
+                        {analisando && (
+                          <div className="mt-4 bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
+                            {statusIA || 'Iniciando análise...'}
+                            {subEtapasIA.length > 0 && (
+                              <ul className="mt-2 text-left text-xs text-gray-600 list-disc list-inside">
+                                {subEtapasIA.map((etapa, idx) => (
+                                  <li key={idx}>{etapa}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           </div>
-          <aside className="hidden lg:block w-full max-w-sm ml-4">
-            <div className="bg-gradient-to-br from-oraculo-blue/10 to-oraculo-purple/10 border-l-4 border-oraculo-blue rounded-xl p-8 shadow flex flex-col gap-2">
-              <img src={AnalisarImg} alt="Análise do Oráculo" className="rounded-lg mb-3 w-full object-cover max-h-40" />
-              <h2 className="text-lg font-semibold mb-2 text-oraculo-blue flex items-center gap-2">
-                <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
-              </h2>
-              <p className="text-gray-700 text-sm mb-2">
-                Agora chegou a hora de avaliar seu projeto.<br/><br/>
-                O Oráculo olha seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.<br/><br/>
-                Ele não vai alterar seu projeto, mas sim sugerir mudanças, que você pode aceitar ou não.
-              </p>
-              <Button size="lg" className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-lg px-8 py-4 flex items-center gap-2 mt-2" onClick={analisarComIA} disabled={analisando}>
-                <Brain className="h-6 w-6" />
-                {analisando ? 'Analisando...' : 'Analisar com IA'}
-              </Button>
-              {analisando && statusIA && (
-                <div className="mt-4 mb-2 bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
-                  {statusIA}
-                  <ul className="mt-2 text-left text-xs text-gray-600 list-disc list-inside">
-                    {subEtapasIA.map((etapa, idx) => (
-                      <li key={idx}>{etapa}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {analise && (
-                <div className="mt-6 bg-white border rounded-lg p-4 text-gray-800 whitespace-pre-line text-sm shadow">
-                  <strong className="block text-oraculo-blue mb-2">Análise do Oráculo:</strong>
-                  {analise}
-                </div>
-              )}
-              {erroIA && (
-                <div className="mt-4 text-red-500 text-sm text-center">{erroIA}</div>
-              )}
-            </div>
-          </aside>
         </main>
       </div>
     </div>

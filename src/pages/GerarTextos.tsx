@@ -20,11 +20,15 @@ const GERAR_TEXTO_PROMPT = `Você é um especialista em elaboração de projetos
 Gere um texto claro, objetivo e bem estruturado para o seguinte item do projeto: `;
 
 const GerarTextos = () => {
+  // Force update hook
+  const [, forceUpdate] = useState<{} | undefined>();
   const { id } = useParams<{ id: string }>();
+  console.log('Current route id:', id); // Debug log
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<ProjetoDocument | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
   const [textos, setTextos] = useState<Record<TextoTipo, string>>({
     justificativa: '',
     objetivos: '',
@@ -33,142 +37,189 @@ const GerarTextos = () => {
     cronograma: ''
   });
   const [gerando, setGerando] = useState<TextoTipo | null>(null);
-  const [textoSelecionado, setTextoSelecionado] = useState<TextoTipo>('justificativa');
+  const [progresso, setProgresso] = useState<string>('');
   const isMounted = useRef(true);
 
-  const steps = [
-    'Criar Projeto',
-    'Avaliar com IA',
-    'Alterar com IA',
-    'Gerar Textos'
-  ];
-  const currentStep: number = 3; 
+  const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos'];
+  const currentStep = 3; // This page is the 4th step
 
   useEffect(() => {
-    const checkPremiumStatus = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          if (userData.isPremium !== true) {
-            navigate('/cadastro-premium');
-          }
-        } else {
-          navigate('/cadastro-premium');
-        }
-      } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
-        navigate('/cadastro-premium');
-      }
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
     };
-
-    checkPremiumStatus();
-  }, [user, navigate]);
-
+  }, []);
+  
+  // Debug effect to log state changes
+  useEffect(() => {
+    console.log('[DEBUG] gerando state changed to:', gerando);
+  }, [gerando]);
+  
+  const [textoSelecionado, setTextoSelecionado] = useState<TextoTipo>('justificativa');
+  // Debug effect to log text changes
+  useEffect(() => {
+    console.log('[DEBUG] textos state changed:', textos);
+    // Log the current selected text whenever it changes
+    if (textoSelecionado && textos[textoSelecionado]) {
+      console.log(`[DEBUG] Current text for ${textoSelecionado}:`, textos[textoSelecionado]);
+    }
+  }, [textos, textoSelecionado]);
+  // Buscar projeto ao carregar o componente
   useEffect(() => {
     const fetchProjeto = async () => {
-      if (!id) return;
+      if (!id || !user) {
+        setLoading(false);
+        navigate('/'); // Redirect to home if no user or id
+        return;
+      }
       
       setLoading(true);
       try {
         const db = getFirestore();
         const projetoRef = doc(db, 'projetos', id);
+        
+        // First check if the project exists and user has access
         const projetoSnap = await getDoc(projetoRef);
         
-        if (projetoSnap.exists()) {
-          const data = { id: projetoSnap.id, ...projetoSnap.data() } as ProjetoDocument;
-          setProjeto(data);
-          
-          // Initialize textos state with empty strings for all required fields
-          setTextos(prev => ({
-            justificativa: '',
-            objetivos: '',
-            metodologia: '',
-            resultados_esperados: '',
-            cronograma: '',
-            // Merge with any existing texts from the database
-            ...(data.textos_gerados || {})
-          }));
-        } else {
-          navigate('/projetos');
+        if (!projetoSnap.exists()) {
+          console.error('Projeto não encontrado');
+          setLoading(false);
+          navigate('/');
+          return;
         }
+        
+        const projetoData = { 
+          id: projetoSnap.id, 
+          ...projetoSnap.data() 
+        } as ProjetoDocument;
+        
+        // Set the project data
+        setProjeto(projetoData);
+        setLoading(false);
+        
       } catch (error) {
         console.error('Erro ao carregar projeto:', error);
-        alert('Erro ao carregar o projeto');
-      } finally {
         setLoading(false);
+        // Don't redirect on error, just show an error state
       }
     };
-
+    
     fetchProjeto();
-
-    return () => {
-      isMounted.current = false;
-    };
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   const salvarNoFirestore = async (tipo: TextoTipo, texto: string) => {
-    if (!id) return;
-    
-    try {
-      const db = getFirestore();
-      const projetoRef = doc(db, 'projetos', id);
-      
-      await updateDoc(projetoRef, {
-        [`textos_gerados.${tipo}`]: texto,
-        atualizado_em: serverTimestamp()
-      });
-      
-      console.log(`Texto salvo no Firestore para ${tipo}`);
-    } catch (error) {
-      console.error('Erro ao salvar no Firestore:', error);
-    }
-  };
-
-  const gerarTexto = async (tipo: TextoTipo) => {
-    console.log(`[${new Date().toISOString()}] gerarTexto iniciado para:`, tipo);
-    
-    if (gerando) {
-      console.log(`[${new Date().toISOString()}] Já existe uma geração em andamento para:`, gerando);
+    if (!id) {
+      console.error('ID do projeto não encontrado');
       return;
     }
     
     try {
-      console.log(`[${new Date().toISOString()}] Iniciando geração para:`, tipo);
+      console.log(`[DEBUG] Salvando texto para ${tipo} no Firestore`);
+      const db = getFirestore();
+      const projetoRef = doc(db, 'projetos', id);
+      
+      // First update the local state
+      setTextos(prev => {
+        const newTexts = {
+          ...prev,
+          [tipo]: texto
+        };
+        console.log('[DEBUG] Estado local atualizado:', newTexts);
+        return newTexts;
+      });
+      
+      // Then update Firestore with the complete textos_gerados object
+      await updateDoc(projetoRef, {
+        textos_gerados: {
+          ...textos, // Include all existing texts
+          [tipo]: texto // Update the current text
+        },
+        atualizado_em: serverTimestamp()
+      });
+      
+      console.log(`[DEBUG] Texto salvo com sucesso para ${tipo}`);
+      return true;
+    } catch (error) {
+      console.error('Erro ao salvar no Firestore:', error);
+      // Revert the local state if Firestore update fails
+      setTextos(prev => ({
+        ...prev
+      }));
+      return false;
+    }
+  };
+
+  const gerarTexto = async (tipo: TextoTipo): Promise<boolean> => {
+    const log = (message: string, data?: any) => {
+      const timestamp = new Date().toISOString();
+      if (data !== undefined) {
+        console.log(`[${timestamp}] ${message}`, data);
+      } else {
+        console.log(`[${timestamp}] ${message}`);
+      }
+    };
+
+    log('Iniciando geração de texto para:', { tipo, projetoId: id });
+    
+    try {
+      // 1. Validações iniciais
+      if (!projeto) {
+        const errorMsg = 'Projeto não carregado';
+        log(errorMsg);
+        alert('Erro: Projeto não carregado. Por favor, recarregue a página.');
+        throw new Error(errorMsg);
+      }
+      
+      if (gerando) {
+        const errorMsg = `Já existe uma geração em andamento para: ${gerando}`;
+        log(errorMsg);
+        return false; // Indica que não foi possível iniciar a geração
+      }
+      
+      // 2. Inicialização do estado
+      setProgresso('Inicializando geração...');
       setGerando(tipo);
       
-      // Clear previous text
-      console.log(`[${new Date().toISOString()}] Limpando texto anterior`);
+      // 3. Limpeza do texto existente
+      log('Limpando texto existente...');
       setTextos(prev => ({
         ...prev,
         [tipo]: ''
       }));
       
-      console.log(`[${new Date().toISOString()}] Enviando requisição para o servidor`);
+      // 4. Aguarda atualização do estado
+      await new Promise(resolve => setTimeout(resolve, 50));
+      log('Estado limpo com sucesso');
+      
+      // 5. Prepara a requisição
+      setProgresso('Preparando dados...');
+      const requestData = {
+        projetoId: id,
+        tipo,
+        dadosProjeto: projeto,
+        prompt: GERAR_TEXTO_PROMPT + tipo
+      };
+      
+      log('Dados da requisição:', { 
+        ...requestData, 
+        dadosProjeto: '[...]' // Não logar o projeto inteiro
+      });
+      
+      // 6. Envia a requisição
+      setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
       
       const response = await fetch('https://analisarprojeto-665760404958.us-central1.run.app/gerar-texto', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projetoId: id,
-          tipo,
-          dadosProjeto: projeto,
-          prompt: GERAR_TEXTO_PROMPT + tipo
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
       });
       
       const requestTime = Date.now() - startTime;
+      log(`Resposta recebida em ${requestTime}ms`, {
+        status: response.status,
+        statusText: response.statusText
+      });
       console.log(`[${new Date().toISOString()}] Resposta recebida em ${requestTime}ms`, response);
       
       if (!response.ok) {
@@ -178,93 +229,232 @@ const GerarTextos = () => {
       }
       
       const contentType = response.headers.get('content-type') || '';
-      
       if (contentType.includes('application/json')) {
-        console.log('[DEBUG] Recebida resposta JSON');
         const data = await response.json();
+        console.log('[DEBUG] Recebida resposta JSON');
         console.log('[DEBUG] Dados recebidos:', data);
         
         if (data.texto) {
-          console.log('[DEBUG] Texto recebido:', data.texto);
+          setProgresso('Gerando texto...');
+          const fullTextData = data.texto.trim();
+          console.log('[DEBUG] Texto recebido via JSON:', fullTextData);
           if (isMounted.current) {
-            setTextos(prev => ({
-              ...prev,
-              [tipo]: data.texto
-            }));
-            await salvarNoFirestore(tipo, data.texto);
+            setTextos(prev => {
+              const newTexts = {
+                ...prev,
+                [tipo]: fullTextData
+              };
+              console.log('[DEBUG] Atualizando textos com novo valor:', newTexts);
+              return newTexts;
+            });
+            await salvarNoFirestore(tipo, fullTextData);
+            setGerando(null); // Clear loading state after successful update
+            return true; // Indica sucesso
           }
         } else {
           throw new Error('Resposta do servidor não contém texto');
+          return false; // This line is unreachable but satisfies TypeScript's return type
         }
-      } else if (contentType.includes('text/event-stream')) {
-        console.log('[DEBUG] Iniciando leitura do stream');
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
+    } else if (contentType.includes('text/event-stream') || contentType.includes('text/plain')) {
+        console.log('[DEBUG] Iniciando leitura do stream de texto');
+        const decoder = new TextDecoder('utf-8');
+        const reader = response.body?.getReader();
+        let generationComplete = false;
         let buffer = '';
-        let fullText = '';
+        let fullText = ''; // Moved outside to maintain state across chunks
         
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
-          
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop() || '';
-          
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
             
-            try {
-              const data = JSON.parse(line.substring(6).trim());
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
               
-              if (data.type === 'chunk' && data.content) {
-                fullText += data.content;
+              try {
+                const data = JSON.parse(line.substring(6).trim());
+                console.log('[STREAM] Received data:', data);
                 
-                if (isMounted.current) {
-                  setTextos(prev => ({
-                    ...prev,
-                    [tipo]: fullText
-                  }));
-                }
-                
-              } else if (data.type === 'complete') {
-                const finalText = data.fullText || fullText;
-                
-                if (finalText) {
-                  if (isMounted.current) {
+                if (data.type === 'chunk' && data.content) {
+                  console.log('[STREAM] Received chunk:', data.content);
+                  // Append new content to the full text
+                  fullText += data.content;
+                  
+                  console.log('[STREAM] Updating UI with new text length:', fullText.length);
+                  // Update the state with the latest text
+                  setTextos(prev => {
+                    const newTexts = {
+                      ...prev,
+                      [tipo]: fullText
+                    };
+                    console.log('[STREAM] State updated with text length:', fullText.length);
+                    return newTexts;
+                  });
+                  
+                  // Update the textarea directly for better performance
+                  const textarea = document.querySelector('.text-display') as HTMLTextAreaElement;
+                  if (textarea) {
+                    textarea.value = fullText;
+                    textarea.scrollTop = textarea.scrollHeight;
+                  }
+                  
+                  // Save to Firestore every 3 seconds or when text is complete
+                  if (Date.now() % 3000 < 50) { // Roughly every 3 seconds
+                    salvarNoFirestore(tipo, fullText).catch(console.error);
+                  }
+                } else if (data.type === 'complete') {
+                  const finalText = data.fullText || fullText;
+                  console.log('[DEBUG] Geração completa, texto final:', finalText);
+                  
+                  if (finalText) {
+                    console.log('[DEBUG] Final text received, updating state and saving to Firestore');
+                    // Update state first
                     setTextos(prev => ({
                       ...prev,
                       [tipo]: finalText
                     }));
+                    // Then save to Firestore and wait for completion
+                    const saved = await salvarNoFirestore(tipo, finalText);
+                    if (!saved) {
+                      console.error('Falha ao salvar o texto final no Firestore');
+                    }
                   }
-                  await salvarNoFirestore(tipo, finalText);
+                  generationComplete = true;
+                  break; // Exit the loop when complete
                 }
-                return;
+              } catch (e) {
+                console.error('Erro ao processar chunk:', e, 'Linha:', line);
               }
-            } catch (e) {
-              console.error('Erro ao processar chunk:', e);
+            }
+            
+            if (generationComplete) break; // Exit the while loop if complete
+          }
+          
+          // If we get here, the stream ended
+          if (!generationComplete) {
+            console.log('[DEBUG] Stream finalizado sem evento complete');
+            if (fullText) {
+              console.log('[DEBUG] Salvando texto final do stream:', fullText);
+              setTextos(prev => ({
+                ...prev,
+                [tipo]: fullText
+              }));
+              await salvarNoFirestore(tipo, fullText);
+            } else {
+              console.error('[ERROR] Nenhum texto foi recebido do servidor');
+              throw new Error('Nenhum texto foi recebido do servidor');
+            }
+          }
+          
+        } catch (error) {
+          console.error('Erro durante o processamento do stream:', error);
+          throw error;
+        } finally {
+          // Ensure the reader is released
+          if (reader) {
+            try { 
+              await reader.cancel(); 
+            } catch (e) { 
+              console.error('Erro ao cancelar reader:', e); 
             }
           }
         }
       } else {
         throw new Error(`Tipo de resposta não suportado: ${contentType}`);
       }
-      
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Erro ao gerar texto:`, error);
-      alert(`Erro ao gerar texto: ${error.message}`);
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error(`[${new Date().toISOString()}] Erro ao gerar texto para ${tipo}:`, error);
+      
+      // Only show alert for non-cancellation errors
+      if (!errorMsg.includes('cancel') && !errorMsg.includes('Já existe')) {
+        alert(`Erro ao gerar texto: ${errorMsg}`);
+      }
+      
+      // In case of error, ensure the text is not left empty
+      if (isMounted.current) {
+        setTextos(prev => ({
+          ...prev,
+          [tipo]: prev[tipo] || 'Ocorreu um erro ao gerar o texto. Por favor, tente novamente.'
+        }));
+      }
+      throw error; // Re-throw to be caught by the outer catch if needed
     } finally {
       console.log(`[${new Date().toISOString()}] Finalizando geração para:`, tipo);
+      // Always clear the loading state
       if (isMounted.current) {
-        setGerando(null);
+        console.log('[DEBUG] Clearing loading state in finally');
+        // Use requestAnimationFrame to ensure React has finished its current render cycle
+        requestAnimationFrame(() => {
+          if (isMounted.current) {
+            setGerando(null);
+            forceUpdate({});
+          }
+        }, );
       }
     }
   };
 
   const handleGerarTexto = async () => {
-    await gerarTexto(textoSelecionado);
+    if (!textoSelecionado) {
+      console.error('Nenhum texto selecionado');
+      return;
+    }
+
+    console.log('[DEBUG] handleGerarTexto started for:', textoSelecionado);
+    
+    // Set loading state
+    setGerando(textoSelecionado);
+    
+    try {
+      console.log('[DEBUG] Current state before generation:', {
+        gerando,
+        currentText: textos[textoSelecionado],
+        hasText: !!textos[textoSelecionado]
+      });
+      
+      // Clear any existing text for the selected type
+      setTextos(prev => ({
+        ...prev,
+        [textoSelecionado]: ''
+      }));
+      
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Generate the text
+      const success = await gerarTexto(textoSelecionado);
+      
+      if (success) {
+        console.log('[DEBUG] Text generation successful');
+        // Force a re-render to ensure the text is displayed
+        forceUpdate({});
+      }
+      
+    } catch (error) {
+      console.error('Error in handleGerarTexto:', error);
+      alert(`Erro ao gerar texto: ${error.message}`);
+    } finally {
+      console.log('[DEBUG] handleGerarTexto completed for:', textoSelecionado);
+      
+      // Always clear loading state
+      if (isMounted.current) {
+        setGerando(null);
+      }
+      
+      // Log final state
+      console.log('[DEBUG] Final state after handleGerarTexto:', {
+        gerando,
+        currentText: textos[textoSelecionado],
+        hasText: !!textos[textoSelecionado]
+      });
+    }
   };
 
   const handleCopiarTexto = async () => {
@@ -291,10 +481,54 @@ const GerarTextos = () => {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <DashboardSidebar />
-        <div className="flex-1 flex flex-col">
+        <main className="flex-1 p-4 md:p-8">
+          <div className="flex flex-col items-center justify-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-oraculo-blue mb-4" />
+            <p className="text-gray-600">{progresso || 'Carregando projeto...'}</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!projeto) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <DashboardSidebar />
+        <main className="flex-1 p-4 md:p-8">
+          <div className="bg-white rounded-lg p-6 shadow-sm text-center">
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Erro ao carregar o projeto</h2>
+            <p className="text-gray-600 mb-4">Não foi possível carregar as informações do projeto. Verifique sua conexão ou tente novamente mais tarde.</p>
+            <Button 
+              onClick={() => window.location.reload()}
+              className="bg-oraculo-blue hover:bg-oraculo-blue/90"
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Render loading state with progress message
+  if (gerando) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <DashboardSidebar />
+        <div className="flex-1 flex flex-col md:ml-64">
           <DashboardHeader />
-          <main className="flex-1 p-8 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-oraculo-blue" />
+          <main className="flex-1 flex items-center justify-center p-8">
+            <div className="max-w-2xl w-full bg-white rounded-xl shadow-md p-8 text-center">
+              <div className="flex justify-center mb-6">
+                <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Gerando {gerando.replace('_', ' ')}</h2>
+              <p className="text-gray-600 mb-6">{progresso}</p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: '75%' }}></div>
+              </div>
+            </div>
           </main>
         </div>
       </div>
@@ -304,7 +538,6 @@ const GerarTextos = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      
       <div className="flex-1 flex flex-col md:ml-64">
         <DashboardHeader />
         
@@ -322,16 +555,46 @@ const GerarTextos = () => {
             {/* Barra de progresso */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-2">
-                {steps.map((step, index) => (
-                  <div key={index} className="flex flex-col items-center">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      {index + 1}
-                    </div>
-                    <span className={`text-xs mt-1 text-center ${index === currentStep ? 'font-medium text-oraculo-blue' : 'text-gray-500'}`}>
-                      {step}
-                    </span>
-                  </div>
-                ))}
+                {steps.map((step, index) => {
+                  const isClickable = index <= currentStep;
+                  const route = index === 0 
+                    ? '/criar-projeto' 
+                    : index === 1 
+                      ? `/projeto/${id}` 
+                      : index === 2 
+                        ? `/projeto/${id}/alterar-com-ia` 
+                        : `#`;
+                  
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => isClickable && navigate(route)}
+                      className={`flex flex-col items-center ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      disabled={!isClickable}
+                    >
+                      <div 
+                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
+                          index <= currentStep 
+                            ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90' 
+                            : 'bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <span 
+                        className={`text-xs mt-1 text-center transition-colors ${
+                          index === currentStep 
+                            ? 'font-medium text-oraculo-blue' 
+                            : index < currentStep 
+                              ? 'text-oraculo-blue hover:underline' 
+                              : 'text-gray-500'
+                        }`}
+                      >
+                        {step}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
@@ -413,22 +676,32 @@ const GerarTextos = () => {
               
               <div className="p-4 border-t bg-gray-50">
                 <div className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 bg-white border rounded-lg">
-                  {textos[textoSelecionado] ? (
+                  {gerando === textoSelecionado ? (
+                    <div className="relative h-full">
+                      <textarea
+                        className="w-full h-full p-2 border rounded text-gray-800 bg-white text-display min-h-[200px]"
+                        readOnly
+                        value={textos[textoSelecionado] || ''}
+                        placeholder="Gerando texto, aguarde..."
+                      />
+                      <div className="absolute bottom-4 right-4 flex items-center bg-white/90 px-3 py-1 rounded-full shadow-sm border">
+                        <Loader2 className="h-4 w-4 animate-spin text-oraculo-blue mr-2" />
+                        <span className="text-sm text-gray-600">Gerando...</span>
+                      </div>
+                    </div>
+                  ) : textos[textoSelecionado] ? (
                     <div className="prose max-w-none">
-                      {textos[textoSelecionado].split('\n').map((paragraph, idx) => (
-                        <p key={idx}>{paragraph}</p>
-                      ))}
+                      {textos[textoSelecionado] ? (
+                        textos[textoSelecionado].split('\n').map((paragraph, idx) => (
+                          <p key={idx} className="whitespace-pre-wrap">{paragraph || '\u00A0'}</p>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 italic">Nenhum texto disponível. Tente gerar novamente.</p>
+                      )}
                     </div>
                   ) : (
                     <div className="h-full flex items-center justify-center text-gray-400">
-                      {gerando === textoSelecionado ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-8 w-8 animate-spin text-oraculo-blue" />
-                          <p>Gerando texto, aguarde...</p>
-                        </div>
-                      ) : (
-                        <p>Clique em "Gerar Texto" para criar o conteúdo.</p>
-                      )}
+                      <p>Clique em "Gerar Texto" para criar o conteúdo.</p>
                     </div>
                   )}
                 </div>

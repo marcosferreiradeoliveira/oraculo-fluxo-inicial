@@ -117,7 +117,7 @@ export function DashboardHeader() {
                 <Sparkles className="h-5 w-5 text-oraculo-blue" />
                 <Link to="/cadastro">
                   <Button size="sm" className="mt-0.5 bg-oraculo-blue text-white hover:bg-oraculo-purple">
-                    Criar conta
+                    Acessar Conta
                   </Button>
                 </Link>
               </div>
