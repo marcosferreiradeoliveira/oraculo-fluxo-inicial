@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -5,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Brain, FileText, Target, Lightbulb, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus } from 'lucide-react';
+import { Brain, FileText, Target, Lightbulb, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
-import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -20,6 +22,27 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Remover qualquer configuração do workerSrc para o CDN
 // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { useAuthState } from 'react-firebase-hooks/auth';
+
+interface DadosExtraidos {
+  data_encerramento?: string | null;
+  // Add other fields that might be present in dadosExtraidos
+  [key: string]: any;
+}
+
+interface Edital {
+  id: string;
+  deadline?: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  } | string | null;
+  titulo?: string;
+  descricao?: string;
+  data_encerramento?: any; // Add data_encerramento to the Edital interface
+  pdf_url?: string;
+  criado_em?: any;
+}
+
 
 const OraculoAI = () => {
   // Novo state para os editais vindos do Firestore
@@ -43,46 +66,96 @@ const OraculoAI = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
-    const fetchEditais = async () => {
-      setLoading(true);
+    const fetchData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "editais"));
-        const editais: any[] = [];
-        querySnapshot.forEach((doc) => {
-          editais.push({ id: doc.id, ...doc.data() });
+        setLoading(true);
+        setLoadingProjetos(true);
+        
+        // Fetch Editais
+        const editaisSnapshot = await getDocs(collection(db, "editais"));
+        const editais: Edital[] = [];
+        const now = new Date();
+        
+        editaisSnapshot.forEach((doc) => {
+          const edital = { id: doc.id, ...doc.data() } as Edital;
+          
+          if (edital.deadline) {
+            let deadlineDate: Date;
+            
+            if (edital.deadline && typeof edital.deadline === 'object' && 'toDate' in edital.deadline) {
+              deadlineDate = edital.deadline.toDate();
+            } else if (edital.deadline && typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
+              deadlineDate = new Date(edital.deadline.seconds * 1000);
+            } else if (typeof edital.deadline === 'string') {
+              deadlineDate = new Date(edital.deadline);
+            } else {
+              deadlineDate = new Date();
+            }
+            
+            if (!isNaN(deadlineDate.getTime()) && deadlineDate >= now) {
+              editais.push(edital);
+            }
+          } else {
+            editais.push(edital);
+          }
         });
+        
         setEditaisAbertos(editais);
+        
+        // Fetch Projetos
+        if (user) {
+          console.log('Buscando projetos para o usuário:', user.uid);
+          try {
+            const projetosRef = collection(db, 'projetos');
+            const q = query(
+              projetosRef,
+              where('user_id', '==', user.uid)
+            );
+            
+            console.log('Query criada:', q);
+            const projetosSnapshot = await getDocs(q);
+            console.log('Documentos encontrados:', projetosSnapshot.docs.length);
+            
+            const projetos = projetosSnapshot.docs.map(doc => {
+              const data = doc.data();
+              console.log(`Projeto ${doc.id}:`, data);
+              return {
+                id: doc.id,
+                ...data
+              };
+            });
+            
+            console.log('Projetos carregados:', projetos);
+            setMeusProjetos(projetos);
+          } catch (error) {
+            console.error('Erro ao buscar projetos:', error);
+          }
+        }
       } catch (error) {
-        console.error("Erro ao buscar editais:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
+        setLoadingProjetos(false);
       }
     };
-    fetchEditais();
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    
+    fetchData();
+    
+    // Set up auth state listener
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
       if (user) {
-        setIsLoggedIn(true);
-        setLoadingProjetos(true);
-        const q = query(
-          collection(db, "projetos"),
-          where("user_id", "==", user.uid)
-        );
-        const querySnapshot = await getDocs(q);
-        const projetos: any[] = [];
-        querySnapshot.forEach((doc) => {
-          projetos.push({ id: doc.id, ...doc.data() });
-        });
-        setMeusProjetos(projetos);
-        setLoadingProjetos(false);
+        // Refresh projects when auth state changes
+        fetchData();
       } else {
-        setIsLoggedIn(false);
         setMeusProjetos([]);
-        setLoadingProjetos(false);
       }
     });
-    return () => unsubscribe();
-  }, []);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
 
   const getDificuldadeColor = (dificuldade: string) => {
     switch (dificuldade) {
@@ -90,6 +163,19 @@ const OraculoAI = () => {
       case 'Média': return 'bg-oraculo-gold';
       case 'Alta': return 'bg-red-500';
       default: return 'bg-gray-500';
+    }
+  };
+
+  const handleDeleteEdital = async (editalId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este edital?')) {
+      try {
+        await deleteDoc(doc(db, 'editais', editalId));
+        setEditaisAbertos(editaisAbertos.filter(edital => edital.id !== editalId));
+        alert('Edital excluído com sucesso!');
+      } catch (error) {
+        console.error('Erro ao excluir edital:', error);
+        alert('Erro ao excluir edital. Tente novamente.');
+      }
     }
   };
 
@@ -150,7 +236,7 @@ const OraculoAI = () => {
         max_tokens: 1200,
         temperature: 0.2,
       });
-      let dadosExtraidos = {};
+      let dadosExtraidos: DadosExtraidos = {};
       try {
         dadosExtraidos = JSON.parse(completion.choices[0].message?.content || '{}');
       } catch {
@@ -159,19 +245,38 @@ const OraculoAI = () => {
 
       setEtapaLog(log => [...log, "Salvando edital no Firestore..."]);
       // 4. Salvar no Firestore
-      const docRef = await addDoc(collection(db, 'editais'), {
-        pdf_url: pdfUrl,
-        // analise_aprovados_texto: analiseAprovadosTextoFinal, // Remover este campo
+      const editalData: any = {
         ...dadosExtraidos,
-        criado_em: new Date(),
-      });
+        pdf_url: pdfUrl,
+        criado_em: Timestamp.now(),
+      };
+
+      // Convert data_encerramento to Timestamp if it exists
+      if (editalData.data_encerramento) {
+        const dataEncerramento = new Date(editalData.data_encerramento);
+        if (!isNaN(dataEncerramento.getTime())) {
+          editalData.data_encerramento = Timestamp.fromDate(dataEncerramento);
+        } else {
+          console.warn('Formato de data inválido:', editalData.data_encerramento);
+          delete editalData.data_encerramento; // Remove invalid date
+        }
+      }
+
+      const docRef = await addDoc(collection(db, 'editais'), editalData);
       setEtapaLog(log => [...log, "Cadastro concluído!"]);
-      setResumoEdital({
+      
+      // Recarregar a página após 1.5 segundos para mostrar a mensagem de sucesso
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
+      const newEdital = {
         ...dadosExtraidos,
-        // analise_aprovados_texto: analiseAprovadosTextoFinal, // Remover este campo
         pdf_url: pdfUrl,
-      });
+      };
+      setResumoEdital(newEdital);
       setPdfEdital(null);
+      setOpenCadastro(false); // Close the modal after successful registration
     } catch (e) {
       setEtapaLog(log => [...log, 'Erro: ' + (e as any).message]);
       alert('Erro ao cadastrar edital: ' + (e as any).message);
@@ -222,8 +327,11 @@ const OraculoAI = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {loadingProjetos ? (
-                  <p>Carregando projetos...</p>
-                ) : isLoggedIn === false ? (
+                  <div className="flex items-center justify-center p-4 col-span-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-oraculo-blue"></div>
+                    <span className="ml-2">Carregando projetos...</span>
+                  </div>
+                ) : !user ? (
                   <div className="flex flex-col items-start gap-1">
                     <span>Nenhum projeto ainda.</span>
                     <span className="text-base font-bold">Crie seu primeiro projeto com a ajuda da IA</span>
@@ -238,18 +346,15 @@ const OraculoAI = () => {
                       Novo Projeto
                     </Button>
                   </div>
-                ) : meusProjetos.length === 0 ? (
-                  <div className="flex flex-col items-start gap-2">
-                    <p>Projetos não encontrados. Crie seu primeiro projeto</p>
-                    <Button className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" onClick={() => {
-                      if (!user) {
-                        setShowAuthModal(true);
-                      } else {
-                        navigate('/criar-projeto');
-                      }
-                    }}>
+                ) : meusProjetos && meusProjetos.length === 0 ? (
+                  <div className="col-span-3 text-center">
+                    <p className="text-gray-600 mb-4">Você ainda não tem nenhum projeto cadastrado.</p>
+                    <Button 
+                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
+                      onClick={() => navigate('/criar-projeto')}
+                    >
                       <Plus className="h-4 w-4 mr-2" />
-                      Criar Projeto
+                      Criar Primeiro Projeto
                     </Button>
                   </div>
                 ) : (
@@ -293,27 +398,37 @@ const OraculoAI = () => {
                 <Button variant="outline">
                   Ver todos os editais
                 </Button>
-                {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
-                  <>
-                    <Button className="ml-2 bg-oraculo-blue text-white" onClick={() => setOpenCadastro(true)}>
-                      Cadastrar Edital
-                    </Button>
-                  </>
+                {user && (
+                  <Button className="ml-2 bg-oraculo-blue text-white" onClick={() => setOpenCadastro(true)}>
+                    Cadastrar Edital
+                  </Button>
                 )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {loading ? (
-                  <p>Carregando editais...</p>
+                  <div className="flex items-center justify-center p-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-oraculo-blue"></div>
+                    <span className="ml-2">Carregando editais...</span>
+                  </div>
+                ) : editaisAbertos.length === 0 ? (
+                  <div className="text-center p-4 text-gray-500">
+                    Nenhum edital aberto no momento.
+                  </div>
                 ) : (
-                  editaisAbertos.map((edital, index) => {
-                    let diffDays = null;
+                  editaisAbertos.map((edital, index) => {let diffDays = null;
                     if (edital.deadline) {
-                      let deadlineDate;
-                      if (edital.deadline.seconds) {
+                      let deadlineDate: Date;
+                      if (typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
+                        // Handle Firestore Timestamp
                         deadlineDate = new Date(edital.deadline.seconds * 1000);
-                      } else {
+                      } else if (typeof edital.deadline === 'string') {
+                        // Handle string date
                         deadlineDate = new Date(edital.deadline);
+                      } else {
+                        // Handle other cases or throw an error
+                        console.error('Unexpected deadline format:', edital.deadline);
+                        return null; // or handle the error case appropriately
                       }
                       const now = new Date();
                       const diffTime = deadlineDate.getTime() - now.getTime();
@@ -321,74 +436,68 @@ const OraculoAI = () => {
                     }
                     const prioridade = diffDays !== null ? getPrioridade(diffDays) : null;
                     return (
-                      <Card key={edital.id || index} className="hover:shadow-lg transition-shadow cursor-pointer">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between mb-2">
-                            <CardTitle className="text-lg flex-1">{edital.nome}</CardTitle>
-                            {/* Badge de prioridade automática */}
-                            {prioridade && prioridade.label && (
-                              <Badge className={`${prioridade.color} text-white`}>
-                                Prioridade: {prioridade.label}
-                              </Badge>
-                            )}
-                          </div>
-                          <CardDescription className="space-y-2">
-                            <div className="flex items-center gap-1 text-sm">
-                              <MapPin className="h-3 w-3" />
-                              {edital.institution}
-                            </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                {typeof edital.value === 'number' ? edital.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : edital.value}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {(() => {
-                                  if (!edital.deadline) return null;
-                                  let deadlineDate;
-                                  if (edital.deadline.seconds) {
-                                    deadlineDate = new Date(edital.deadline.seconds * 1000);
-                                  } else {
-                                    deadlineDate = new Date(edital.deadline);
-                                  }
-                                  const now = new Date();
-                                  const diffTime = deadlineDate.getTime() - now.getTime();
-                                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                  if (diffDays < 0) return 'Encerrado';
-                                  if (diffDays === 0) return 'Último dia';
-                                  if (diffDays === 1) return '1 dia restante';
-                                  return `${diffDays} dias restantes`;
-                                })()}
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-500">{edital.area}</div>
-                            {/* Exemplo: link para documento */}
-                            {edital.modelos_documentos && edital.modelos_documentos["Carta de Anuência"] && (
-                              <a
-                                href={edital.modelos_documentos["Carta de Anuência"].url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 underline text-xs"
-                              >
-                                Baixar Carta de Anuência
-                              </a>
-                            )}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <Button variant="outline" className="w-full">
-                            Escrever com IA para este Edital
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="w-full mt-2"
-                            onClick={() => navigate(`/editar-edital/${edital.id}`)}
+                      <Card key={edital.id || index} className="relative hover:shadow-lg transition-shadow cursor-pointer">
+                      {/* Action Buttons - Only visible to admin */}
+                      {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
+                        <div className="absolute top-2 right-2 flex gap-1 z-10">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Navigate to edit page with edital ID
+                              navigate(`/editar-edital/${edital.id}`);
+                            }}
+                            className="p-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-colors"
+                            title="Editar edital"
                           >
-                            Editar Edital
-                          </Button>
-                        </CardContent>
-                      </Card>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEdital(edital.id);
+                            }}
+                            className="p-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-colors"
+                            title="Excluir edital"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <CardTitle className="text-lg flex-1">{edital.nome || 'Edital sem nome'}</CardTitle>
+                          {prioridade && prioridade.label && (
+                            <Badge className={`${prioridade.color} text-white`}>
+                              Prioridade: {prioridade.label}
+                            </Badge>
+                          )}
+                        </div>
+                        {edital.descricao && (
+                          <p className="text-sm text-gray-600 mb-2">{edital.descricao}</p>
+                        )}
+                        <div className="flex items-center text-sm text-gray-500 gap-4">
+                          {edital.data_encerramento && (
+                            <span className="flex items-center">
+                              <Calendar className="h-4 w-4 mr-1" />
+                              {edital.data_encerramento?.toDate ? 
+                                edital.data_encerramento.toDate().toLocaleDateString('pt-BR') :
+                                new Date(edital.data_encerramento).toLocaleDateString('pt-BR')
+                              }
+                            </span>
+                          )}
+                          {edital.valor_maximo_premiacao && (
+                            <span className="flex items-center">
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              {edital.valor_maximo_premiacao}
+                            </span>
+                          )}
+                        </div>
+                      </CardHeader>
+                    </Card>
                     );
                   })
                 )}

@@ -7,7 +7,7 @@ import { getAuth } from 'firebase/auth';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-const CadastroPremium = () => {
+const cadastroPremium = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState({ email: '', userId: '' });
@@ -22,7 +22,6 @@ const CadastroPremium = () => {
           const db = getFirestore();
           const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
           if (userDoc.exists()) {
-            const userData = userDoc.data();
             setUserData({
               email: user.email || '',
               userId: user.uid
@@ -43,14 +42,12 @@ const CadastroPremium = () => {
       return;
     }
 
-    // Call the onPremiumClick function to log this action
     try {
       const functions = getFunctions();
       const onPremiumClick = httpsCallable(functions, 'onPremiumClick');
       await onPremiumClick({});
     } catch (error) {
       console.error('Error logging premium click:', error);
-      // Don't stop the flow if logging fails
     }
 
     setLoading(true);
@@ -116,7 +113,7 @@ const CadastroPremium = () => {
                   onClick={handlePremium}
                   disabled={loading || !userData.email}
                 >
-                  {loading ? 'Processando...' : 'Assinar Plano Premium - R$29,90/mês'}
+                  {loading ? 'Processando...' : 'Assinar Plano Premium - R$49,90/mês'}
                 </Button>
                 <p className="text-sm text-gray-500 mt-2">
                   Já é premium? Faça login normalmente para acessar todos os recursos.
@@ -130,4 +127,4 @@ const CadastroPremium = () => {
   );
 };
 
-export default CadastroPremium; 
+export default cadastroPremium;

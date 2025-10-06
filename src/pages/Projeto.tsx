@@ -318,6 +318,22 @@ const Projeto = () => {
     }
   };
 
+  // Function to handle step navigation
+  const navigateToStep = (stepIndex: number) => {
+    if (stepIndex > etapaAtual) return; // Only allow navigation to previous or current steps
+    
+    const routes = [
+      '/criar-projeto',
+      `/projeto/${id}`,
+      `/projeto/${id}/alterar-com-ia`,
+      `/projeto/${id}/gerar-textos`
+    ];
+    
+    if (routes[stepIndex]) {
+      navigate(routes[stepIndex]);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
@@ -364,24 +380,43 @@ const Projeto = () => {
               </p>
             </div>
 
-            {/* Barra de progresso */}
+            {/* Progress Bar with Clickable Steps */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-2">
                 {steps.map((step, index) => (
                   <div key={index} className="flex flex-col items-center">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    <button 
+                      onClick={() => navigateToStep(index)}
+                      className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                        index <= etapaAtual 
+                          ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90 cursor-pointer' 
+                          : 'bg-gray-200 text-gray-600 cursor-not-allowed'
+                      }`}
+                      disabled={index > etapaAtual}
+                      aria-label={`Ir para ${step}`}
+                    >
                       {index + 1}
-                    </div>
-                    <span className={`text-xs mt-1 text-center ${index === currentStep ? 'font-medium text-oraculo-blue' : 'text-gray-500'}`}>
+                    </button>
+                    <button 
+                      onClick={() => navigateToStep(index)}
+                      disabled={index > etapaAtual}
+                      className={`text-xs mt-1 text-center ${
+                        index === etapaAtual 
+                          ? 'font-medium text-oraculo-blue' 
+                          : index < etapaAtual 
+                            ? 'text-oraculo-blue hover:underline cursor-pointer' 
+                            : 'text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
                       {step}
-                    </span>
+                    </button>
                   </div>
                 ))}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${(currentStep + 1) * 25}%` }}
+                  style={{ width: `${(etapaAtual + 1) * 25}%` }}
                 ></div>
               </div>
             </div>
@@ -393,19 +428,23 @@ const Projeto = () => {
                   {steps.map((step, idx) => (
                     <li key={step} className="flex items-center gap-2">
                       {idx < etapaAtual ? (
-                        <span className={`px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1`}>
+                        <button 
+                          onClick={() => navigateToStep(idx)}
+                          className="px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1 hover:bg-green-200"
+                        >
                           <span className="font-bold">✓</span> {step}
-                        </span>
+                        </button>
                       ) : idx === etapaAtual ? (
-                        idx === 0 ? (
-                          <Link to="/criar-projeto" className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
-                        ) : idx === 2 ? (
-                          <Link to={`/projeto/${id}/alterar-com-ia`} className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white hover:underline">{step}</Link>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">{step}</span>
-                        )
+                        <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">
+                          {step}
+                        </span>
                       ) : (
-                        <span className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700">{step}</span>
+                        <button 
+                          disabled
+                          className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700 cursor-not-allowed"
+                        >
+                          {step}
+                        </button>
                       )}
                       {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
                     </li>
@@ -424,6 +463,29 @@ const Projeto = () => {
                 )}
               </div>
               <div className="mb-8">
+                {/* Seção de Análise */}
+                {projeto.analise_ia && !analisando && (
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-oraculo-blue mb-3 flex items-center gap-2">
+                      <Brain className="h-5 w-5" /> Análise do Oráculo
+                    </h2>
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow">
+                      <div className="whitespace-pre-line text-gray-800 text-sm">
+                        {projeto.analise_ia}
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500 flex justify-end">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={toggleAlterarIA}
+                          className="text-oraculo-blue hover:bg-oraculo-blue/10"
+                        >
+                          Ver sugestões de melhoria →
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <h2 className="text-lg font-semibold mb-1">Resumo do Projeto</h2>
                 {mostrarAlterarIA ? (
                   <div className="mb-6">
@@ -502,39 +564,13 @@ const Projeto = () => {
                     )}
                   </div>
                 ) : (
-                  <>
-                    <p className="text-gray-700 whitespace-pre-line mb-6">{projeto.resumo || projeto.descricao}</p>
-                    
-                    {/* Seção de Análise */}
-                    {projeto.analise_ia && !analisando && (
-                      <div className="mt-6">
-                        <h2 className="text-xl font-semibold text-oraculo-blue mb-3 flex items-center gap-2">
-                          <Brain className="h-5 w-5" /> Análise do Oráculo
-                        </h2>
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow">
-                          <div className="whitespace-pre-line text-gray-800 text-sm">
-                            {projeto.analise_ia}
-                          </div>
-                          <div className="mt-3 text-xs text-gray-500 flex justify-end">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={toggleAlterarIA}
-                              className="text-oraculo-blue hover:bg-oraculo-blue/10"
-                            >
-                              Ver sugestões de melhoria →
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <p className="text-gray-700 whitespace-pre-line mb-6">{projeto.resumo || projeto.descricao}</p>
                 )}
               </div>
             </div>
           </div>
-          <aside className="hidden lg:block w-full max-w-sm ml-8">
-            <div className="bg-gradient-to-br from-oraculo-blue/10 to-oraculo-purple/10 border-l-4 border-oraculo-blue rounded-xl p-6 shadow flex flex-col gap-2">
+          <aside className="hidden lg:block w-full max-w-sm ml-4">
+            <div className="bg-gradient-to-br from-oraculo-blue/10 to-oraculo-purple/10 border-l-4 border-oraculo-blue rounded-xl p-8 shadow flex flex-col gap-2">
               <img src={AnalisarImg} alt="Análise do Oráculo" className="rounded-lg mb-3 w-full object-cover max-h-40" />
               <h2 className="text-lg font-semibold mb-2 text-oraculo-blue flex items-center gap-2">
                 <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo

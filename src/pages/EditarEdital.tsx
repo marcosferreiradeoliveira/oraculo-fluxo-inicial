@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 
 const EditarEdital = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [edital, setEdital] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -64,6 +65,18 @@ const EditarEdital = () => {
         
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
+            <Button 
+              variant="ghost"
+              onClick={() => navigate(-1)}
+              className="mb-4 flex items-center gap-2 text-oraculo-blue hover:bg-oraculo-blue/10"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="m12 19-7-7 7-7"/>
+                <path d="M19 12H5"/>
+              </svg>
+              Voltar
+            </Button>
+            
             <div className="mb-6">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                 {loading ? 'Carregando...' : `Editar Edital: ${edital?.nome || ''}`}
@@ -94,8 +107,10 @@ const EditarEdital = () => {
                     <label className="block text-sm font-medium text-gray-700">Data de Encerramento</label>
                     <Input
                       type="date"
-                      value={edital?.dataEncerramento || ''}
-                      onChange={(e) => handleChange('dataEncerramento', e.target.value)}
+                      value={edital?.data_encerramento?.toDate ? 
+                        edital.data_encerramento.toDate().toISOString().split('T')[0] : 
+                        (edital?.data_encerramento || '')}
+                      onChange={(e) => handleChange('data_encerramento', e.target.value)}
                       className="w-full"
                     />
                   </div>
@@ -137,20 +152,13 @@ const EditarEdital = () => {
                   />
                 </div>
 
-                <div className="flex justify-end space-x-4 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => window.history.back()}
-                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
+                <div className="flex justify-end pt-4">
+                  <Button 
                     onClick={handleSalvar}
                     disabled={salvando}
-                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+                    className="bg-oraculo-blue text-white hover:bg-oraculo-blue/90"
                   >
-                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                    {salvando ? 'Salvando...' : 'Salvar alterações'}
                   </Button>
                 </div>
               </div>

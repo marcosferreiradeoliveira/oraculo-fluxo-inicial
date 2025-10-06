@@ -52,7 +52,32 @@ const CriarProjeto = () => {
     const fetchEditais = async () => {
       const db = getFirestore();
       const snap = await getDocs(collection(db, 'editais'));
-      setEditais(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const now = new Date();
+      
+      const editaisFiltrados = snap.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          // Convert data_encerramento to Date if it's a Firestore Timestamp
+          data_encerramento: doc.data().data_encerramento?.toDate 
+            ? doc.data().data_encerramento.toDate() 
+            : doc.data().data_encerramento
+        }))
+        .filter(edital => {
+          // If there's no deadline, don't show it
+          if (!edital.data_encerramento) return false;
+          
+          // If it's already a Date object, compare directly
+          if (edital.data_encerramento instanceof Date) {
+            return edital.data_encerramento > now;
+          }
+          
+          // If it's a string, try to parse it
+          const dataEncerramento = new Date(edital.data_encerramento);
+          return !isNaN(dataEncerramento.getTime()) && dataEncerramento > now;
+        });
+      
+      setEditais(editaisFiltrados);
     };
     fetchEditais();
   }, []);

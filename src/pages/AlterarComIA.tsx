@@ -200,13 +200,19 @@ const AlterarComIA = () => {
     
     if (!id) return;
     setSalvando(true);
-    const db = getFirestore();
-    const ref = doc(db, 'projetos', id);
-    await updateDoc(ref, { descricao: descricaoEditada, sugestoes_aprovadas: aprovacoes });
-    setSalvando(false);
-    window.location.reload();
+    try {
+      const db = getFirestore();
+      const ref = doc(db, 'projetos', id);
+      await updateDoc(ref, { descricao: descricaoEditada, sugestoes_aprovadas: aprovacoes });
+      // Navega para a página de Gerar Textos após salvar
+      navigate(`/projeto/${id}/gerar-textos`);
+    } catch (error) {
+      console.error('Erro ao salvar alterações:', error);
+      alert('Ocorreu um erro ao salvar as alterações. Por favor, tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
   };
-
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
