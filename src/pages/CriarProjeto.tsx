@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
@@ -35,6 +36,16 @@ const CriarProjeto = () => {
   const [categoria, setCategoria] = useState('Outra');
   const [editalAssociado, setEditalAssociado] = useState('');
   const [editais, setEditais] = useState<any[]>([]);
+  const [showUploadEdital, setShowUploadEdital] = useState(false);
+  const [novoEdital, setNovoEdital] = useState({
+    nome: '',
+    orgao: '',
+    data_encerramento: '',
+    link: '',
+    arquivo: null as File | null,
+    arquivoUrl: ''
+  });
+  const [uploading, setUploading] = useState(false);
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -82,9 +93,101 @@ const CriarProjeto = () => {
     fetchEditais();
   }, []);
 
+  const handleFileUpload = async (file: File): Promise<string> => {
+    const storage = getStorage();
+    const fileRef = storageRef(storage, `editais/${Date.now()}_${file.name}`);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
+
+  const handleNovoEditalChange = (field: string, value: any) => {
+    setNovoEdital(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleNovoEditalChange('arquivo', e.target.files[0]);
+    }
+  };
+
+  const salvarNovoEdital = async () => {
+    if (!novoEdital.nome || !novoEdital.data_encerramento) {
+      setErro('Preencha todos os campos obrigatórios do edital.');
+      return false;
+    }
+
+    try {
+      setUploading(true);
+      const db = getFirestore();
+      let arquivoUrl = '';
+
+      if (novoEdital.arquivo) {
+        arquivoUrl = await handleFileUpload(novoEdital.arquivo);
+      }
+
+      const editalData = {
+        nome: novoEdital.nome,
+        orgao: novoEdital.orgao,
+        data_encerramento: new Date(novoEdital.data_encerramento),
+        link: novoEdital.link,
+        arquivo_url: arquivoUrl,
+        data_criacao: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'editais'), editalData);
+      
+      // Adiciona o novo edital à lista de editais
+      const novoEditalCompleto = {
+        id: docRef.id,
+        ...editalData,
+        data_encerramento: new Date(novoEdital.data_encerramento)
+      };
+      
+      setEditais(prev => [...prev, novoEditalCompleto]);
+      setEditalAssociado(novoEdital.nome);
+      setShowUploadEdital(false);
+      setNovoEdital({
+        nome: '',
+        orgao: '',
+        data_encerramento: '',
+        link: '',
+        arquivo: null,
+        arquivoUrl: ''
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao salvar edital:', error);
+      setErro('Erro ao salvar o novo edital. Tente novamente.');
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro('');
+    
+    let editalId = '';
+    
+    // Se estiver no modo de upload de novo edital, salva o edital primeiro
+    if (showUploadEdital) {
+      const sucesso = await salvarNovoEdital();
+      if (!sucesso) return;
+      
+      // Pega o ID do último edital adicionado (que acabou de ser salvo)
+      if (editais.length > 0) {
+        editalId = editais[editais.length - 1].id;
+      }
+    } else if (editalAssociado) {
+      // Se um edital existente foi selecionado, pega o ID
+      const editalSelecionado = editais.find(e => e.nome === editalAssociado);
+      if (editalSelecionado) {
+        editalId = editalSelecionado.id;
+      }
+    }
+    
     setLoading(true);
     setEtapaAtualIA(0);
     try {
@@ -115,17 +218,24 @@ const CriarProjeto = () => {
       setEtapaAtualIA(3); // Salvando projeto
       // Salva no Firestore
       const db = getFirestore();
-      const docRef = await addDoc(collection(db, 'projetos'), {
+      const projetoData: any = {
         nome,
         descricao,
         resumo: resumoGerado,
         categoria,
-        edital_associado: editalAssociado,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
         user_id: user.uid,
         etapa_atual: 1, // já vai para Avaliar com IA
-      });
+      };
+      
+      // Adiciona a referência ao edital se existir
+      if (editalId) {
+        projetoData.edital_id = editalId;
+        projetoData.edital_associado = editalAssociado;
+      }
+      
+      const docRef = await addDoc(collection(db, 'projetos'), projetoData);
       // Redireciona para Avaliar com IA
       navigate(`/projeto/${docRef.id}`);
     } catch (err) {
@@ -202,17 +312,94 @@ const CriarProjeto = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700">Edital associado</label>
-                    <select
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                      value={editalAssociado}
-                      onChange={e => setEditalAssociado(e.target.value)}
-                    >
-                      <option value="">Nenhum</option>
-                      {editais.map((edital) => (
-                        <option key={edital.id} value={edital.nome}>{edital.nome}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Edital associado</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowUploadEdital(!showUploadEdital)}
+                        className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium"
+                      >
+                        {showUploadEdital ? 'Selecionar existente' : 'Cadastrar novo edital'}
+                      </button>
+                    </div>
+                    
+                    {showUploadEdital ? (
+                      <div className="space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Nome do Edital *</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                            value={novoEdital.nome}
+                            onChange={(e) => handleNovoEditalChange('nome', e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Órgão</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                            value={novoEdital.orgao}
+                            onChange={(e) => handleNovoEditalChange('orgao', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Data de Encerramento *</label>
+                          <input
+                            type="date"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                            value={novoEdital.data_encerramento}
+                            onChange={(e) => handleNovoEditalChange('data_encerramento', e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Link do Edital</label>
+                          <input
+                            type="url"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                            value={novoEdital.link}
+                            onChange={(e) => handleNovoEditalChange('link', e.target.value)}
+                            placeholder="https://"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Arquivo do Edital (PDF)</label>
+                          <div className="mt-1 flex items-center">
+                            <label className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-oraculo-blue">
+                              {novoEdital.arquivo ? novoEdital.arquivo.name : 'Selecionar arquivo'}
+                              <input
+                                type="file"
+                                className="sr-only"
+                                accept=".pdf"
+                                onChange={handleFileChange}
+                              />
+                            </label>
+                            {novoEdital.arquivo && (
+                              <span className="ml-2 text-sm text-gray-500">
+                                {Math.round(novoEdital.arquivo.size / 1024)} KB
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Envie o arquivo PDF do edital (opcional)
+                          </p>
+                        </div>
+                        {erro && <div className="text-red-500 text-sm">{erro}</div>}
+                      </div>
+                    ) : (
+                      <select
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                        value={editalAssociado}
+                        onChange={e => setEditalAssociado(e.target.value)}
+                      >
+                        <option value="">Selecione um edital...</option>
+                        {editais.map((edital) => (
+                          <option key={edital.id} value={edital.nome}>{edital.nome}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-gray-700">Descrição</label>
@@ -232,13 +419,15 @@ const CriarProjeto = () => {
                       </div>
                     </div>
                   )}
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition"
-                    disabled={loading}
-                  >
-                    {loading ? 'Salvando...' : 'Criar projeto'}
-                  </button>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition disabled:opacity-70"
+                      disabled={loading || uploading || (showUploadEdital && !novoEdital.nome)}
+                    >
+                      {loading || uploading ? 'Salvando...' : 'Criar projeto'}
+                    </button>
+                  </div>
                 </form>
                 {showResumo && resumo && (
                   <div className="bg-white border rounded-lg p-4 shadow mb-4">

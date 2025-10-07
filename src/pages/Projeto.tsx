@@ -35,6 +35,7 @@ const Projeto = () => {
   const [gerando, setGerando] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
+  const [mostrarAnalise, setMostrarAnalise] = useState(false);
   const [user] = useAuthState(auth);
   const navigate = useNavigate();
 
@@ -217,27 +218,48 @@ const Projeto = () => {
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Função para atualizar status com delay
-  const updateStatusWithDelay = async (status: string, subEtapas: string[] = [], delayMs: number = 1000) => {
-    if (status) setStatusIA(status);
-    if (subEtapas.length > 0) {
-      setSubEtapasIA(prev => [...prev, ...subEtapas]);
+  const updateStatusWithDelay = async (status: string, subEtapas: string[] = [], delayMs: number = 1500) => {
+    if (status) {
+      setStatusIA(status);
+      // Adiciona uma nova subetapa apenas se for diferente da última
+      setSubEtapasIA(prev => {
+        const lastItem = prev[prev.length - 1];
+        if (status !== lastItem) {
+          return [...prev, status];
+        }
+        return prev;
+      });
     }
+    
+    // Adiciona subetapas adicionais se fornecidas
+    if (subEtapas.length > 0) {
+      setSubEtapasIA(prev => [...prev, ...subEtapas.filter(s => !prev.includes(s))]);
+    }
+    
+    // Pequeno delay para permitir a atualização da UI
     await delay(delayMs);
   };
 
   // Função para analisar com IA
   const analisarComIA = async () => {
-    // Reset states first to ensure clean start
+    // Primeiro, mostra o modal e configura os estados iniciais
+    setMostrarAnalise(true);
     setAnalise(null);
     setErroIA(null);
-    setStatusIA('');
-    setSubEtapasIA([]);
-    
-    // Set loading to true to show the loading state
+    setStatusIA('Iniciando análise do projeto...');
+    setSubEtapasIA(['Iniciando análise...']);
     setAnalisando(true);
     
-    // Small delay to ensure UI updates
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Força uma atualização síncrona do DOM
+    await new Promise(resolve => {
+      // Usa requestAnimationFrame para garantir que o React tenha tempo de renderizar
+      requestAnimationFrame(() => {
+        // Usa um pequeno timeout para garantir que o navegador tenha tempo de renderizar
+        setTimeout(resolve, 100);
+      });
+    });
+    
+    // Agora começa o processamento real
     try {
       await updateStatusWithDelay('Iniciando análise do projeto...', ['Preparando ambiente de análise...']);
       await updateStatusWithDelay('Coletando dados do projeto e edital...', 
@@ -367,6 +389,88 @@ const Projeto = () => {
           <main className="flex-1 flex items-center justify-center p-8 animate-fade-in">
             <p>Projeto não encontrado.</p>
           </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Modal de Análise com IA - Versão simplificada
+  const AnaliseModal = () => {
+    if (erroIA) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 text-center">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Erro na Análise</h2>
+            <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm mb-6">
+              <p className="font-medium">Ocorreu um erro:</p>
+              <p className="mt-1">{erroIA}</p>
+            </div>
+            <button
+              onClick={analisarComIA}
+              className="px-4 py-2 bg-oraculo-blue text-white rounded-lg hover:bg-oraculo-blue/90 transition"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4">
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <Loader2 className="h-12 w-12 animate-spin text-oraculo-blue" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Analisando Projeto</h2>
+            <p className="text-gray-600 mb-6">
+              Aguarde enquanto analisamos seu projeto com IA. 
+              Este processo pode levar alguns instantes.
+            </p>
+            
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+              <div 
+                className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple h-2 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, (subEtapasIA.length / 8) * 100)}%` }}
+              ></div>
+            </div>
+            
+            <p className="text-sm text-gray-500">
+              {statusIA || 'Iniciando análise...'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Show loading popup when analyzing
+  if (mostrarAnalise && analisando) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-oraculo-blue mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Analisando Projeto</h3>
+            <p className="text-sm text-gray-600 text-center">
+              {statusIA || 'Processando sua solicitação...'}
+            </p>
+            {erroIA && (
+              <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm w-full">
+                {erroIA}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setMostrarAnalise(false);
+                setAnalisando(false);
+              }}
+              className="mt-6 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -575,13 +679,39 @@ const Projeto = () => {
                       </div>
                     </div>
                     
-                    <div className="border border-gray-200 rounded-lg p-4 mb-6 bg-white">
-                      <textarea
-                        value={descricaoEditada}
-                        onChange={(e) => setDescricaoEditada(e.target.value)}
-                        className="w-full min-h-[300px] p-3 border rounded-md focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
-                        placeholder="Digite o texto do seu projeto aqui..."
-                      />
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Descrição do Projeto
+                        </label>
+                        <button
+                          type="button"
+                          onClick={analisarComIA}
+                          disabled={analisando || !descricaoEditada}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-oraculo-blue hover:bg-oraculo-blue/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-oraculo-blue disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {analisando ? (
+                            <>
+                              <Loader2 className="animate-spin -ml-1 mr-2 h-3 w-3" />
+                              Analisando...
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="-ml-1 mr-2 h-3 w-3" />
+                              Analisar com IA
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                        <textarea
+                          value={descricaoEditada}
+                          onChange={(e) => setDescricaoEditada(e.target.value)}
+                          className="w-full min-h-[300px] p-3 border rounded-md focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
+                          placeholder="Digite o texto do seu projeto aqui..."
+                        />
+                      </div>
+                      {mostrarAnalise && <AnaliseModal />}
                     </div>
                     
                     {sugestoes.length > 0 && (

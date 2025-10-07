@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Brain, FileText, Target, Lightbulb, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { toast } from 'sonner';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -64,6 +65,26 @@ const OraculoAI = () => {
   const [resumoEdital, setResumoEdital] = useState<any | null>(null);
   const [user] = useAuthState(auth);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Função para deletar um projeto
+  const handleDeleteProjeto = async (projetoId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!user) return;
+    
+    if (window.confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) {
+      try {
+        await deleteDoc(doc(db, 'projetos', projetoId));
+        // Atualiza a lista de projetos após a exclusão
+        setMeusProjetos(prev => prev.filter(proj => proj.id !== projetoId));
+        toast.success('Projeto excluído com sucesso!');
+      } catch (error) {
+        console.error('Erro ao excluir projeto:', error);
+        toast.error('Erro ao excluir o projeto. Tente novamente.');
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -359,30 +380,39 @@ const OraculoAI = () => {
                   </div>
                 ) : (
                   meusProjetos.map((projeto, index) => (
-                    <Link to={`/projeto/${projeto.id}`} key={projeto.id || index} className="block hover:no-underline">
-                      <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <CardTitle className="text-lg mb-2">{projeto.nome}</CardTitle>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">{projeto.status}</span>
+                    <div key={projeto.id || index} className="relative group">
+                      <Link to={`/projeto/${projeto.id}`} className="block hover:no-underline">
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <CardTitle className="text-lg mb-2">{projeto.nome}</CardTitle>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-sm font-medium">{projeto.status}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <CardDescription className="space-y-1">
-                            <div className="flex items-center gap-1 text-xs">
-                              <FileText className="h-3 w-3" />
-                              {projeto.edital_associado || 'Sem edital associado'}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs">
-                              <span className="w-2 h-2 rounded-full bg-oraculo-blue inline-block mr-1"></span>
-                              <span className="font-semibold">Setor:</span> {projeto.categoria}
-                            </div>
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
-                    </Link>
+                            <CardDescription className="space-y-1">
+                              <div className="flex items-center gap-1 text-xs">
+                                <FileText className="h-3 w-3" />
+                                {projeto.edital_associado || 'Sem edital associado'}
+                              </div>
+                              <div className="flex items-center gap-1 text-xs">
+                                <span className="w-2 h-2 rounded-full bg-oraculo-blue inline-block mr-1"></span>
+                                <span className="font-semibold">Setor:</span> {projeto.categoria}
+                              </div>
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </Link>
+                      <button
+                        onClick={(e) => handleDeleteProjeto(projeto.id, e)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10"
+                        title="Excluir projeto"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ))
                 )}
               </div>

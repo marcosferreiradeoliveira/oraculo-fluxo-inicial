@@ -38,11 +38,14 @@ const GerarTextos = () => {
   });
   const [gerando, setGerando] = useState<TextoTipo | null>(null);
   const [progresso, setProgresso] = useState<string>('');
+  const [textoSelecionado, setTextoSelecionado] = useState<TextoTipo>('justificativa');
+  const [mostrarCaixaTexto, setMostrarCaixaTexto] = useState(false);
   const isMounted = useRef(true);
 
   const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos'];
   const currentStep = 3; // This page is the 4th step
 
+  // Initialize and cleanup
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -55,15 +58,20 @@ const GerarTextos = () => {
     console.log('[DEBUG] gerando state changed to:', gerando);
   }, [gerando]);
   
-  const [textoSelecionado, setTextoSelecionado] = useState<TextoTipo>('justificativa');
   // Debug effect to log text changes
   useEffect(() => {
     console.log('[DEBUG] textos state changed:', textos);
-    // Log the current selected text whenever it changes
     if (textoSelecionado && textos[textoSelecionado]) {
       console.log(`[DEBUG] Current text for ${textoSelecionado}:`, textos[textoSelecionado]);
     }
   }, [textos, textoSelecionado]);
+  
+  // Show text box when a text type is selected or when generating
+  useEffect(() => {
+    if (textoSelecionado || gerando) {
+      setMostrarCaixaTexto(true);
+    }
+  }, [textoSelecionado, gerando]);
   // Buscar projeto ao carregar o componente
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -406,6 +414,9 @@ const GerarTextos = () => {
       console.error('Nenhum texto selecionado');
       return;
     }
+    
+    // Show the text box immediately
+    setMostrarCaixaTexto(true);
 
     console.log('[DEBUG] handleGerarTexto started for:', textoSelecionado);
     
@@ -511,29 +522,7 @@ const GerarTextos = () => {
     );
   }
 
-  // Render loading state with progress message
-  if (gerando) {
-    return (
-      <div className="flex min-h-screen bg-gray-50">
-        <DashboardSidebar />
-        <div className="flex-1 flex flex-col md:ml-64">
-          <DashboardHeader />
-          <main className="flex-1 flex items-center justify-center p-8">
-            <div className="max-w-2xl w-full bg-white rounded-xl shadow-md p-8 text-center">
-              <div className="flex justify-center mb-6">
-                <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Gerando {gerando.replace('_', ' ')}</h2>
-              <p className="text-gray-600 mb-6">{progresso}</p>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: '75%' }}></div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  // No longer using a separate loading page - showing the text box instead
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -674,38 +663,44 @@ const GerarTextos = () => {
                 </div>
               </div>
               
-              <div className="p-4 border-t bg-gray-50">
-                <div className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 bg-white border rounded-lg">
-                  {gerando === textoSelecionado ? (
-                    <div className="relative h-full">
-                      <textarea
-                        className="w-full h-full p-2 border rounded text-gray-800 bg-white text-display min-h-[200px]"
-                        readOnly
-                        value={textos[textoSelecionado] || ''}
-                        placeholder="Gerando texto, aguarde..."
-                      />
-                      <div className="absolute bottom-4 right-4 flex items-center bg-white/90 px-3 py-1 rounded-full shadow-sm border">
-                        <Loader2 className="h-4 w-4 animate-spin text-oraculo-blue mr-2" />
-                        <span className="text-sm text-gray-600">Gerando...</span>
+              {mostrarCaixaTexto && (
+                <div className="p-4 border-t bg-gray-50">
+                  <div className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 bg-white border rounded-lg">
+                    {gerando === textoSelecionado ? (
+                      <div className="relative h-full">
+                        <textarea
+                          className="w-full h-full p-4 border rounded text-gray-800 bg-white text-display min-h-[300px]"
+                          readOnly
+                          value={textos[textoSelecionado] || ''}
+                          placeholder={gerando ? 'Gerando texto, aguarde...' : `Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
+                        />
+                        <div className="absolute bottom-4 right-4 flex items-center bg-white/90 px-3 py-1.5 rounded-full shadow-sm border text-sm">
+                          <Loader2 className="h-4 w-4 animate-spin text-oraculo-blue mr-2" />
+                          <span className="text-gray-700">Gerando texto...</span>
+                        </div>
                       </div>
-                    </div>
-                  ) : textos[textoSelecionado] ? (
-                    <div className="prose max-w-none">
-                      {textos[textoSelecionado] ? (
-                        textos[textoSelecionado].split('\n').map((paragraph, idx) => (
-                          <p key={idx} className="whitespace-pre-wrap">{paragraph || '\u00A0'}</p>
-                        ))
-                      ) : (
-                        <p className="text-gray-500 italic">Nenhum texto disponível. Tente gerar novamente.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-gray-400">
-                      <p>Clique em "Gerar Texto" para criar o conteúdo.</p>
-                    </div>
-                  )}
+                    ) : textos[textoSelecionado] ? (
+                      <div className="prose max-w-none">
+                        <textarea
+                          className="w-full h-full min-h-[300px] p-4 border rounded text-gray-800 bg-white"
+                          value={textos[textoSelecionado]}
+                          onChange={(e) => {
+                            setTextos(prev => ({
+                              ...prev,
+                              [textoSelecionado]: e.target.value
+                            }));
+                          }}
+                          placeholder={`Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-gray-500">
+                        <p>Selecione um tipo de texto e clique em "Gerar Texto" para começar.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </main>
