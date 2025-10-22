@@ -9,18 +9,6 @@ import CriarImg from '@/assets/Criar.jpeg';
 import { Link } from 'react-router-dom';
 import OpenAI from 'openai';
 
-const categorias = [
-  'Audiovisual',
-  'Teatro',
-  'Dança',
-  'Música',
-  'Literatura',
-  'Artes Visuais',
-  'Cultura Popular',
-  'Patrimônio',
-  'Circo',
-  'Outra'
-];
 
 const steps = [
   'Criar Projeto',
@@ -33,7 +21,6 @@ const currentStep: number = 0; // Criar Projeto
 const CriarProjeto = () => {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [categoria, setCategoria] = useState('Outra');
   const [editalAssociado, setEditalAssociado] = useState('');
   const [editais, setEditais] = useState<any[]>([]);
   const [showUploadEdital, setShowUploadEdital] = useState(false);
@@ -169,10 +156,27 @@ const CriarProjeto = () => {
     e.preventDefault();
     setErro('');
     
+    console.log('Iniciando criação do projeto...');
+    console.log('Dados do formulário:', { nome, descricao, editalAssociado });
+    
+    // Validações básicas
+    if (!nome.trim()) {
+      setErro('Nome do projeto é obrigatório.');
+      setLoading(false);
+      return;
+    }
+    
+    if (!descricao.trim()) {
+      setErro('Descrição do projeto é obrigatória.');
+      setLoading(false);
+      return;
+    }
+    
     let editalId = '';
     
     // Se estiver no modo de upload de novo edital, salva o edital primeiro
     if (showUploadEdital) {
+      console.log('Modo upload de edital ativado');
       const sucesso = await salvarNovoEdital();
       if (!sucesso) return;
       
@@ -181,10 +185,12 @@ const CriarProjeto = () => {
         editalId = editais[editais.length - 1].id;
       }
     } else if (editalAssociado) {
+      console.log('Edital selecionado:', editalAssociado);
       // Se um edital existente foi selecionado, pega o ID
       const editalSelecionado = editais.find(e => e.nome === editalAssociado);
       if (editalSelecionado) {
         editalId = editalSelecionado.id;
+        console.log('ID do edital encontrado:', editalId);
       }
     }
     
@@ -193,16 +199,24 @@ const CriarProjeto = () => {
     try {
       const user = auth.currentUser;
       if (!user) {
+        console.error('Usuário não logado');
         setErro('Você precisa estar logado para criar um projeto.');
         setLoading(false);
         return;
       }
+      
+      console.log('Usuário logado:', user.uid);
       setEtapaAtualIA(1); // Extraindo pontos-chave
       // (Simulação de extração, pode ser expandido no futuro)
       setEtapaAtualIA(2); // Resumindo
+      console.log('Iniciando geração do resumo com IA...');
+      console.log('Chave da API OpenAI:', import.meta.env.VITE_OPENAI_API_KEY ? 'Presente' : 'Ausente');
+      
       // Chama a OpenAI para gerar o resumo
       const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
       const prompt = `Resuma de forma objetiva o projeto cultural abaixo, destacando: objetivo, justificativa, público-alvo, orçamento estimado, cronograma e diferenciais. O resumo deve ser claro, direto e útil para avaliação em editais.\n\nTEXTO DO PROJETO:\n${descricao}`;
+      
+      console.log('Enviando prompt para OpenAI...');
       const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -212,22 +226,27 @@ const CriarProjeto = () => {
         max_tokens: 800,
         temperature: 0.3,
       });
+      
+      console.log('Resposta da OpenAI recebida');
       const resumoGerado = completion.choices[0].message?.content || '';
+      console.log('Resumo gerado:', resumoGerado.substring(0, 100) + '...');
       setResumo(resumoGerado);
       setShowResumo(true);
       setEtapaAtualIA(3); // Salvando projeto
+      console.log('Resumo gerado com sucesso, salvando no Firestore...');
       // Salva no Firestore
       const db = getFirestore();
       const projetoData: any = {
         nome,
         descricao,
         resumo: resumoGerado,
-        categoria,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
         user_id: user.uid,
         etapa_atual: 1, // já vai para Avaliar com IA
       };
+      
+      console.log('Dados do projeto a serem salvos:', projetoData);
       
       // Adiciona a referência ao edital se existir
       if (editalId) {
@@ -235,11 +254,16 @@ const CriarProjeto = () => {
         projetoData.edital_associado = editalAssociado;
       }
       
+      console.log('Salvando projeto no Firestore...');
       const docRef = await addDoc(collection(db, 'projetos'), projetoData);
+      console.log('Projeto criado com ID:', docRef.id);
+      
       // Redireciona para Avaliar com IA
+      console.log('Redirecionando para página de avaliação...');
       navigate(`/projeto/${docRef.id}`);
     } catch (err) {
-      setErro('Erro ao criar projeto.');
+      console.error('Erro ao criar projeto:', err);
+      setErro(`Erro ao criar projeto: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -249,11 +273,11 @@ const CriarProjeto = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col">
         <DashboardHeader />
         
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-5xl mx-auto">
+        <main className="flex-1 p-2 md:p-4">
+          <div className="w-full">
             <div className="mb-8">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                 Criar Novo Projeto
@@ -264,22 +288,22 @@ const CriarProjeto = () => {
             </div>
 
             {/* Barra de progresso */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
+            <div className="mb-8 p-12 bg-white rounded-xl shadow-lg border-2 border-gray-200">
+              <div className="flex items-center justify-between mb-6">
                 {steps.map((step, index) => (
-                  <div key={index} className="flex flex-col items-center">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
+                  <div key={index} className="flex flex-col items-center px-4">
+                    <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-bold ${index <= currentStep ? 'bg-oraculo-blue text-white' : 'bg-gray-200 text-gray-600'}`}>
                       {index + 1}
                     </div>
-                    <span className={`text-xs mt-1 text-center ${index === currentStep ? 'font-medium text-oraculo-blue' : 'text-gray-500'}`}>
+                    <span className={`text-sm mt-3 text-center font-medium ${index === currentStep ? 'text-oraculo-blue' : 'text-gray-500'}`}>
                       {step}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-3 mt-4">
                 <div 
-                  className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
+                  className="bg-oraculo-blue h-3 rounded-full transition-all duration-300" 
                   style={{ width: `${(currentStep + 1) * 25}%` }}
                 ></div>
               </div>
@@ -299,107 +323,29 @@ const CriarProjeto = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700">Categoria</label>
-                    <select
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                      value={categoria}
-                      onChange={e => setCategoria(e.target.value)}
-                      required
-                    >
-                      {categorias.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-sm font-medium text-gray-700">Edital associado</label>
                       <button
                         type="button"
-                        onClick={() => setShowUploadEdital(!showUploadEdital)}
+                        onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
                         className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium"
                       >
-                        {showUploadEdital ? 'Selecionar existente' : 'Cadastrar novo edital'}
+                        Cadastrar novo edital
                       </button>
                     </div>
                     
-                    {showUploadEdital ? (
-                      <div className="space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <div>
-                          <label className="block text-sm font-medium mb-1 text-gray-700">Nome do Edital *</label>
-                          <input
-                            type="text"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                            value={novoEdital.nome}
-                            onChange={(e) => handleNovoEditalChange('nome', e.target.value)}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1 text-gray-700">Órgão</label>
-                          <input
-                            type="text"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                            value={novoEdital.orgao}
-                            onChange={(e) => handleNovoEditalChange('orgao', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1 text-gray-700">Data de Encerramento *</label>
-                          <input
-                            type="date"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                            value={novoEdital.data_encerramento}
-                            onChange={(e) => handleNovoEditalChange('data_encerramento', e.target.value)}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1 text-gray-700">Link do Edital</label>
-                          <input
-                            type="url"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                            value={novoEdital.link}
-                            onChange={(e) => handleNovoEditalChange('link', e.target.value)}
-                            placeholder="https://"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1 text-gray-700">Arquivo do Edital (PDF)</label>
-                          <div className="mt-1 flex items-center">
-                            <label className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-oraculo-blue">
-                              {novoEdital.arquivo ? novoEdital.arquivo.name : 'Selecionar arquivo'}
-                              <input
-                                type="file"
-                                className="sr-only"
-                                accept=".pdf"
-                                onChange={handleFileChange}
-                              />
-                            </label>
-                            {novoEdital.arquivo && (
-                              <span className="ml-2 text-sm text-gray-500">
-                                {Math.round(novoEdital.arquivo.size / 1024)} KB
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs text-gray-500">
-                            Envie o arquivo PDF do edital (opcional)
-                          </p>
-                        </div>
-                        {erro && <div className="text-red-500 text-sm">{erro}</div>}
-                      </div>
-                    ) : (
-                      <select
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                        value={editalAssociado}
-                        onChange={e => setEditalAssociado(e.target.value)}
-                      >
-                        <option value="">Selecione um edital...</option>
-                        {editais.map((edital) => (
-                          <option key={edital.id} value={edital.nome}>{edital.nome}</option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
+                      value={editalAssociado}
+                      onChange={e => setEditalAssociado(e.target.value)}
+                    >
+                      <option value="">Selecione um edital</option>
+                      {editais.map((edital) => (
+                        <option key={edital.id} value={edital.nome}>
+                          {edital.nome} - {edital.orgao}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-gray-700">Descrição</label>
@@ -430,10 +376,10 @@ const CriarProjeto = () => {
                   </div>
                 </form>
                 {showResumo && resumo && (
-                  <div className="bg-white border rounded-lg p-4 shadow mb-4">
-                    <h2 className="text-lg font-bold text-oraculo-blue mb-2">Resumo gerado pela IA</h2>
-                    <div className="whitespace-pre-line text-gray-800 text-sm">{resumo}</div>
-                    <div className="text-xs text-gray-500 mt-2">Você será redirecionado em instantes...</div>
+                  <div className="bg-white border rounded-lg p-8 shadow mb-4">
+                    <h2 className="text-xl font-bold text-oraculo-blue mb-4">Resumo gerado pela IA</h2>
+                    <div className="whitespace-pre-line text-gray-800 text-base leading-relaxed">{resumo}</div>
+                    <div className="text-sm text-gray-500 mt-4">Você será redirecionado em instantes...</div>
                   </div>
                 )}
               </div>

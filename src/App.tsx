@@ -24,6 +24,8 @@ import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
 import CadastroPremium from './pages/CadastroPremium';
 import GerarTextos from './pages/GerarTextos';
+import Termos from './pages/Termos';
+import Privacidade from './pages/Privacidade';
 
 const queryClient = new QueryClient();
 
@@ -70,6 +72,8 @@ const App = () => (
           <Route path="/cadastrar-episodio" element={<CadastrarEpisodio />} />
           <Route path="/podcast/:id" element={<PodcastDetalhes />} />
           <Route path="/cadastrar-guia" element={<CadastrarGuia />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/privacidade" element={<Privacidade />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

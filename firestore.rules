@@ -5,5 +5,35 @@ service cloud.firestore {
     match /usuarios/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // Permitir leitura pública de guias
+    match /guias/{guiaId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Permitir leitura pública de podcasts
+    match /podcasts/{podcastId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Permitir leitura pública de episódios de podcast
+    match /podcast_episodios/{episodioId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Permitir leitura pública de editais
+    match /editais/{editalId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Projetos continuam privados (apenas para o usuário logado)
+    match /projetos/{projetoId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.user_id;
+    }
   }
 }

@@ -18,6 +18,16 @@ const preference = new mercadopago.Preference(mp);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 exports.analisarProjeto = onRequest(async (req, res) => {
+  // Configurar CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Responder a requisições OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).send('');
+  }
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -41,6 +51,81 @@ exports.analisarProjeto = onRequest(async (req, res) => {
     console.error('Error calling OpenAI API:', error);
     // Garante que sempre retorna JSON válido, mesmo em erro inesperado
     return res.status(500).json({ error: error && error.message ? error.message : 'Failed to get analysis from AI.' });
+  }
+});
+
+exports.gerarTexto = onRequest(async (req, res) => {
+  // Configurar CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Responder a requisições OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).send('');
+  }
+  
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+  
+  try {
+    const { projetoId, tipo, dadosProjeto, prompt } = req.body;
+    
+    if (!projetoId || !tipo || !dadosProjeto) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Validar tipos permitidos
+    const tiposValidos = ['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento'];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ error: 'Tipo de texto inválido' });
+    }
+    
+    // Criar prompt específico para orçamento
+    let promptEspecifico = prompt;
+    if (tipo === 'orcamento') {
+      promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
+      Crie um orçamento detalhado e realista para o projeto cultural descrito abaixo.
+      Inclua todas as rubricas necessárias como: produção, divulgação, recursos humanos, materiais, equipamentos, etc.
+      Seja específico com valores e justificativas para cada item.
+      
+      DADOS DO PROJETO:
+      Nome: ${dadosProjeto.nome || 'Não informado'}
+      Descrição: ${dadosProjeto.descricao || 'Não informado'}
+      Resumo: ${dadosProjeto.resumo || 'Não informado'}
+      
+      Gere um orçamento completo e profissional:`;
+    }
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: tipo === 'orcamento' 
+            ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados.'
+            : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados.'
+        },
+        { role: 'user', content: promptEspecifico },
+      ],
+      max_tokens: 2000,
+      temperature: 0.3,
+    });
+    
+    const textoGerado = completion.choices[0].message?.content || 'Erro ao gerar texto.';
+    
+    return res.status(200).json({ 
+      texto: textoGerado,
+      tipo: tipo,
+      projetoId: projetoId
+    });
+    
+  } catch (error) {
+    console.error('Error generating text:', error);
+    return res.status(500).json({ 
+      error: error.message || 'Failed to generate text' 
+    });
   }
 });
 

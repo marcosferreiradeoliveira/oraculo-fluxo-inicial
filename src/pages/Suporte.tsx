@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { HelpCircle, MessageCircle, Book, Phone, Mail, Clock } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import emailjs from '@emailjs/browser';
 
 const Suporte = () => {
+  const [assunto, setAssunto] = useState('');
+  const [email, setEmail] = useState('');
+  const [mensagem, setMensagem] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
   const faqItems = [
     {
       pergunta: "Como funciona o Oráculo AI?",
@@ -33,11 +40,59 @@ const Suporte = () => {
     }
   ];
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!assunto.trim() || !email.trim() || !mensagem.trim()) {
+      toast.error('Por favor, preencha todos os campos');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      toast.error('Por favor, insira um email válido');
+      return;
+    }
+
+    setEnviando(true);
+    
+    try {
+      // Configurar EmailJS
+      const serviceId = 'service_7c0g6tp';
+      const templateId = 'template_gnb12x7';
+      const publicKey = '5kHIvMHjw-9HBbLeW';
+      
+      // Dados do template
+      const templateParams = {
+        from_name: email,
+        from_email: email,
+        subject: assunto,
+        message: mensagem,
+        to_name: 'Equipe Oráculo Cultural'
+      };
+      
+      // Enviar email
+      await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      
+      toast.success('Mensagem enviada com sucesso! Entraremos em contato em breve.');
+      
+      // Limpar formulário
+      setAssunto('');
+      setEmail('');
+      setMensagem('');
+      
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      toast.error('Erro ao enviar mensagem. Tente novamente.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col">
         <DashboardHeader />
         
         <main className="flex-1 p-4 md:p-8">
@@ -52,63 +107,6 @@ const Suporte = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              {/* Formas de Contato */}
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="text-center pb-3">
-                  <MessageCircle className="h-12 w-12 text-oraculo-blue mx-auto mb-3" />
-                  <CardTitle>Chat ao Vivo</CardTitle>
-                  <CardDescription>
-                    Resposta imediata para dúvidas urgentes
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <Badge className="bg-green-100 text-green-800 mb-3">
-                    <Clock className="h-3 w-3 mr-1" />
-                    Online agora
-                  </Badge>
-                  <Button className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90">
-                    Iniciar Chat
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="text-center pb-3">
-                  <Mail className="h-12 w-12 text-oraculo-magenta mx-auto mb-3" />
-                  <CardTitle>Email</CardTitle>
-                  <CardDescription>
-                    Para questões mais complexas e detalhadas
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-sm text-gray-600 mb-3">
-                    Resposta em até 24h
-                  </p>
-                  <Button variant="outline" className="w-full">
-                    suporte@oraculocultural.com
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="text-center pb-3">
-                  <Book className="h-12 w-12 text-oraculo-gold mx-auto mb-3" />
-                  <CardTitle>Base de Conhecimento</CardTitle>
-                  <CardDescription>
-                    Tutoriais e guias de uso da plataforma
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-sm text-gray-600 mb-3">
-                    +50 artigos disponíveis
-                  </p>
-                  <Button variant="outline" className="w-full">
-                    Explorar Artigos
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* FAQ */}
@@ -152,28 +150,51 @@ const Suporte = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form className="space-y-4">
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="assunto">Assunto</Label>
-                      <Input id="assunto" placeholder="Qual é o tema da sua dúvida?" />
+                      <Input 
+                        id="assunto" 
+                        value={assunto}
+                        onChange={(e) => setAssunto(e.target.value)}
+                        placeholder="Qual é o tema da sua dúvida?"
+                        disabled={enviando}
+                        required
+                      />
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="email">Seu Email</Label>
-                      <Input id="email" type="email" placeholder="seu@email.com" />
+                      <Input 
+                        id="email" 
+                        type="email" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="seu@email.com"
+                        disabled={enviando}
+                        required
+                      />
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="mensagem">Mensagem</Label>
                       <Textarea 
                         id="mensagem" 
+                        value={mensagem}
+                        onChange={(e) => setMensagem(e.target.value)}
                         placeholder="Descreva sua dúvida ou problema em detalhes..."
                         className="min-h-[120px] resize-none"
+                        disabled={enviando}
+                        required
                       />
                     </div>
                     
-                    <Button className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90">
-                      Enviar Mensagem
+                    <Button 
+                      type="submit"
+                      className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
+                      disabled={enviando}
+                    >
+                      {enviando ? 'Enviando...' : 'Enviar Mensagem'}
                     </Button>
                   </form>
                 </CardContent>

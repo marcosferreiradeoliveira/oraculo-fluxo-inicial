@@ -101,12 +101,12 @@ const Index = () => {
       <DashboardSidebar />
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col">
         {/* Header */}
         <DashboardHeader />
         
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-8 animate-fade-in">
+        <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
             {/* Welcome Message */}
             <div className="mb-8">
@@ -203,11 +203,12 @@ const Index = () => {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pt-0">
-                        <Button className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" asChild>
-                          <a href={ep.mp3Url} target="_blank" rel="noopener noreferrer">
-                            <Play className="h-4 w-4 mr-2" />
-                            Ouvir
-                          </a>
+                        <Button 
+                          className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
+                          onClick={() => navigate(`/podcast/${ep.id}`)}
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Ouvir
                         </Button>
                       </CardContent>
                     </Card>

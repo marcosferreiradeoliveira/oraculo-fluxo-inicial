@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Brain, FileText, Target, Lightbulb, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
+import { Brain, FileText, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -310,7 +310,7 @@ const OraculoAI = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col">
         <DashboardHeader />
         
         <main className="flex-1 p-4 md:p-8">
@@ -425,11 +425,11 @@ const OraculoAI = () => {
                   <Calendar className="h-6 w-6 text-oraculo-magenta" />
                   Editais Abertos
                 </h2>
-                <Button variant="outline">
-                  Ver todos os editais
-                </Button>
                 {user && (
-                  <Button className="ml-2 bg-oraculo-blue text-white" onClick={() => setOpenCadastro(true)}>
+                  <Button 
+                    className="ml-2 bg-oraculo-blue text-white" 
+                    onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
+                  >
                     Cadastrar Edital
                   </Button>
                 )}
@@ -534,43 +534,6 @@ const OraculoAI = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <FileText className="h-5 w-5 text-oraculo-magenta" />
-                    Análise de Editais
-                  </CardTitle>
-                  <CardDescription>
-                    Cole o texto do edital e receba insights estratégicos
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Target className="h-5 w-5 text-oraculo-blue" />
-                    Desenvolvimento de Propostas
-                  </CardTitle>
-                  <CardDescription>
-                    Crie propostas alinhadas com os critérios do edital
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Lightbulb className="h-5 w-5 text-oraculo-gold" />
-                    Otimização de Estratégias
-                  </CardTitle>
-                  <CardDescription>
-                    Melhore suas chances de aprovação
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
 
             {/* Exibir resumo do edital extraído diretamente na página, fora do Dialog */}
             {resumoEdital && (

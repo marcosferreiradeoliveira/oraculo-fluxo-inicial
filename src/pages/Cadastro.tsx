@@ -65,15 +65,16 @@ const Cadastro = () => {
     try {
       const { getFirestore, collection, addDoc, serverTimestamp } = await import('firebase/firestore');
       const db = getFirestore();
-      await addDoc(collection(db, 'usuarios'), {
+      const docRef = await addDoc(collection(db, 'usuarios'), {
         nome_completo: nomeCompleto,
         empresa: empresa,
         data_cadastro: serverTimestamp(),
         ultimo_login: serverTimestamp(),
-        premium: false,
+        isPremium: false,
         email: email,
         uid: userUid,
       });
+      console.log('Usuário criado no Firestore com ID:', docRef.id);
       navigate('/');
     } catch (err: any) {
       setErro('Erro ao salvar informações adicionais.');
@@ -189,7 +190,7 @@ const Cadastro = () => {
               </div>
               <div className="ml-3 text-sm">
                 <label htmlFor="termos" className="text-gray-600">
-                  Concordo com o <a href="/termos" className="text-oraculo-blue hover:underline">Termo de Uso</a> e a <a href="/privacidade" className="text-oraculo-blue hover:underline">Política de Privacidade</a>.
+                  Concordo com o <Link to="/termos" className="text-oraculo-blue hover:underline">Termo de Uso</Link> e a <Link to="/privacidade" className="text-oraculo-blue hover:underline">Política de Privacidade</Link>.
                 </label>
               </div>
             </div>

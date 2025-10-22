@@ -4,11 +4,11 @@ import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileText, CheckCircle, Copy, Download } from 'lucide-react';
+import { Loader2, FileText, CheckCircle, Copy, Download, DollarSign } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 
-type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma';
+type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento';
 
 interface ProjetoDocument {
   id: string;
@@ -18,6 +18,16 @@ interface ProjetoDocument {
 
 const GERAR_TEXTO_PROMPT = `Você é um especialista em elaboração de projetos culturais para leis de incentivo. 
 Gere um texto claro, objetivo e bem estruturado para o seguinte item do projeto: `;
+
+// Mapeamento de tipos para compatibilidade com backend
+const TIPO_MAP: Record<TextoTipo, string> = {
+  justificativa: 'justificativa',
+  objetivos: 'objetivos',
+  metodologia: 'metodologia',
+  resultados_esperados: 'resultados_esperados',
+  cronograma: 'cronograma',
+  orcamento: 'orcamento'
+};
 
 const GerarTextos = () => {
   // Force update hook
@@ -34,7 +44,8 @@ const GerarTextos = () => {
     objetivos: '',
     metodologia: '',
     resultados_esperados: '',
-    cronograma: ''
+    cronograma: '',
+    orcamento: ''
   });
   const [gerando, setGerando] = useState<TextoTipo | null>(null);
   const [progresso, setProgresso] = useState<string>('');
@@ -201,11 +212,12 @@ const GerarTextos = () => {
       
       // 5. Prepara a requisição
       setProgresso('Preparando dados...');
+      const tipoMapeado = TIPO_MAP[tipo];
       const requestData = {
         projetoId: id,
-        tipo,
+        tipo: tipoMapeado,
         dadosProjeto: projeto,
-        prompt: GERAR_TEXTO_PROMPT + tipo
+        prompt: GERAR_TEXTO_PROMPT + tipoMapeado
       };
       
       log('Dados da requisição:', { 
@@ -213,11 +225,18 @@ const GerarTextos = () => {
         dadosProjeto: '[...]' // Não logar o projeto inteiro
       });
       
+      // Debug específico para orçamento
+      if (tipo === 'orcamento') {
+        log('Gerando orçamento - tipo original:', tipo);
+        log('Gerando orçamento - tipo mapeado:', tipoMapeado);
+        log('Projeto data keys:', Object.keys(projeto));
+      }
+      
       // 6. Envia a requisição
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
       
-      const response = await fetch('https://analisarprojeto-665760404958.us-central1.run.app/gerar-texto', {
+      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTexto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData)
@@ -527,7 +546,7 @@ const GerarTextos = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col">
         <DashboardHeader />
         
         <main className="flex-1 p-4 md:p-8">
@@ -604,7 +623,8 @@ const GerarTextos = () => {
                   objetivos: 'Objetivos',
                   metodologia: 'Metodologia',
                   resultados_esperados: 'Resultados Esperados',
-                  cronograma: 'Cronograma'
+                  cronograma: 'Cronograma',
+                  orcamento: 'Orçamento'
                 }).map(([tipo, titulo]) => (
                   <button
                     key={tipo}
@@ -616,7 +636,11 @@ const GerarTextos = () => {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-oraculo-blue" />
+                      {tipo === 'orcamento' ? (
+                        <DollarSign className="h-5 w-5 text-oraculo-blue" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-oraculo-blue" />
+                      )}
                       <span className="font-medium text-gray-800">{titulo}</span>
                       {textos[tipo as TextoTipo] && (
                         <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
