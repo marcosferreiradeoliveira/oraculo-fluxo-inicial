@@ -28,11 +28,20 @@ const Index = () => {
     const fetchGuias = async () => {
       setLoadingGuias(true);
       try {
-        const qGuias = query(collection(db, 'guias'), orderBy('criadoEm', 'desc'), limit(3));
-        const snapshot = await getDocs(qGuias);
+        // Tenta buscar com ordenação, se falhar busca sem ordenação
+        let snapshot;
+        try {
+          const qGuias = query(collection(db, 'guias'), orderBy('criadoEm', 'desc'), limit(3));
+          snapshot = await getDocs(qGuias);
+        } catch (orderError) {
+          console.log('Erro ao ordenar, buscando sem ordenação:', orderError);
+          const qGuias = query(collection(db, 'guias'), limit(3));
+          snapshot = await getDocs(qGuias);
+        }
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setGuias(data);
       } catch (e) {
+        console.error('Erro ao buscar guias:', e);
         setGuias([]);
       } finally {
         setLoadingGuias(false);
@@ -45,11 +54,20 @@ const Index = () => {
     const fetchPodcasts = async () => {
       setLoadingPodcasts(true);
       try {
-        const qPodcasts = query(collection(db, 'podcast_episodios'), orderBy('criadoEm', 'desc'), limit(3));
-        const snapshot = await getDocs(qPodcasts);
+        // Tenta buscar com ordenação, se falhar busca sem ordenação
+        let snapshot;
+        try {
+          const qPodcasts = query(collection(db, 'podcast_episodios'), orderBy('criadoEm', 'desc'), limit(3));
+          snapshot = await getDocs(qPodcasts);
+        } catch (orderError) {
+          console.log('Erro ao ordenar, buscando sem ordenação:', orderError);
+          const qPodcasts = query(collection(db, 'podcast_episodios'), limit(3));
+          snapshot = await getDocs(qPodcasts);
+        }
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setPodcasts(data);
       } catch (e) {
+        console.error('Erro ao buscar podcasts:', e);
         setPodcasts([]);
       } finally {
         setLoadingPodcasts(false);

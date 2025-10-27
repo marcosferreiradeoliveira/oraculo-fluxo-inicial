@@ -282,51 +282,68 @@ const AlterarComIA = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
-              <div className="p-4">
-                <h2 className="text-lg font-semibold mb-1">Descrição</h2>
+              <div className="p-6 border-b">
+                <h2 className="text-lg font-semibold mb-3 text-oraculo-blue">Texto do Projeto</h2>
                 <textarea
-                  className="w-full border rounded p-2 text-gray-700 min-h-[120px] mb-2"
+                  className="w-full border-2 border-gray-300 rounded-lg p-4 text-gray-700 min-h-[300px] focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue outline-none resize-y"
                   value={descricaoEditada}
                   onChange={e => setDescricaoEditada(e.target.value)}
                   disabled={gerando}
+                  placeholder="Digite o texto do seu projeto aqui..."
                 />
                 {gerando && (
-                  <div className="flex items-center gap-2 text-oraculo-blue mb-2 animate-pulse">
+                  <div className="flex items-center gap-2 text-oraculo-blue mt-3 animate-pulse">
                     <Loader2 className="animate-spin h-5 w-5" />
                     Produzindo o texto...
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <Button onClick={handleSalvar} disabled={salvando || gerando} className="mb-4">
-                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+              </div>
+              
+              <div className="p-6">
+                <div className="flex gap-3">
+                  <Button 
+                    onClick={handleSalvar} 
+                    disabled={salvando || gerando} 
+                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3 flex items-center gap-2"
+                  >
+                    {salvando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      'Salvar Alterações'
+                    )}
                   </Button>
                   <Button 
                     onClick={() => id && navigate(`/projeto/${id}/gerar-textos`)}
-                    className="mb-4 bg-oraculo-blue hover:bg-oraculo-blue/90"
+                    className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white px-6 py-3 flex items-center gap-2"
                   >
                     Gerar Textos
                   </Button>
                 </div>
               </div>
               {sugestoes.length > 0 && (
-                <div className="p-4">
-                  <h2 className="text-lg font-semibold mb-2 text-oraculo-blue">Sugestões de Alteração da IA</h2>
-                  <ul className="space-y-2">
+                <div className="p-6 border-t">
+                  <h2 className="text-lg font-semibold mb-4 text-oraculo-blue">Sugestões de Alteração da IA</h2>
+                  <ul className="space-y-3">
                     {sugestoes.map((sug, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <Button size="sm" variant={aprovacoes[idx] ? 'default' : 'outline'} disabled={aprovacoes[idx] || gerando} onClick={() => handleAprovar(idx)}>
-                          {aprovacoes[idx] ? 'Aprovada' : 'Aprovar'}
+                      <li key={idx} className="flex items-start gap-3 p-3 bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 rounded-lg">
+                        <Button 
+                          size="sm" 
+                          variant={aprovacoes[idx] ? 'default' : 'outline'} 
+                          disabled={aprovacoes[idx] || gerando} 
+                          onClick={() => handleAprovar(idx)}
+                          className={aprovacoes[idx] ? 'bg-green-500 hover:bg-green-600' : ''}
+                        >
+                          {aprovacoes[idx] ? '✓ Aprovada' : 'Aprovar'}
                         </Button>
-                        <span className={aprovacoes[idx] ? 'line-through text-gray-400' : ''}>{sug}</span>
+                        <span className={`flex-1 ${aprovacoes[idx] ? 'line-through text-gray-400' : 'text-gray-800'}`}>{sug}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              <div className="p-4 bg-gray-50 border-t">
-                <strong className="block text-oraculo-blue mb-2">Análise do Oráculo:</strong>
-                {analise ? analise : <span className="text-gray-400">Nenhuma análise encontrada para este projeto.</span>}
-              </div>
             </div>
           </div>
         </main>

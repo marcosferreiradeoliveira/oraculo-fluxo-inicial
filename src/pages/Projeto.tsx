@@ -33,6 +33,7 @@ const Projeto = () => {
   const [aprovacoes, setAprovacoes] = useState<boolean[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [gerandoSugestao, setGerandoSugestao] = useState<number | null>(null); // Armazena o índice da sugestão sendo processada
   const [isPremium, setIsPremium] = useState(false);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
@@ -112,7 +113,7 @@ const Projeto = () => {
     const novasAprovacoes = [...aprovacoes];
     novasAprovacoes[idx] = true;
     setAprovacoes(novasAprovacoes);
-    setGerando(true);
+    setGerandoSugestao(idx); // Usa o índice específico da sugestão
     
     try {
       const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
@@ -153,7 +154,7 @@ const Projeto = () => {
       // If there's an error, just append the suggestion to the end of the text
       setDescricaoEditada(prev => prev + '\n' + sugestoes[idx]);
     } finally {
-      setGerando(false);
+      setGerandoSugestao(null); // Limpa o estado de loading
     }
   };
 
@@ -813,14 +814,16 @@ const Projeto = () => {
                                     size="sm"
                                     className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white px-4 py-2 text-sm font-medium"
                                     onClick={() => handleAprovar(idx)}
-                                    disabled={gerando}
+                                    disabled={gerandoSugestao !== null || aprovacoes[idx]}
                                   >
-                                    {gerando ? (
+                                    {gerandoSugestao === idx ? (
                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : aprovacoes[idx] ? (
+                                      <CheckCircle className="h-4 w-4 mr-1" />
                                     ) : (
                                       <Check className="h-4 w-4 mr-1" />
                                     )}
-                                    Aplicar
+                                    {gerandoSugestao === idx ? 'Aplicando...' : aprovacoes[idx] ? 'Aplicado' : 'Aplicar'}
                                   </Button>
                                 </div>
                               </div>
@@ -843,78 +846,43 @@ const Projeto = () => {
                     </div>
                   </div>
                 )}
-                <h2 className="text-lg font-semibold mb-4 text-gray-800">Resumo do Projeto</h2>
-                {mostrarAlterarIA ? (
-                  <div className="mb-8 p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="mb-3">
-                      <h2 className="text-xl font-semibold text-oraculo-blue">Editor de Texto</h2>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <div className="mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Descrição do Projeto
-                        </label>
+                {/* Texto do Projeto em Campo Editável */}
+                <div className="mb-8 bg-white rounded-xl shadow-md overflow-hidden">
+                  <div className="p-6 border-b">
+                    <h2 className="text-lg font-semibold mb-3 text-oraculo-blue">Texto do Projeto</h2>
+                    <textarea
+                      className="w-full border-2 border-gray-300 rounded-lg p-4 text-gray-700 min-h-[300px] focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue outline-none resize-y"
+                      value={descricaoEditada}
+                      onChange={(e) => setDescricaoEditada(e.target.value)}
+                      disabled={gerandoSugestao !== null}
+                      placeholder="Digite o texto do seu projeto aqui..."
+                    />
+                    {gerandoSugestao !== null && (
+                      <div className="flex items-center gap-2 text-oraculo-blue mt-3 animate-pulse">
+                        <Loader2 className="animate-spin h-5 w-5" />
+                        Aplicando sugestão {gerandoSugestao + 1}...
                       </div>
-                      <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                        <textarea
-                          value={descricaoEditada}
-                          onChange={(e) => setDescricaoEditada(e.target.value)}
-                          className="w-full min-h-[300px] p-3 border rounded-md focus:ring-2 focus:ring-oraculo-blue/50 focus:border-oraculo-blue outline-none"
-                          placeholder="Digite o texto do seu projeto aqui..."
-                        />
-                      </div>
-                      
-                      {/* Botões abaixo do campo de texto */}
-                      <div className="flex gap-4 mt-4">
-                        <Button 
-                          onClick={handleSalvar} 
-                          disabled={salvando}
-                          className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white px-6 py-3 flex items-center gap-2"
-                        >
-                          {salvando ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Salvando...
-                            </>
-                          ) : 'Salvar alterações'}
-                        </Button>
-                        <Button 
-                          size="lg" 
-                          onClick={analisarComIA} 
-                          disabled={analisando || !descricaoEditada}
-                          className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3 flex items-center gap-2"
-                        >
-                          {analisando ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Analisando...
-                            </>
-                          ) : (
-                            <>
-                              <Brain className="h-4 w-4" />
-                              Analisar novamente com IA
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      
-                      {mostrarAnalise && <AnaliseModal />}
-                    </div>
-                    
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm mb-6">
-                      <p className="text-gray-700 whitespace-pre-line leading-relaxed">{projeto.resumo || projeto.descricao}</p>
-                    </div>
-                    
-                    {/* Botão abaixo da descrição */}
-                    <div className="flex justify-center mb-6">
+                  
+                  <div className="p-6">
+                    <div className="flex gap-3">
+                      <Button 
+                        onClick={handleSalvar} 
+                        disabled={salvando || gerandoSugestao !== null} 
+                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3 flex items-center gap-2"
+                      >
+                        {salvando ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Salvando...
+                          </>
+                        ) : 'Salvar Alterações'}
+                      </Button>
                       <Button 
                         size="lg" 
                         onClick={analisarComIA} 
-                        disabled={analisando}
+                        disabled={analisando || !descricaoEditada}
                         className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3 flex items-center gap-2"
                       >
                         {analisando ? (
@@ -930,39 +898,40 @@ const Projeto = () => {
                         )}
                       </Button>
                     </div>
-                    
-                    {!projeto.analise_ia && !analisando && (
-                      <div className="mb-8 p-12 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-2 border-oraculo-blue rounded-xl shadow-lg">
-                        <h2 className="text-2xl font-bold mb-6 text-oraculo-blue flex items-center gap-3">
-                          <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
-                        </h2>
-                        <p className="text-gray-700 text-base mb-8 leading-relaxed">
-                          Agora chegou a hora de avaliar seu projeto. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
-                        </p>
-                        <Button 
-                          size="lg" 
-                          className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-xl px-12 py-6 flex items-center gap-3 w-full justify-center font-bold" 
-                          onClick={analisarComIA} 
-                          disabled={analisando}
-                        >
-                          <Brain className="h-8 w-8" />
-                          {analisando ? 'Analisando...' : 'Analisar novamente com IA'}
-                        </Button>
-                        {analisando && (
-                          <div className="mt-4 bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
-                            {statusIA || 'Iniciando análise...'}
-                            {subEtapasIA.length > 0 && (
-                              <ul className="mt-2 text-left text-xs text-gray-600 list-disc list-inside">
-                                {subEtapasIA.map((etapa, idx) => (
-                                  <li key={idx}>{etapa}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
+                  </div>
+                </div>
+                
+                {/* Section de Como Funciona (só aparece quando não há análise) */}
+                {!projeto.analise_ia && !analisando && (
+                  <div className="mb-8 p-12 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-2 border-oraculo-blue rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-6 text-oraculo-blue flex items-center gap-3">
+                      <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
+                    </h2>
+                    <p className="text-gray-700 text-base mb-8 leading-relaxed">
+                      Agora chegou a hora de avaliar seu projeto. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
+                    </p>
+                    <Button 
+                      size="lg" 
+                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-xl px-12 py-6 flex items-center gap-3 w-full justify-center font-bold" 
+                      onClick={analisarComIA} 
+                      disabled={analisando}
+                    >
+                      <Brain className="h-8 w-8" />
+                      {analisando ? 'Analisando...' : 'Analisar novamente com IA'}
+                    </Button>
+                    {analisando && (
+                      <div className="mt-4 bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
+                        {statusIA || 'Iniciando análise...'}
+                        {subEtapasIA.length > 0 && (
+                          <ul className="mt-2 text-left text-xs text-gray-600 list-disc list-inside">
+                            {subEtapasIA.map((etapa, idx) => (
+                              <li key={idx}>{etapa}</li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             </div>

@@ -8,11 +8,11 @@ import { Loader2, FileText, CheckCircle, Copy, Download, DollarSign } from 'luci
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 
-type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento';
+type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
 interface ProjetoDocument {
   id: string;
-  textos_gerados?: Record<TextoTipo, string>;
+  textos_gerados?: Record<string, string>;
   [key: string]: any;
 }
 
@@ -39,7 +39,7 @@ const GerarTextos = () => {
   const [projeto, setProjeto] = useState<ProjetoDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
-  const [textos, setTextos] = useState<Record<TextoTipo, string>>({
+  const [textos, setTextos] = useState<Record<string, string>>({
     justificativa: '',
     objetivos: '',
     metodologia: '',
@@ -47,10 +47,13 @@ const GerarTextos = () => {
     cronograma: '',
     orcamento: ''
   });
-  const [gerando, setGerando] = useState<TextoTipo | null>(null);
+  const [gerando, setGerando] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<string>('');
-  const [textoSelecionado, setTextoSelecionado] = useState<TextoTipo>('justificativa');
+  const [textoSelecionado, setTextoSelecionado] = useState<string>('justificativa');
   const [mostrarCaixaTexto, setMostrarCaixaTexto] = useState(false);
+  const [categoriaPersonalizada, setCategoriaPersonalizada] = useState('');
+  const [mostrarInputCategoria, setMostrarInputCategoria] = useState(false);
+  const [categoriasCustom, setCategoriasCustom] = useState<string[]>([]);
   const isMounted = useRef(true);
 
   const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos'];
@@ -114,6 +117,23 @@ const GerarTextos = () => {
         
         // Set the project data
         setProjeto(projetoData);
+        
+        // Carregar textos gerados se existirem
+        if (projetoData.textos_gerados) {
+          setTextos(prev => ({
+            ...prev,
+            ...projetoData.textos_gerados
+          }));
+          
+          // Identificar categorias personalizadas (que não estão no TIPO_MAP)
+          const categoriasPersonalizadas = Object.keys(projetoData.textos_gerados)
+            .filter(chave => !(chave in TIPO_MAP));
+          
+          if (categoriasPersonalizadas.length > 0) {
+            setCategoriasCustom(categoriasPersonalizadas);
+          }
+        }
+        
         setLoading(false);
         
       } catch (error) {
@@ -212,11 +232,30 @@ const GerarTextos = () => {
       
       // 5. Prepara a requisição
       setProgresso('Preparando dados...');
-      const tipoMapeado = TIPO_MAP[tipo];
+      
+      // Buscar dados do usuário (incluindo portfolio) para incluir na geração
+      let userPortfolio = '';
+      if (user) {
+        try {
+          const db = getFirestore();
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            userPortfolio = userDoc.data().portfolio || '';
+          }
+        } catch (err) {
+          console.error('Erro ao buscar portfolio do usuário:', err);
+        }
+      }
+      
+      const tipoMapeado = TIPO_MAP[tipo] || tipo; // Use o tipo original se não houver mapeamento (categorias personalizadas)
       const requestData = {
         projetoId: id,
         tipo: tipoMapeado,
-        dadosProjeto: projeto,
+        dadosProjeto: {
+          ...projeto,
+          portfolio: userPortfolio // Adiciona o portfolio aos dados do projeto
+        },
         prompt: GERAR_TEXTO_PROMPT + tipoMapeado
       };
       
@@ -236,11 +275,22 @@ const GerarTextos = () => {
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
       
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTexto', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData)
-      });
+      // Tenta primeiro a nova função, se falhar usa a antiga
+      let response;
+      try {
+        response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        });
+      } catch (err) {
+        // Fallback para a URL do Cloud Run
+        response = await fetch('https://gerartexto-v3odkawqzq-uc.a.run.app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        });
+      }
       
       const requestTime = Date.now() - startTime;
       log(`Resposta recebida em ${requestTime}ms`, {
@@ -628,7 +678,7 @@ const GerarTextos = () => {
                 }).map(([tipo, titulo]) => (
                   <button
                     key={tipo}
-                    onClick={() => setTextoSelecionado(tipo as TextoTipo)}
+                    onClick={() => setTextoSelecionado(tipo)}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       textoSelecionado === tipo
                         ? 'border-oraculo-blue bg-oraculo-blue/5'
@@ -642,12 +692,44 @@ const GerarTextos = () => {
                         <FileText className="h-5 w-5 text-oraculo-blue" />
                       )}
                       <span className="font-medium text-gray-800">{titulo}</span>
-                      {textos[tipo as TextoTipo] && (
+                      {textos[tipo] && (
                         <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
                       )}
                     </div>
                   </button>
                 ))}
+                
+                {/* Categorias customizadas */}
+                {categoriasCustom.map((categoria) => (
+                  <button
+                    key={categoria}
+                    onClick={() => setTextoSelecionado(categoria)}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      textoSelecionado === categoria
+                        ? 'border-oraculo-purple bg-oraculo-purple/5'
+                        : 'border-gray-200 hover:border-oraculo-purple/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-oraculo-purple" />
+                      <span className="font-medium text-gray-800">{categoria}</span>
+                      {textos[categoria] && (
+                        <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+                
+                {/* Botão para adicionar categoria personalizada */}
+                <button
+                  onClick={() => setMostrarInputCategoria(true)}
+                  className="p-4 rounded-lg border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-oraculo-purple" />
+                    <span className="font-medium text-oraculo-purple">+ Categoria Personalizada</span>
+                  </div>
+                </button>
               </div>
 
               <div className="p-4 border-t">
@@ -729,6 +811,54 @@ const GerarTextos = () => {
           </div>
         </main>
       </div>
+      
+      {/* Modal para categoria personalizada */}
+      {mostrarInputCategoria && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Criar Categoria Personalizada</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome da Categoria
+              </label>
+              <input
+                type="text"
+                value={categoriaPersonalizada}
+                onChange={(e) => setCategoriaPersonalizada(e.target.value)}
+                placeholder="Ex: Parcerias, Contrapartida, etc."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-oraculo-purple focus:border-oraculo-purple outline-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  if (categoriaPersonalizada.trim()) {
+                    const novaCategoria = categoriaPersonalizada.trim();
+                    setCategoriasCustom([...categoriasCustom, novaCategoria]);
+                    setTextoSelecionado(novaCategoria);
+                    setTextos({ ...textos, [novaCategoria]: '' });
+                    setCategoriaPersonalizada('');
+                    setMostrarInputCategoria(false);
+                  }
+                }}
+                className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+              >
+                Adicionar
+              </Button>
+              <Button
+                onClick={() => {
+                  setCategoriaPersonalizada('');
+                  setMostrarInputCategoria(false);
+                }}
+                variant="outline"
+                className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

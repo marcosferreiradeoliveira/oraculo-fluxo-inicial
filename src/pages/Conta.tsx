@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Crown, Settings } from 'lucide-react';
@@ -22,6 +23,8 @@ const Conta = () => {
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [email, setEmail] = useState('');
   const [empresa, setEmpresa] = useState('');
+  const [portfolio, setPortfolio] = useState('');
+  const [equipeBio, setEquipeBio] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -77,6 +80,8 @@ const Conta = () => {
             setNomeCompleto(data.nome_completo || '');
             setEmail(firebaseUser.email || '');
             setEmpresa(data.empresa || '');
+            setPortfolio(data.portfolio || '');
+            setEquipeBio(data.equipeBio || '');
             setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
           } else {
             console.log('Usuário não encontrado no Firestore, criando documento...');
@@ -90,6 +95,8 @@ const Conta = () => {
                 setNomeCompleto(data.nome_completo || '');
                 setEmail(firebaseUser.email || '');
                 setEmpresa(data.empresa || '');
+                setPortfolio(data.portfolio || '');
+                setEquipeBio(data.equipeBio || '');
                 setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
               }
             } else {
@@ -120,7 +127,9 @@ const Conta = () => {
       await updateDoc(userDocRef, {
         nome_completo: nomeCompleto,
         email: email,
-        empresa: empresa
+        empresa: empresa,
+        portfolio: portfolio,
+        equipeBio: equipeBio
       });
       toast.success('Dados atualizados com sucesso!');
     } catch (error) {
@@ -340,6 +349,26 @@ const Conta = () => {
                         placeholder="Digite o nome da sua empresa"
                       />
                     </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="portfolio">Portfolio</Label>
+                      <Textarea 
+                        id="portfolio" 
+                        value={portfolio}
+                        onChange={(e) => setPortfolio(e.target.value)}
+                        placeholder="Descreva seu portfolio, projetos anteriores, experiências relevantes..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="equipeBio">Equipe e Mini Bios</Label>
+                      <Textarea 
+                        id="equipeBio" 
+                        value={equipeBio}
+                        onChange={(e) => setEquipeBio(e.target.value)}
+                        placeholder="Descreva sua equipe, membros, papéis e mini-bios..."
+                        rows={4}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-4">
@@ -376,11 +405,8 @@ const Conta = () => {
                           {userData?.isPremium ? 'Plano Premium' : 'Plano Gratuito'}
                         </Badge>
                         <p className="text-2xl font-bold text-gray-900">
-                          {userData?.isPremium ? 'R$ 97/mês' : 'Gratuito'}
+                          {userData?.isPremium ? 'R$ 99/mês' : 'Gratuito'}
                         </p>
-                        {userData?.isPremium && (
-                          <p className="text-sm text-gray-500">Próximo vencimento: 15/02/2024</p>
-                        )}
                       </div>
                       
                       <div className="space-y-2 text-sm">
