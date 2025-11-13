@@ -26,6 +26,8 @@ import CadastroPremium from './pages/CadastroPremium';
 import GerarTextos from './pages/GerarTextos';
 import Termos from './pages/Termos';
 import Privacidade from './pages/Privacidade';
+import DetalhesEdital from './pages/DetalhesEdital';
+import InteligenciaMercado from './pages/InteligenciaMercado';
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,7 @@ const App = () => (
           <Route path="/oraculo-ai" element={<OraculoAI />} />
           <Route path="/biblioteca" element={<Biblioteca />} />
           <Route path="/podcast" element={<Podcast />} />
+          <Route path="/inteligencia-mercado" element={<InteligenciaMercado />} />
           <Route path="/infograficos" element={<Infograficos />} />
           <Route path="/conta" element={<Conta />} />
           <Route path="/suporte" element={<Suporte />} />
@@ -69,6 +72,7 @@ const App = () => (
           <Route path="/projeto/:id/alterar-com-ia" element={<AlterarComIA />} />
           <Route path="/projeto/:id/gerar-textos" element={<GerarTextos />} />
           <Route path="/editar-edital/:id" element={<EditarEdital />} />
+          <Route path="/edital/:id" element={<DetalhesEdital />} />
           <Route path="/cadastrar-episodio" element={<CadastrarEpisodio />} />
           <Route path="/podcast/:id" element={<PodcastDetalhes />} />
           <Route path="/cadastrar-guia" element={<CadastrarGuia />} />

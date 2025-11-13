@@ -1,0 +1,44 @@
+# Force MIME types for JavaScript files - ADICIONE ISSO NO INÍCIO
+
+<IfModule mod_mime.c>
+  AddType application/javascript js mjs
+  AddType text/css css
+  AddType image/svg+xml svg
+  AddType image/jpeg jpg jpeg
+  AddType image/png png
+  AddType image/webp webp
+</IfModule>
+
+# CORS Headers - Permitir acesso às imagens de qualquer origem
+<IfModule mod_headers.c>
+  # Permitir CORS para todos os arquivos estáticos
+  <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico|css|js|woff|woff2|ttf|eot)$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+    Header set Cache-Control "public, max-age=31536000"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # IMPORTANTE: Excluir o diretório oraculocultural das regras de rewrite
+  RewriteCond %{REQUEST_URI} ^/oraculocultural/ [NC]
+  RewriteRule ^ - [L]
+  
+  # Regras para o site principal (raiz)
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# php -- BEGIN cPanel-generated handler, do not edit
+# Defina o pacote "ea-php82" como a linguagem padrão de programação "PHP".
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php82___lsphp .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit

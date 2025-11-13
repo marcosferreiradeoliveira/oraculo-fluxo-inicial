@@ -466,7 +466,11 @@ const OraculoAI = () => {
                     }
                     const prioridade = diffDays !== null ? getPrioridade(diffDays) : null;
                     return (
-                      <Card key={edital.id || index} className="relative hover:shadow-lg transition-shadow cursor-pointer">
+                      <Card 
+                        key={edital.id || index} 
+                        className="relative hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                        onClick={() => navigate(`/edital/${edital.id}`)}
+                      >
                       {/* Action Buttons - Only visible to admin */}
                       {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
                         <div className="absolute top-2 right-2 flex gap-1 z-10">

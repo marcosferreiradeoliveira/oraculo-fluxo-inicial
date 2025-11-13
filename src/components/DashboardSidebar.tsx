@@ -9,14 +9,19 @@ import {
   HelpCircle,
   Sparkles,
   Menu,
-  X
+  X,
+  Plus,
+  TrendingUp,
+  PlayCircle,
+  ExternalLink
 } from 'lucide-react';
+import logo from '@/assets/logo.png';
 
 const menuItems = [
   { title: 'Início', url: '/', icon: Home },
-  { title: 'Oráculo AI', url: '/oraculo-ai', icon: Brain },
-  { title: 'Biblioteca de Guias', url: '/biblioteca', icon: BookOpen },
-  { title: 'Podcast', url: '/podcast', icon: Headphones },
+  { title: 'Criar Projeto', url: '/oraculo-ai', icon: Plus },
+  { title: 'Executar Projeto', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, external: true },
+  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp },
   { title: 'Conta', url: '/conta', icon: User },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle },
 ];
@@ -105,9 +110,11 @@ export function DashboardSidebar() {
         {/* Logo/Brand Section */}
         <div className="p-6 border-b border-purple-800/30">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-oraculo-magenta to-oraculo-gold rounded-lg flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
+            <img 
+              src={logo} 
+              alt="Oráculo Cultural" 
+              className="w-10 h-10 object-contain"
+            />
             <div>
               <h1 className="text-xl font-bold">Oráculo</h1>
               <p className="text-sm text-purple-300">Cultural</p>
@@ -120,19 +127,34 @@ export function DashboardSidebar() {
           <ul className="space-y-2 px-4">
             {menuItems.map((item) => (
               <li key={item.title}>
-                <NavLink
-                  to={item.url}
-                  className={({ isActive }) =>
-                    `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                      isActive
-                        ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
-                        : 'hover:bg-purple-800/30 hover:translate-x-1'
-                    }`
-                  }
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span className="font-medium">{item.title}</span>
-                </NavLink>
+                {item.external ? (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 hover:bg-purple-800/30 hover:translate-x-1"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <item.icon className="h-5 w-5" />
+                      <span className="font-medium">{item.title}</span>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-purple-300" />
+                  </a>
+                ) : (
+                  <NavLink
+                    to={item.url}
+                    className={({ isActive }) =>
+                      `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                        isActive
+                          ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
+                          : 'hover:bg-purple-800/30 hover:translate-x-1'
+                      }`
+                    }
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span className="font-medium">{item.title}</span>
+                  </NavLink>
+                )}
               </li>
             ))}
           </ul>

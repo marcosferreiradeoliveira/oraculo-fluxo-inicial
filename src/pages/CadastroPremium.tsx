@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 
 const CadastroPremium = () => {
@@ -45,20 +44,39 @@ const CadastroPremium = () => {
 
     setLoading(true);
     try {
-      const functions = getFunctions();
-      const criarCheckoutPremium = httpsCallable(functions, 'criarCheckoutPremium');
-      const result = await criarCheckoutPremium({ 
-        planType,
-        userEmail: userData.email,
-        userId: userData.userId
-      });
+      console.log('[CadastroPremium] Iniciando criação de checkout:', { planType, userEmail: userData.email, userId: userData.userId });
       
-      if (result.data && (result.data as any).init_point) {
-        window.open((result.data as any).init_point, '_blank');
+      const response = await fetch('https://criarcheckoutpremium-v3odkawqzq-uc.a.run.app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          planType,
+          userEmail: userData.email,
+          userId: userData.userId
+        }),
+      });
+
+      console.log('[CadastroPremium] Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[CadastroPremium] Error response:', errorText);
+        throw new Error(`Erro ao criar checkout: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('[CadastroPremium] Success data:', data);
+      
+      if (data.init_point) {
+        window.open(data.init_point, '_blank');
+      } else {
+        throw new Error('Link de pagamento não retornado');
       }
     } catch (error) {
-      console.error('Error creating checkout:', error);
-      alert('Erro ao processar pagamento. Tente novamente.');
+      console.error('[CadastroPremium] Error creating checkout:', error);
+      alert(`Erro ao processar pagamento: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
     } finally {
       setLoading(false);
     }

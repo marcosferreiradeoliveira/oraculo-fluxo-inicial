@@ -18,6 +18,102 @@ const steps = [
 ];
 const currentStep: number = 1; // Avaliar com IA
 
+// Função utilitária para limpar markdown
+const limparMarkdown = (texto: string): string => {
+  return texto
+    .replace(/####\s*/g, '') // Remove ####
+    .replace(/###\s*/g, '') // Remove ###
+    .replace(/##\s*/g, '') // Remove ##
+    .replace(/#\s*/g, '') // Remove #
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **texto**
+    .replace(/\*(.*?)\*/g, '$1') // Remove *texto*
+    .replace(/`(.*?)`/g, '$1') // Remove `código`
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links [texto](url)
+    .trim();
+};
+
+// Função para extrair sugestões de forma robusta
+const extrairSugestoes = (analiseTexto: string): string[] => {
+  let matches: string[] = [];
+  
+  // Remove seções que não são sugestões
+  const textoLimpo = analiseTexto
+    .replace(/###?\s*\d+\.\s*NOTA\s+ESTIMADA.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*PONTOS\s+FORTES.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*PONTOS\s+FRACOS.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*ADEQUAÇÃO.*?(?=###?\s*\d+\.|$)/is, '');
+  
+  // Padrão 1: "Sugestão:" ou "- Sugestão:" no início da linha
+  const padrao1 = /(?:^|\n)[-•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-•]\s*Sugestão:|$)/gis;
+  let match;
+  while ((match = padrao1.exec(textoLimpo)) !== null) {
+    const sugestao = limparMarkdown(match[1].trim());
+    if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+      matches.push(sugestao);
+    }
+  }
+  
+  // Padrão 2: Números seguidos de "Sugestão:"
+  if (matches.length === 0) {
+    const padrao2 = /\d+[\.\)]\s*Sugestão:\s*(.+?)(?=\n\n|\d+[\.\)]\s*Sugestão:|$)/gis;
+    while ((match = padrao2.exec(textoLimpo)) !== null) {
+      const sugestao = limparMarkdown(match[1].trim());
+      if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+        matches.push(sugestao);
+      }
+    }
+  }
+  
+  // Padrão 3: Seção "Sugestões de Melhoria" com lista
+  if (matches.length === 0) {
+    const secaoSugestoes = textoLimpo.match(/sugest[õo]es?\s+de\s+melhoria:?\s*(.+?)(?=\n\n[A-Z]|\n\n\d+\.|$)/is);
+    if (secaoSugestoes) {
+      const listaSugestoes = secaoSugestoes[1]
+        .split(/\n/)
+        .map(line => {
+          const limpa = line.trim()
+            .replace(/^[-•\d.)\s]+/, '')
+            .replace(/^Sugestão:\s*/i, '');
+          return limparMarkdown(limpa);
+        })
+        .filter(line => line.length > 20 && !line.match(/\d+\/\d+/) && !line.match(/^###/));
+      matches.push(...listaSugestoes);
+    }
+  }
+  
+  // Padrão 4: Linhas que começam com "-" ou "•" após a palavra "Sugestão"
+  if (matches.length === 0) {
+    const linhas = textoLimpo.split('\n');
+    let dentroSecaoSugestoes = false;
+    for (const linha of linhas) {
+      if (linha.match(/sugest[õo]es?\s+de\s+melhoria/i)) {
+        dentroSecaoSugestoes = true;
+        continue;
+      }
+      if (dentroSecaoSugestoes && linha.match(/^[-•]\s*(.+)/)) {
+        const sugestao = limparMarkdown(linha.replace(/^[-•]\s*/, '').trim());
+        if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+          matches.push(sugestao);
+        }
+      }
+      if (dentroSecaoSugestoes && linha.trim() === '') {
+        dentroSecaoSugestoes = false;
+      }
+    }
+  }
+  
+  return matches.filter((s, i, arr) => arr.indexOf(s) === i); // Remove duplicatas
+};
+
+// Função para formatar texto para exibição
+const formatarTextoParaExibicao = (texto: string): string => {
+  return limparMarkdown(texto)
+    .split('\n')
+    .map(linha => linha.trim())
+    .filter(linha => linha.length > 0)
+    .join('\n');
+};
+
 const Projeto = () => {
   const { id } = useParams();
   const [projeto, setProjeto] = useState<any>(null);
@@ -91,9 +187,10 @@ const Projeto = () => {
           setAnalise(data.analise_ia);
           setStatusIA('Análise carregada');
           
-          // Extract suggestions from analysis
-          const regex = /Sugestão: ?(.+)/gi;
-          const matches = [...data.analise_ia.matchAll(regex)].map(m => m[1].trim());
+          // Extract suggestions using the new robust function
+          const matches = extrairSugestoes(data.analise_ia);
+          console.log('Sugestões extraídas em Projeto.tsx:', matches);
+          console.log('Total de sugestões:', matches.length);
           setSugestoes(matches);
           
           // Initialize approvals
@@ -256,8 +353,8 @@ const Projeto = () => {
     setMostrarAnalise(true);
     setAnalise(null);
     setErroIA(null);
-    setStatusIA('Iniciando análise do projeto...');
-    setSubEtapasIA(['Iniciando análise...']);
+    setStatusIA('O Oráculo está consultando as musas...');
+    setSubEtapasIA(['Consultando as musas da inspiração...']);
     setAnalisando(true);
     
     // Força uma atualização síncrona do DOM
@@ -311,29 +408,64 @@ const Projeto = () => {
       
       await updateStatusWithDelay('Enviando para análise da IA...', 
         ['Enviando dados para IA...', 'Aguardando resposta da IA...'], 1800);
-      const endpoint = 'https://analisarprojeto-665760404958.us-central1.run.app/analisarProjeto';
-      const payload = { prompt };
+      
+      // Buscar portfolio do usuário
+      let portfolioTexto = '';
+      if (user) {
+        try {
+          const db = getFirestore();
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            portfolioTexto = userDoc.data().portfolio || '';
+          }
+        } catch (err) {
+          console.error('Erro ao buscar portfolio:', err);
+        }
+      }
+      
+      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/avaliarProjetoIA';
+      
+      const payload = {
+        textoProjeto: dadosConsolidados.resumo_projeto,
+        nomeProjeto: projeto.nome,
+        nomeEdital: dadosConsolidados.nome_edital,
+        criteriosEdital: dadosConsolidados.criterios || 'Não especificados',
+        textoEdital: dadosConsolidados.texto_edital,
+        portfolio: portfolioTexto,
+        projetosSelecionados: dadosConsolidados.texto_selecionados ? dadosConsolidados.texto_selecionados.slice(0, 2000) : '',
+        userId: user?.uid // Adicionar userId para buscar equipeBio e portfolio do Firestore
+      };
+      
       console.log('[Oraculo] Chamando endpoint:', endpoint);
       console.log('[Oraculo] Payload enviado:', payload);
+      
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
-      console.log('[Oraculo] Status da resposta:', response.status);
-      let data;
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Oraculo] Erro HTTP:', response.status, errorText);
+        throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
+      }
+      
       const text = await response.text();
       console.log('[Oraculo] Texto da resposta:', text);
+      
+      let data;
       try {
         data = text ? JSON.parse(text) : null;
       } catch (e) {
-        console.error('[Oraculo] Erro ao fazer parse do JSON:', text);
-        throw new Error('Resposta inválida do servidor: ' + text);
+        console.error('[Oraculo] Erro ao fazer parse do JSON:', e);
+        throw new Error('Resposta inválida do servidor');
       }
-      if (!response.ok) {
-        console.error('[Oraculo] Erro HTTP:', response.status, data && data.error);
-        throw new Error((data && data.error) || `Erro HTTP: ${response.status}`);
-      }
+      
       await updateStatusWithDelay('', ['Recebendo análise da IA...'], 1000);
       await updateStatusWithDelay('', ['Processando resultado...'], 1200);
       const analiseIA = data.analise;
@@ -458,30 +590,105 @@ const Projeto = () => {
   // Show loading popup when analyzing
   if (mostrarAnalise && analisando) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="bg-gradient-to-br from-oraculo-blue/95 to-oraculo-purple/95 rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl border-2 border-white/20">
           <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-oraculo-blue mb-4"></div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Analisando Projeto</h3>
-            <p className="text-sm text-gray-600 text-center">
-              {statusIA || 'Processando sua solicitação...'}
-            </p>
+            {/* Animação bem humorada das musas */}
+            <div className="relative mb-6">
+              {/* Círculo central com ícone do Oráculo */}
+              <div className="relative w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm animate-pulse">
+                <Brain className="h-12 w-12 text-white animate-bounce" />
+              </div>
+              
+              {/* Musas girando ao redor */}
+              <div className="absolute inset-0 animate-spin" style={{ animationDuration: '3s' }}>
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <span className="text-2xl animate-bounce" style={{ animationDelay: '0s' }}>🎭</span>
+                </div>
+                <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2">
+                  <span className="text-2xl animate-bounce" style={{ animationDelay: '0.3s' }}>🎨</span>
+                </div>
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
+                  <span className="text-2xl animate-bounce" style={{ animationDelay: '0.6s' }}>📚</span>
+                </div>
+                <div className="absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <span className="text-2xl animate-bounce" style={{ animationDelay: '0.9s' }}>✨</span>
+                </div>
+              </div>
+              
+              {/* Partículas mágicas */}
+              <div className="absolute inset-0">
+                <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-yellow-300 rounded-full animate-ping" style={{ animationDelay: '0s' }}></div>
+                <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-pink-300 rounded-full animate-ping" style={{ animationDelay: '0.5s' }}></div>
+                <div className="absolute bottom-1/4 left-3/4 w-2 h-2 bg-blue-300 rounded-full animate-ping" style={{ animationDelay: '1s' }}></div>
+              </div>
+            </div>
+            
+            {/* Texto principal */}
+            <h3 className="text-2xl font-bold text-white mb-3 text-center animate-pulse">
+              O Oráculo está consultando as musas
+            </h3>
+            
+            {/* Status da análise */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 w-full mb-4">
+              <p className="text-sm text-white/90 text-center font-medium">
+                {statusIA || 'Consultando as musas da inspiração...'}
+              </p>
+              {subEtapasIA.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {subEtapasIA.slice(-3).map((etapa, idx) => (
+                    <p key={idx} className="text-xs text-white/70 text-center animate-fade-in">
+                      • {etapa}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Barra de progresso animada */}
+            <div className="w-full bg-white/20 rounded-full h-2 mb-4 overflow-hidden">
+              <div className="bg-white h-2 rounded-full animate-progress" style={{
+                width: '100%',
+                animation: 'progress 2s ease-in-out infinite'
+              }}></div>
+            </div>
+            
             {erroIA && (
-              <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm w-full">
+              <div className="mt-4 p-3 bg-red-500/90 text-white rounded-md text-sm w-full backdrop-blur-sm">
                 {erroIA}
               </div>
             )}
+            
             <button
               onClick={() => {
                 setMostrarAnalise(false);
                 setAnalisando(false);
               }}
-              className="mt-6 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="mt-4 px-6 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all backdrop-blur-sm font-medium"
             >
               Cancelar
             </button>
           </div>
         </div>
+        
+        {/* Estilos CSS inline para animações */}
+        <style>{`
+          @keyframes progress {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(0%); }
+            100% { transform: translateX(100%); }
+          }
+          .animate-progress {
+            animation: progress 2s ease-in-out infinite;
+          }
+          @keyframes fade-in {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in {
+            animation: fade-in 0.5s ease-out;
+          }
+        `}</style>
       </div>
     );
   }
@@ -740,63 +947,190 @@ const Projeto = () => {
                           </Button>
                         </div>
                         
-                        {projeto.analise_ia.split('\n\n').map((section, index) => {
-                          // Remove markdown formatting
-                          const cleanSection = section.replace(/\*\*(.*?)\*\*/g, '$1');
+                        {/* Dashboard de Critérios */}
+                        {(() => {
+                          // Extrair nota global
+                          const notaGlobalPatterns = [
+                            /5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i,
+                            /Nota estimada.*?:\s*(\d+)/i,
+                            /Nota estimada.*?\):\s*(\d+)/i,
+                            /Nota.*?:\s*(\d+)/i,
+                            /(\d+)\s*de\s*100/i,
+                            /(\d+)\/100/i
+                          ];
                           
-                          // Skip the "Nota estimada" section since it's displayed in the card above
-                          if (cleanSection.includes('Nota estimada') || cleanSection.includes('Nota estimada (0-100)')) {
-                            return null;
+                          let notaGlobal = null;
+                          for (const pattern of notaGlobalPatterns) {
+                            const match = projeto.analise_ia.match(pattern);
+                            if (match && match[1]) {
+                              const nota = parseInt(match[1]);
+                              if (nota >= 0 && nota <= 100) {
+                                notaGlobal = nota;
+                                break;
+                              }
+                            }
                           }
                           
-                          // Check for section headers (lines ending with :)
-                          const isSectionHeader = cleanSection.trim().endsWith(':');
-                          const isNumberedItem = /^\d+[\.\)]/.test(cleanSection.trim());
+                          // Extrair notas dos critérios
+                          const criterios = [
+                            { nome: 'Adequação aos critérios do edital', peso: 40, pattern: /Adequação aos critérios do edital.*?(\d+)%.*?:\s*(\d+)/i },
+                            { nome: 'Viabilidade e capacidade de execução', peso: 30, pattern: /Viabilidade e capacidade de execução.*?(\d+)%.*?:\s*(\d+)/i },
+                            { nome: 'Qualidade técnica e inovação', peso: 20, pattern: /Qualidade técnica e inovação.*?(\d+)%.*?:\s*(\d+)/i },
+                            { nome: 'Impacto cultural e relevância', peso: 10, pattern: /Impacto cultural e relevância.*?(\d+)%.*?:\s*(\d+)/i }
+                          ];
                           
-                          if (isSectionHeader) {
-                            return (
-                              <div key={index} className="border-b-2 border-oraculo-blue/20 pb-4 mb-6">
-                                <h3 className="text-xl font-bold text-oraculo-blue">
-                                  {cleanSection.replace(':', '')}
-                                </h3>
-                              </div>
-                            );
-                          } else if (isNumberedItem) {
-                            return (
-                              <div key={index} className="flex gap-4 mb-4">
-                                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-oraculo-blue text-white flex items-center justify-center text-sm font-bold">
-                                  {cleanSection.match(/^\d+/)?.[0]}
-                                </div>
-                                <div className="text-gray-700 text-base leading-relaxed">
-                                  {cleanSection.replace(/^\d+[\.\)]\s*/, '').split('\n').map((line, lineIndex) => (
-                                    <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
-                                      {line.replace(/\*\*(.*?)\*\*/g, '$1')}
-                                    </p>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          } else if (cleanSection.includes('Sugestões de Melhoria')) {
-                            // Skip the "Sugestões de Melhoria" section from text since we show it separately
+                          const criteriosComNotas = criterios.map(criterio => {
+                            const match = projeto.analise_ia.match(criterio.pattern);
+                            if (match && match[2]) {
+                              return {
+                                ...criterio,
+                                nota: parseInt(match[2]),
+                                notaMaxima: criterio.peso
+                              };
+                            }
                             return null;
-                          }
+                          }).filter(Boolean);
+                          
+                          if (criteriosComNotas.length === 0 && !notaGlobal) return null;
                           
                           return (
-                            <div key={index} className="text-gray-700 leading-relaxed text-base mb-4">
-                              {cleanSection.split('\n').map((line, lineIndex) => (
-                                <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
-                                  {line.replace(/\*\*(.*?)\*\*/g, '$1')}
-                                </p>
-                              ))}
+                            <div className="mb-8">
+                              {/* Card de Nota Global */}
+                              {notaGlobal !== null && (
+                                <div className="mb-4">
+                                  <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-2xl p-6 text-white shadow-lg">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                                          <span className="text-3xl">🎯</span>
+                                        </div>
+                                        <div>
+                                          <h3 className="text-lg font-bold">Nota Global do Projeto</h3>
+                                          <p className="text-sm opacity-90">Avaliação geral considerando todos os critérios</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-5xl font-black">{notaGlobal}</div>
+                                        <div className="text-sm opacity-90">de 100 pontos</div>
+                                      </div>
+                                    </div>
+                                    <div className="mt-4 bg-white/20 rounded-full h-3 overflow-hidden">
+                                      <div 
+                                        className="bg-white rounded-full h-3 transition-all duration-1000"
+                                        style={{ width: `${notaGlobal}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Grid de Critérios */}
+                              {criteriosComNotas.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {criteriosComNotas.map((criterio: any, idx) => {
+                                const percentual = (criterio.nota / criterio.notaMaxima) * 100;
+                                const cor = percentual >= 75 ? 'bg-green-500' : percentual >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                                
+                                return (
+                                  <div key={idx} className="bg-white border-2 border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div className="flex-1">
+                                        <h4 className="font-semibold text-gray-800 text-sm leading-tight">{criterio.nome}</h4>
+                                        <p className="text-xs text-gray-500 mt-1">Peso: {criterio.peso}%</p>
+                                      </div>
+                                      <div className="ml-3 text-right">
+                                        <div className="text-2xl font-bold text-oraculo-blue">{criterio.nota}</div>
+                                        <div className="text-xs text-gray-500">de {criterio.notaMaxima}</div>
+                                      </div>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                      <div 
+                                        className={`${cor} h-2 rounded-full transition-all duration-500`}
+                                        style={{ width: `${percentual}%` }}
+                                      ></div>
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-600 text-right">
+                                      {percentual.toFixed(0)}% do peso máximo
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                                </div>
+                              )}
                             </div>
                           );
-                        })}
+                        })()}
+                        
+                        {(() => {
+                          // Processar o texto da análise removendo markdown e seções já exibidas
+                          const textoProcessado = formatarTextoParaExibicao(projeto.analise_ia);
+                          const secoes = textoProcessado.split('\n\n').filter(sec => {
+                            const secLower = sec.toLowerCase();
+                            return !secLower.includes('nota estimada') && 
+                                   !secLower.includes('sugestões de melhoria') &&
+                                   !secLower.includes('sugestoes de melhoria') &&
+                                   sec.trim().length > 0;
+                          });
+                          
+                          return secoes.map((section, index) => {
+                            const secaoLimpa = limparMarkdown(section);
+                            
+                            // Verificar se é um cabeçalho de seção
+                            const isSectionHeader = secaoLimpa.trim().endsWith(':') || 
+                                                   /^[A-Z][A-Z\s]+:?\s*$/.test(secaoLimpa.trim());
+                            
+                            // Verificar se é um item numerado
+                            const isNumberedItem = /^\d+[\.\)]\s/.test(secaoLimpa.trim());
+                            
+                            if (isSectionHeader) {
+                              return (
+                                <div key={index} className="border-b border-gray-300 pb-3 mb-5 mt-6 first:mt-0">
+                                  <h3 className="text-lg font-semibold text-gray-900">
+                                    {secaoLimpa.replace(/[:\.]$/, '').trim()}
+                                  </h3>
+                                </div>
+                              );
+                            } else if (isNumberedItem) {
+                              const numero = secaoLimpa.match(/^\d+/)?.[0];
+                              const conteudo = secaoLimpa.replace(/^\d+[\.\)]\s*/, '').trim();
+                              
+                              return (
+                                <div key={index} className="flex gap-3 mb-4">
+                                  <div className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold mt-0.5">
+                                    {numero}
+                                  </div>
+                                  <div className="text-gray-800 text-sm leading-relaxed flex-1">
+                                    {conteudo.split('\n').map((line, lineIndex) => (
+                                      <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
+                                        {line.trim()}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div key={index} className="text-gray-800 leading-relaxed text-sm mb-4">
+                                {secaoLimpa.split('\n').map((line, lineIndex) => {
+                                  const linhaLimpa = line.trim();
+                                  if (!linhaLimpa) return null;
+                                  return (
+                                    <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
+                                      {linhaLimpa}
+                                    </p>
+                                  );
+                                })}
+                              </div>
+                            );
+                          });
+                        })()}
                         
                         {/* Sugestões de Melhoria - Todas as sugestões */}
                         {sugestoes.length > 0 && (
                           <>
-                            <div className="border-b-2 border-oraculo-blue/20 pb-4 mb-6">
-                              <h3 className="text-xl font-bold text-oraculo-blue">
+                            <div className="border-b border-gray-300 pb-3 mb-5 mt-6">
+                              <h3 className="text-lg font-semibold text-gray-900">
                                 Sugestões de Melhoria
                               </h3>
                             </div>
@@ -804,9 +1138,9 @@ const Projeto = () => {
                               <div key={`sugestao-${idx}`} className="bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 border-oraculo-blue shadow-sm mb-4">
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="flex-1">
-                                <div className="text-base text-black leading-relaxed">
-                                  <span className="text-black text-lg">
-                                    💡 Sugestão {idx + 1}: {sugestao.replace(/\*\*(.*?)\*\*/g, '$1')}
+                                <div className="text-base text-gray-800 leading-relaxed">
+                                  <span className="text-gray-800 text-lg font-medium">
+                                    💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
                                   </span>
                                 </div>
                                   </div>
@@ -893,7 +1227,7 @@ const Projeto = () => {
                         ) : (
                           <>
                             <Brain className="h-4 w-4" />
-                            Analisar novamente com IA
+                            Analisar com IA
                           </>
                         )}
                       </Button>

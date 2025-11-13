@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 import { toast } from 'sonner';
 
 const Conta = () => {
+  const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +27,7 @@ const Conta = () => {
   const [empresa, setEmpresa] = useState('');
   const [portfolio, setPortfolio] = useState('');
   const [equipeBio, setEquipeBio] = useState('');
+  const [dadosCadastrais, setDadosCadastrais] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -82,6 +85,7 @@ const Conta = () => {
             setEmpresa(data.empresa || '');
             setPortfolio(data.portfolio || '');
             setEquipeBio(data.equipeBio || '');
+            setDadosCadastrais(data.dadosCadastrais || '');
             setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
           } else {
             console.log('Usuário não encontrado no Firestore, criando documento...');
@@ -97,6 +101,7 @@ const Conta = () => {
                 setEmpresa(data.empresa || '');
                 setPortfolio(data.portfolio || '');
                 setEquipeBio(data.equipeBio || '');
+                setDadosCadastrais(data.dadosCadastrais || '');
                 setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
               }
             } else {
@@ -129,7 +134,8 @@ const Conta = () => {
         email: email,
         empresa: empresa,
         portfolio: portfolio,
-        equipeBio: equipeBio
+        equipeBio: equipeBio,
+        dadosCadastrais: dadosCadastrais
       });
       toast.success('Dados atualizados com sucesso!');
     } catch (error) {
@@ -369,6 +375,20 @@ const Conta = () => {
                         rows={4}
                       />
                     </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="dadosCadastrais">Dados Cadastrais da Empresa</Label>
+                      <Textarea 
+                        id="dadosCadastrais" 
+                        value={dadosCadastrais}
+                        onChange={(e) => setDadosCadastrais(e.target.value)}
+                        placeholder="Cole aqui todos os dados cadastrais da empresa: CNPJ, razão social, nome fantasia, sócios, endereço completo, telefone, email, etc. Você pode copiar e colar diretamente do documento ou sistema da empresa."
+                        rows={8}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-gray-500">
+                        Campo livre para copiar e colar todos os dados cadastrais da empresa. Pode incluir CNPJ, sócios, endereço, contatos e outras informações relevantes.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex gap-4">
@@ -436,7 +456,11 @@ const Conta = () => {
                         </div>
                       </div>
 
-                      <Button variant="outline" className="w-full">
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => navigate('/cadastro-premium')}
+                      >
                         Gerenciar Assinatura
                       </Button>
                     </div>

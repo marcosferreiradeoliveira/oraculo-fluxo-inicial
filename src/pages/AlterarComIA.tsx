@@ -18,6 +18,102 @@ const steps = [
 ];
 const currentStep: number = 2; // Alterar com IA
 
+// Função utilitária para limpar markdown
+const limparMarkdown = (texto: string): string => {
+  return texto
+    .replace(/####\s*/g, '') // Remove ####
+    .replace(/###\s*/g, '') // Remove ###
+    .replace(/##\s*/g, '') // Remove ##
+    .replace(/#\s*/g, '') // Remove #
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **texto**
+    .replace(/\*(.*?)\*/g, '$1') // Remove *texto*
+    .replace(/`(.*?)`/g, '$1') // Remove `código`
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links [texto](url)
+    .trim();
+};
+
+// Função para extrair sugestões de forma robusta
+const extrairSugestoes = (analiseTexto: string): string[] => {
+  let matches: string[] = [];
+  
+  // Remove seções que não são sugestões
+  const textoLimpo = analiseTexto
+    .replace(/###?\s*\d+\.\s*NOTA\s+ESTIMADA.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*PONTOS\s+FORTES.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*PONTOS\s+FRACOS.*?(?=###?\s*\d+\.|$)/is, '')
+    .replace(/###?\s*\d+\.\s*ADEQUAÇÃO.*?(?=###?\s*\d+\.|$)/is, '');
+  
+  // Padrão 1: "Sugestão:" ou "- Sugestão:" no início da linha
+  const padrao1 = /(?:^|\n)[-•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-•]\s*Sugestão:|$)/gis;
+  let match;
+  while ((match = padrao1.exec(textoLimpo)) !== null) {
+    const sugestao = limparMarkdown(match[1].trim());
+    if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+      matches.push(sugestao);
+    }
+  }
+  
+  // Padrão 2: Números seguidos de "Sugestão:"
+  if (matches.length === 0) {
+    const padrao2 = /\d+[\.\)]\s*Sugestão:\s*(.+?)(?=\n\n|\d+[\.\)]\s*Sugestão:|$)/gis;
+    while ((match = padrao2.exec(textoLimpo)) !== null) {
+      const sugestao = limparMarkdown(match[1].trim());
+      if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+        matches.push(sugestao);
+      }
+    }
+  }
+  
+  // Padrão 3: Seção "Sugestões de Melhoria" com lista
+  if (matches.length === 0) {
+    const secaoSugestoes = textoLimpo.match(/sugest[õo]es?\s+de\s+melhoria:?\s*(.+?)(?=\n\n[A-Z]|\n\n\d+\.|$)/is);
+    if (secaoSugestoes) {
+      const listaSugestoes = secaoSugestoes[1]
+        .split(/\n/)
+        .map(line => {
+          const limpa = line.trim()
+            .replace(/^[-•\d.)\s]+/, '')
+            .replace(/^Sugestão:\s*/i, '');
+          return limparMarkdown(limpa);
+        })
+        .filter(line => line.length > 20 && !line.match(/\d+\/\d+/) && !line.match(/^###/));
+      matches.push(...listaSugestoes);
+    }
+  }
+  
+  // Padrão 4: Linhas que começam com "-" ou "•" após a palavra "Sugestão"
+  if (matches.length === 0) {
+    const linhas = textoLimpo.split('\n');
+    let dentroSecaoSugestoes = false;
+    for (const linha of linhas) {
+      if (linha.match(/sugest[õo]es?\s+de\s+melhoria/i)) {
+        dentroSecaoSugestoes = true;
+        continue;
+      }
+      if (dentroSecaoSugestoes && linha.match(/^[-•]\s*(.+)/)) {
+        const sugestao = limparMarkdown(linha.replace(/^[-•]\s*/, '').trim());
+        if (sugestao.length > 15 && !sugestao.match(/\d+\/\d+/) && !sugestao.match(/^###/)) {
+          matches.push(sugestao);
+        }
+      }
+      if (dentroSecaoSugestoes && linha.trim() === '') {
+        dentroSecaoSugestoes = false;
+      }
+    }
+  }
+  
+  return matches.filter((s, i, arr) => arr.indexOf(s) === i); // Remove duplicatas
+};
+
+// Função para formatar texto para exibição
+const formatarTextoParaExibicao = (texto: string): string => {
+  return limparMarkdown(texto)
+    .split('\n')
+    .map(linha => linha.trim())
+    .filter(linha => linha.length > 0)
+    .join('\n');
+};
+
 interface Projeto extends DocumentData {
   id: string;
   descricao?: string;
@@ -45,26 +141,43 @@ const AlterarComIA = () => {
     document.title = 'Alterar com IA - Oráculo Cultural';
   }, []);
 
-  // Verificar status premium do usuário
+  // Verificar status premium e redirecionar se necessário
   useEffect(() => {
-    const checkPremiumStatus = async () => {
-      if (!user) return;
+    const checkPremiumAndRedirect = async () => {
+      if (!user) {
+        navigate('/');
+        return;
+      }
+      
       try {
         const db = getFirestore();
-        // Changed from 'users' to 'usuarios' to match the webhook
         const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
+        
         if (userSnap.exists()) {
           const userData = userSnap.data();
           console.log('User data from Firestore:', userData);
-          setIsPremium(userData.isPremium === true);
+          const isPremiumStatus = userData.isPremium === true;
+          setIsPremium(isPremiumStatus);
+          
+          if (!isPremiumStatus) {
+            console.log('Usuário não premium tentando acessar Alterar com IA, redirecionando para assinatura...');
+            navigate('/cadastro-premium');
+            return;
+          }
+        } else {
+          // Se o usuário não tem documento, não é premium
+          navigate('/cadastro-premium');
+          return;
         }
       } catch (error) {
         console.error('Erro ao verificar status premium:', error);
+        navigate('/cadastro-premium');
       }
     };
-    checkPremiumStatus();
-  }, [user]);
+    
+    checkPremiumAndRedirect();
+  }, [user, navigate]);
 
   // Função para verificar premium e redirecionar se necessário
   const checkPremiumAccess = () => {
@@ -144,9 +257,10 @@ const AlterarComIA = () => {
 
   useEffect(() => {
     if (analise) {
-      // Extrai sugestões da análise (cada linha que começa com "Sugestão:")
-      const regex = /Sugestão: ?(.+)/gi;
-      const matches = [...analise.matchAll(regex)].map(m => m[1].trim());
+      // Extract suggestions using the new robust function
+      const matches = extrairSugestoes(analise);
+      console.log('Sugestões extraídas em AlterarComIA:', matches);
+      console.log('Total de sugestões:', matches.length);
       setSugestoes(matches);
       // Se já há aprovações salvas, mantém, senão inicializa tudo como false
       setAprovacoes(prev => prev.length === matches.length ? prev : matches.map(() => false));
@@ -323,6 +437,263 @@ const AlterarComIA = () => {
                   </Button>
                 </div>
               </div>
+              
+              {/* Diagnóstico e Análise da IA */}
+              {analise && (
+                <div className="p-6 border-t">
+                  <h2 className="text-lg font-semibold mb-4 text-oraculo-blue flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Diagnóstico do Oráculo
+                  </h2>
+                  
+                  {/* Nota Estimada - Card Especial */}
+                  {analise.includes('Nota estimada') && (
+                    <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-2xl p-6 text-white text-center mb-6">
+                      <div className="flex items-center justify-center mb-3">
+                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                          <span className="text-2xl">📊</span>
+                        </div>
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">Nota Estimada</h3>
+                      <div className="text-5xl font-black mb-3">
+                        {(() => {
+                          // Busca por diferentes padrões de nota
+                          const patterns = [
+                            /5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i,
+                            /Nota estimada.*?:\s*(\d+)/i,
+                            /Nota estimada.*?\):\s*(\d+)/i,
+                            /Nota.*?:\s*(\d+)/i,
+                            /(\d+)\s*de\s*100/i,
+                            /(\d+)\/100/i
+                          ];
+                          
+                          for (const pattern of patterns) {
+                            const match = analise.match(pattern);
+                            if (match && match[1]) {
+                              const nota = parseInt(match[1]);
+                              if (nota >= 0 && nota <= 100) {
+                                return nota;
+                              }
+                            }
+                          }
+                          return '?';
+                        })()}
+                      </div>
+                      <p className="text-sm opacity-90">de 100 pontos</p>
+                      <div className="mt-4 bg-white/20 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-white rounded-full h-2 transition-all duration-1000"
+                          style={{ 
+                            width: `${(() => {
+                              const patterns = [
+                                /5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i,
+                                /Nota estimada.*?:\s*(\d+)/i,
+                                /Nota estimada.*?\):\s*(\d+)/i,
+                                /Nota.*?:\s*(\d+)/i,
+                                /(\d+)\s*de\s*100/i,
+                                /(\d+)\/100/i
+                              ];
+                              
+                              for (const pattern of patterns) {
+                                const match = analise.match(pattern);
+                                if (match && match[1]) {
+                                  const nota = parseInt(match[1]);
+                                  if (nota >= 0 && nota <= 100) {
+                                    return nota;
+                                  }
+                                }
+                              }
+                              return 0;
+                            })()}%` 
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Dashboard de Critérios */}
+                  {analise && (() => {
+                    // Extrair nota global
+                    const notaGlobalPatterns = [
+                      /5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i,
+                      /Nota estimada.*?:\s*(\d+)/i,
+                      /Nota estimada.*?\):\s*(\d+)/i,
+                      /Nota.*?:\s*(\d+)/i,
+                      /(\d+)\s*de\s*100/i,
+                      /(\d+)\/100/i
+                    ];
+                    
+                    let notaGlobal = null;
+                    for (const pattern of notaGlobalPatterns) {
+                      const match = analise.match(pattern);
+                      if (match && match[1]) {
+                        const nota = parseInt(match[1]);
+                        if (nota >= 0 && nota <= 100) {
+                          notaGlobal = nota;
+                          break;
+                        }
+                      }
+                    }
+                    
+                    // Extrair notas dos critérios
+                    const criterios = [
+                      { nome: 'Adequação aos critérios do edital', peso: 40, pattern: /Adequação aos critérios do edital.*?(\d+)%.*?:\s*(\d+)/i },
+                      { nome: 'Viabilidade e capacidade de execução', peso: 30, pattern: /Viabilidade e capacidade de execução.*?(\d+)%.*?:\s*(\d+)/i },
+                      { nome: 'Qualidade técnica e inovação', peso: 20, pattern: /Qualidade técnica e inovação.*?(\d+)%.*?:\s*(\d+)/i },
+                      { nome: 'Impacto cultural e relevância', peso: 10, pattern: /Impacto cultural e relevância.*?(\d+)%.*?:\s*(\d+)/i }
+                    ];
+                    
+                    const criteriosComNotas = criterios.map(criterio => {
+                      const match = analise.match(criterio.pattern);
+                      if (match && match[2]) {
+                        return {
+                          ...criterio,
+                          nota: parseInt(match[2]),
+                          notaMaxima: criterio.peso
+                        };
+                      }
+                      return null;
+                    }).filter(Boolean);
+                    
+                    if (criteriosComNotas.length === 0 && !notaGlobal) return null;
+                    
+                    return (
+                      <div className="mb-6">
+                        {/* Card de Nota Global */}
+                        {notaGlobal !== null && (
+                          <div className="mb-4">
+                            <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-2xl p-6 text-white shadow-lg">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                                    <span className="text-3xl">🎯</span>
+                                  </div>
+                                  <div>
+                                    <h3 className="text-lg font-bold">Nota Global do Projeto</h3>
+                                    <p className="text-sm opacity-90">Avaliação geral considerando todos os critérios</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-5xl font-black">{notaGlobal}</div>
+                                  <div className="text-sm opacity-90">de 100 pontos</div>
+                                </div>
+                              </div>
+                              <div className="mt-4 bg-white/20 rounded-full h-3 overflow-hidden">
+                                <div 
+                                  className="bg-white rounded-full h-3 transition-all duration-1000"
+                                  style={{ width: `${notaGlobal}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Grid de Critérios */}
+                        {criteriosComNotas.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {criteriosComNotas.map((criterio: any, idx) => {
+                          const percentual = (criterio.nota / criterio.notaMaxima) * 100;
+                          const cor = percentual >= 75 ? 'bg-green-500' : percentual >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                          
+                          return (
+                            <div key={idx} className="bg-white border-2 border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-gray-800 text-sm leading-tight">{criterio.nome}</h4>
+                                  <p className="text-xs text-gray-500 mt-1">Peso: {criterio.peso}%</p>
+                                </div>
+                                <div className="ml-3 text-right">
+                                  <div className="text-2xl font-bold text-oraculo-blue">{criterio.nota}</div>
+                                  <div className="text-xs text-gray-500">de {criterio.notaMaxima}</div>
+                                </div>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className={`${cor} h-2 rounded-full transition-all duration-500`}
+                                  style={{ width: `${percentual}%` }}
+                                ></div>
+                              </div>
+                              <div className="mt-2 text-xs text-gray-600 text-right">
+                                {percentual.toFixed(0)}% do peso máximo
+                              </div>
+                            </div>
+                          );
+                        })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  
+                  <div className="prose max-w-none">
+                    <div className="bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 rounded-lg p-6 text-gray-800 leading-relaxed">
+                      {(() => {
+                        // Processar o texto da análise removendo markdown e seções já exibidas
+                        const textoProcessado = formatarTextoParaExibicao(analise);
+                        const secoes = textoProcessado.split('\n\n').filter(sec => {
+                          const secLower = sec.toLowerCase();
+                          return !secLower.includes('nota estimada') && 
+                                 !secLower.includes('sugestões de melhoria') &&
+                                 !secLower.includes('sugestoes de melhoria') &&
+                                 sec.trim().length > 0;
+                        });
+                        
+                        return secoes.map((section, index) => {
+                          const secaoLimpa = limparMarkdown(section);
+                          
+                          // Verificar se é um cabeçalho de seção
+                          const isSectionHeader = secaoLimpa.trim().endsWith(':') || 
+                                                 /^[A-Z][A-Z\s]+:?\s*$/.test(secaoLimpa.trim());
+                          
+                          // Verificar se é um item numerado
+                          const isNumberedItem = /^\d+[\.\)]\s/.test(secaoLimpa.trim());
+                          
+                          if (isSectionHeader) {
+                            return (
+                              <div key={index} className="font-semibold text-gray-900 text-lg mb-3 mt-6 first:mt-0 border-b border-gray-300 pb-2">
+                                {secaoLimpa.replace(/[:\.]$/, '').trim()}
+                              </div>
+                            );
+                          } else if (isNumberedItem) {
+                            const numero = secaoLimpa.match(/^\d+/)?.[0];
+                            const conteudo = secaoLimpa.replace(/^\d+[\.\)]\s*/, '').trim();
+                            
+                            return (
+                              <div key={index} className="flex gap-3 mb-4">
+                                <div className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold mt-0.5">
+                                  {numero}
+                                </div>
+                                <div className="text-gray-800 text-sm leading-relaxed flex-1">
+                                  {conteudo.split('\n').map((line, lineIndex) => (
+                                    <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
+                                      {line.trim()}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div key={index} className="text-gray-800 leading-relaxed text-sm mb-4">
+                              {secaoLimpa.split('\n').map((line, lineIndex) => {
+                                const linhaLimpa = line.trim();
+                                if (!linhaLimpa) return null;
+                                return (
+                                  <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
+                                    {linhaLimpa}
+                                  </p>
+                                );
+                              })}
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {sugestoes.length > 0 && (
                 <div className="p-6 border-t">
                   <h2 className="text-lg font-semibold mb-4 text-oraculo-blue">Sugestões de Alteração da IA</h2>
@@ -338,7 +709,9 @@ const AlterarComIA = () => {
                         >
                           {aprovacoes[idx] ? '✓ Aprovada' : 'Aprovar'}
                         </Button>
-                        <span className={`flex-1 ${aprovacoes[idx] ? 'line-through text-gray-400' : 'text-gray-800'}`}>{sug}</span>
+                        <span className={`flex-1 ${aprovacoes[idx] ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                          {limparMarkdown(sug)}
+                        </span>
                       </li>
                     ))}
                   </ul>

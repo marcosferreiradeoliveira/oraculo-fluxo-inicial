@@ -13,6 +13,14 @@ type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esp
 interface ProjetoDocument {
   id: string;
   textos_gerados?: Record<string, string>;
+  edital_id?: string;
+  [key: string]: any;
+}
+
+interface EditalDocument {
+  id: string;
+  nome: string;
+  textos_exigidos?: string[];
   [key: string]: any;
 }
 
@@ -37,16 +45,11 @@ const GerarTextos = () => {
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<ProjetoDocument | null>(null);
+  const [edital, setEdital] = useState<EditalDocument | null>(null);
+  const [tiposTextoDisponiveis, setTiposTextoDisponiveis] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
-  const [textos, setTextos] = useState<Record<string, string>>({
-    justificativa: '',
-    objetivos: '',
-    metodologia: '',
-    resultados_esperados: '',
-    cronograma: '',
-    orcamento: ''
-  });
+  const [textos, setTextos] = useState<Record<string, string>>({});
   const [gerando, setGerando] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<string>('');
   const [textoSelecionado, setTextoSelecionado] = useState<string>('justificativa');
@@ -86,6 +89,42 @@ const GerarTextos = () => {
       setMostrarCaixaTexto(true);
     }
   }, [textoSelecionado, gerando]);
+  // Verificar status premium e redirecionar se necessário
+  useEffect(() => {
+    const checkPremiumAndRedirect = async () => {
+      if (!user) {
+        navigate('/');
+        return;
+      }
+      
+      try {
+        const db = getFirestore();
+        const userRef = doc(db, 'usuarios', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const isPremium = userData.isPremium === true;
+          
+          if (!isPremium) {
+            console.log('Usuário não premium tentando acessar Gerar Textos, redirecionando para assinatura...');
+            navigate('/cadastro-premium');
+            return;
+          }
+        } else {
+          // Se o usuário não tem documento, não é premium
+          navigate('/cadastro-premium');
+          return;
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status premium:', error);
+        navigate('/cadastro-premium');
+      }
+    };
+    
+    checkPremiumAndRedirect();
+  }, [user, navigate]);
+
   // Buscar projeto ao carregar o componente
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -118,20 +157,50 @@ const GerarTextos = () => {
         // Set the project data
         setProjeto(projetoData);
         
+        // Buscar edital se o projeto tiver um edital_id
+        if (projetoData.edital_id) {
+          try {
+            const editalRef = doc(db, 'editais', projetoData.edital_id);
+            const editalSnap = await getDoc(editalRef);
+            
+            if (editalSnap.exists()) {
+              const editalData = {
+                id: editalSnap.id,
+                ...editalSnap.data()
+              } as EditalDocument;
+              
+              setEdital(editalData);
+              
+              // Definir tipos de texto baseado no edital
+              if (editalData.textos_exigidos && Array.isArray(editalData.textos_exigidos) && editalData.textos_exigidos.length > 0) {
+                setTiposTextoDisponiveis(editalData.textos_exigidos);
+                // Selecionar o primeiro tipo por padrão
+                setTextoSelecionado(editalData.textos_exigidos[0]);
+              } else {
+                // Fallback para tipos padrão se o edital não tiver textos_exigidos
+                setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+                setTextoSelecionado('justificativa');
+              }
+            } else {
+              // Edital não encontrado, usar tipos padrão
+              setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+              setTextoSelecionado('justificativa');
+            }
+          } catch (error) {
+            console.error('Erro ao buscar edital:', error);
+            // Em caso de erro, usar tipos padrão
+            setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+            setTextoSelecionado('justificativa');
+          }
+        } else {
+          // Projeto sem edital, usar tipos padrão
+          setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+          setTextoSelecionado('justificativa');
+        }
+        
         // Carregar textos gerados se existirem
         if (projetoData.textos_gerados) {
-          setTextos(prev => ({
-            ...prev,
-            ...projetoData.textos_gerados
-          }));
-          
-          // Identificar categorias personalizadas (que não estão no TIPO_MAP)
-          const categoriasPersonalizadas = Object.keys(projetoData.textos_gerados)
-            .filter(chave => !(chave in TIPO_MAP));
-          
-          if (categoriasPersonalizadas.length > 0) {
-            setCategoriasCustom(categoriasPersonalizadas);
-          }
+          setTextos(projetoData.textos_gerados);
         }
         
         setLoading(false);
@@ -256,7 +325,8 @@ const GerarTextos = () => {
           ...projeto,
           portfolio: userPortfolio // Adiciona o portfolio aos dados do projeto
         },
-        prompt: GERAR_TEXTO_PROMPT + tipoMapeado
+        prompt: GERAR_TEXTO_PROMPT + tipoMapeado,
+        userId: user?.uid // Adicionar userId para buscar equipeBio e portfolio do Firestore
       };
       
       log('Dados da requisição:', { 
@@ -668,57 +738,38 @@ const GerarTextos = () => {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-                {Object.entries({
-                  justificativa: 'Justificativa',
-                  objetivos: 'Objetivos',
-                  metodologia: 'Metodologia',
-                  resultados_esperados: 'Resultados Esperados',
-                  cronograma: 'Cronograma',
-                  orcamento: 'Orçamento'
-                }).map(([tipo, titulo]) => (
-                  <button
-                    key={tipo}
-                    onClick={() => setTextoSelecionado(tipo)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      textoSelecionado === tipo
-                        ? 'border-oraculo-blue bg-oraculo-blue/5'
-                        : 'border-gray-200 hover:border-oraculo-blue/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {tipo === 'orcamento' ? (
-                        <DollarSign className="h-5 w-5 text-oraculo-blue" />
-                      ) : (
-                        <FileText className="h-5 w-5 text-oraculo-blue" />
-                      )}
-                      <span className="font-medium text-gray-800">{titulo}</span>
-                      {textos[tipo] && (
-                        <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-                
-                {/* Categorias customizadas */}
-                {categoriasCustom.map((categoria) => (
-                  <button
-                    key={categoria}
-                    onClick={() => setTextoSelecionado(categoria)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      textoSelecionado === categoria
-                        ? 'border-oraculo-purple bg-oraculo-purple/5'
-                        : 'border-gray-200 hover:border-oraculo-purple/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-oraculo-purple" />
-                      <span className="font-medium text-gray-800">{categoria}</span>
-                      {textos[categoria] && (
-                        <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+                {/* Tipos de texto do edital */}
+                {tiposTextoDisponiveis.map((tipo) => {
+                  // Capitalizar primeira letra e substituir underscores por espaços
+                  const titulo = tipo
+                    .split('_')
+                    .map(palavra => palavra.charAt(0).toUpperCase() + palavra.slice(1))
+                    .join(' ');
+                  
+                  return (
+                    <button
+                      key={tipo}
+                      onClick={() => setTextoSelecionado(tipo)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        textoSelecionado === tipo
+                          ? 'border-oraculo-blue bg-oraculo-blue/5'
+                          : 'border-gray-200 hover:border-oraculo-blue/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {tipo.toLowerCase().includes('orcamento') || tipo.toLowerCase().includes('orçamento') ? (
+                          <DollarSign className="h-5 w-5 text-oraculo-blue" />
+                        ) : (
+                          <FileText className="h-5 w-5 text-oraculo-blue" />
+                        )}
+                        <span className="font-medium text-gray-800">{titulo}</span>
+                        {textos[tipo] && (
+                          <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
                 
                 {/* Botão para adicionar categoria personalizada */}
                 <button
