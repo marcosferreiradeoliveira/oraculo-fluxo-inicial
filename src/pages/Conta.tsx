@@ -383,7 +383,6 @@ const Conta = () => {
                         onChange={(e) => setDadosCadastrais(e.target.value)}
                         placeholder="Cole aqui todos os dados cadastrais da empresa: CNPJ, razão social, nome fantasia, sócios, endereço completo, telefone, email, etc. Você pode copiar e colar diretamente do documento ou sistema da empresa."
                         rows={8}
-                        className="font-mono text-sm"
                       />
                       <p className="text-xs text-gray-500">
                         Campo livre para copiar e colar todos os dados cadastrais da empresa. Pode incluir CNPJ, sócios, endereço, contatos e outras informações relevantes.
@@ -425,7 +424,7 @@ const Conta = () => {
                           {userData?.isPremium ? 'Plano Premium' : 'Plano Gratuito'}
                         </Badge>
                         <p className="text-2xl font-bold text-gray-900">
-                          {userData?.isPremium ? 'R$ 99/mês' : 'Gratuito'}
+                          {userData?.isPremium ? 'R$ 99,00/mês' : 'Gratuito'}
                         </p>
                       </div>
                       

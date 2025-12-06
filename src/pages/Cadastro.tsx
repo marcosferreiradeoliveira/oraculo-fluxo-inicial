@@ -75,6 +75,58 @@ const Cadastro = () => {
         uid: userUid,
       });
       console.log('Usuário criado no Firestore com ID:', docRef.id);
+      
+      // Enviar email de boas-vindas e adicionar ao Brevo
+      try {
+        // Enviar email de boas-vindas
+        const emailUrl = 'https://enviaremailboasvindas-v3odkawqzq-uc.a.run.app';
+        const emailResponse = await fetch(emailUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            nome: nomeCompleto,
+            email: email,
+          }),
+        });
+        
+        if (!emailResponse.ok) {
+          throw new Error(`HTTP error! status: ${emailResponse.status}`);
+        }
+        
+        console.log('Email de boas-vindas enviado com sucesso');
+      } catch (emailError) {
+        console.error('Erro ao enviar email de boas-vindas:', emailError);
+        // Não bloquear o cadastro se o email falhar
+      }
+
+      // Adicionar contato ao Brevo
+      try {
+        const brevoUrl = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/adicionarContatoBrevo';
+        const brevoResponse = await fetch(brevoUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            nome: nomeCompleto,
+          }),
+        });
+        
+        const brevoData = await brevoResponse.json();
+        
+        if (!brevoResponse.ok) {
+          throw new Error(`HTTP error! status: ${brevoResponse.status}`);
+        }
+        
+        console.log('Contato adicionado ao Brevo com sucesso:', brevoData);
+      } catch (brevoError) {
+        console.error('Erro ao adicionar contato ao Brevo:', brevoError);
+        // Não bloquear o cadastro se o Brevo falhar
+      }
+      
       navigate('/');
     } catch (err: any) {
       setErro('Erro ao salvar informações adicionais.');

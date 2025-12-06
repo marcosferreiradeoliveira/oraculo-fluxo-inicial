@@ -14,7 +14,8 @@ const steps = [
   'Criar Projeto',
   'Avaliar com IA',
   'Alterar com IA',
-  'Gerar Textos'
+  'Gerar Textos',
+  'Preencher Anexos'
 ];
 const currentStep: number = 1; // Avaliar com IA
 

@@ -24,6 +24,7 @@ import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
 import CadastroPremium from './pages/CadastroPremium';
 import GerarTextos from './pages/GerarTextos';
+import PreencherAnexos from './pages/PreencherAnexos';
 import Termos from './pages/Termos';
 import Privacidade from './pages/Privacidade';
 import DetalhesEdital from './pages/DetalhesEdital';
@@ -71,6 +72,7 @@ const App = () => (
           <Route path="/projeto/:id" element={<Projeto />} />
           <Route path="/projeto/:id/alterar-com-ia" element={<AlterarComIA />} />
           <Route path="/projeto/:id/gerar-textos" element={<GerarTextos />} />
+          <Route path="/projeto/:id/preencher-anexos" element={<PreencherAnexos />} />
           <Route path="/editar-edital/:id" element={<EditarEdital />} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />
           <Route path="/cadastrar-episodio" element={<CadastrarEpisodio />} />

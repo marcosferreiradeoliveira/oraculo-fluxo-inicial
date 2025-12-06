@@ -46,14 +46,13 @@ const CadastroPremium = () => {
     try {
       console.log('[CadastroPremium] Iniciando criação de checkout:', { planType, userEmail: userData.email, userId: userData.userId });
       
-      const response = await fetch('https://criarcheckoutpremium-v3odkawqzq-uc.a.run.app', {
+      const response = await fetch('https://criarcheckoutpremium-v3odkawqzq-uc.a.run.app/criarAssinaturaPremium', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          planType,
-          userEmail: userData.email,
+          email: userData.email,
           userId: userData.userId
         }),
       });
@@ -88,9 +87,9 @@ const CadastroPremium = () => {
       subtitle: 'Produtor Iniciante ou Individual',
       description: '1 usuário, até 3 projetos ativos/ano',
       focus: 'Criação (Foco na Captação)',
-      price: 'R$ 99',
+      price: 'R$ 99,00',
       period: '/mês',
-      annualPrice: 'R$ 990',
+      annualPrice: 'R$ 5,00',
       annualPeriod: '/ano',
       discount: '17% de desconto',
       features: [
@@ -127,8 +126,8 @@ const CadastroPremium = () => {
       subtitle: 'Agências e Produtoras Grandes',
       description: 'Usuários Ilimitados, Projetos Ilimitados',
       focus: 'Criação e Execução (Foco em Performance e Auditoria Rigorosa)',
-      price: 'Sob Consulta',
-      period: '',
+      price: 'R$ 99,00',
+      period: '/mês',
       annualPrice: '',
       annualPeriod: '',
       discount: 'Modelo Enterprise com Venda Consultiva',

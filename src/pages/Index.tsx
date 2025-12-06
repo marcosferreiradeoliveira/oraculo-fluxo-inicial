@@ -5,15 +5,19 @@ import { QuickAccessCards } from '@/components/QuickAccessCards';
 import { FeaturedGuides } from '@/components/FeaturedGuides';
 import { RecentContent } from '@/components/RecentContent';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Brain, Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import emailImage from '@/assets/email.png';
+import logo from '@/assets/logo.png';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -26,6 +30,8 @@ const Index = () => {
   const [user] = useAuthState(auth);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [redirectPremium, setRedirectPremium] = useState(false);
+  const [emailNewsletter, setEmailNewsletter] = useState('');
+  const [salvandoEmail, setSalvandoEmail] = useState(false);
 
   useEffect(() => {
     const fetchGuias = async () => {
@@ -86,14 +92,35 @@ const Index = () => {
         // Busca editais abertos (máximo 4)
         let snapshot;
         try {
-          const qEditais = query(collection(db, 'editais'), orderBy('data_encerramento', 'desc'), limit(4));
+          const qEditais = query(collection(db, 'editais'), orderBy('data_encerramento', 'desc'), limit(20));
           snapshot = await getDocs(qEditais);
         } catch (orderError) {
           console.log('Erro ao ordenar editais, buscando sem ordenação:', orderError);
-          const qEditais = query(collection(db, 'editais'), limit(4));
+          const qEditais = query(collection(db, 'editais'), limit(20));
           snapshot = await getDocs(qEditais);
         }
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const now = new Date();
+        const data = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(edital => {
+            if (!edital.data_encerramento) return false;
+            
+            let dataEncerramento: Date;
+            if (edital.data_encerramento?.toDate) {
+              dataEncerramento = edital.data_encerramento.toDate();
+            } else if (edital.data_encerramento?.seconds) {
+              dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
+            } else if (typeof edital.data_encerramento === 'string') {
+              dataEncerramento = new Date(edital.data_encerramento);
+            } else {
+              return false;
+            }
+            
+            return !isNaN(dataEncerramento.getTime()) && dataEncerramento > now;
+          })
+          .slice(0, 4); // Limita a 4 após filtrar
+        
         setEditais(data);
       } catch (e) {
         console.error('Erro ao buscar editais:', e);
@@ -156,13 +183,22 @@ const Index = () => {
         <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
             {/* Welcome Message */}
-            <div className="mb-8">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                Bem-vinda ao seu Oráculo Cultural! ✨
-              </h1>
-              <p className="text-gray-600 text-sm md:text-base">
-                Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.
-              </p>
+            <div className="mb-8 flex flex-col md:flex-row items-center md:items-start gap-4">
+              <div className="flex-shrink-0">
+                <img 
+                  src={logo} 
+                  alt="Oráculo Cultural Logo" 
+                  className="w-24 h-24 md:w-32 md:h-32 object-contain"
+                />
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                  Bem-vinda ao seu Oráculo Cultural! ✨
+                </h1>
+                <p className="text-gray-600 text-sm md:text-base">
+                  Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.
+                </p>
+              </div>
             </div>
 
             {/* Quick Access Section */}
@@ -249,6 +285,80 @@ const Index = () => {
               >
                 Ver Mais Editais
               </Button>
+              
+              {/* Formulário de cadastro de email para receber editais */}
+              <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
+                <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+                  <div className="flex-1 w-full md:w-auto">
+                    <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
+                      Receba em seu email os últimos editais
+                    </h3>
+                    <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-4">
+                      Todo o conteúdo é destrinchado por nossa inteligência artificial, facilitando sua compreensão e aumentando suas chances de aprovação
+                    </p>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!emailNewsletter.trim()) {
+                          toast.error('Por favor, insira um email válido');
+                          return;
+                        }
+                        
+                        // Validar formato de email
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailRegex.test(emailNewsletter.trim())) {
+                          toast.error('Por favor, insira um email válido');
+                          return;
+                        }
+                        
+                        setSalvandoEmail(true);
+                        try {
+                          // Salvar email no Firestore
+                          await addDoc(collection(db, 'newsletter_emails'), {
+                            email: emailNewsletter.trim(),
+                            userId: user?.uid || null,
+                            criadoEm: Timestamp.now(),
+                            origem: 'home_editais_abertos'
+                          });
+                          
+                          toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
+                          setEmailNewsletter('');
+                        } catch (error) {
+                          console.error('Erro ao salvar email:', error);
+                          toast.error('Erro ao cadastrar email. Tente novamente.');
+                        } finally {
+                          setSalvandoEmail(false);
+                        }
+                      }}
+                      className="flex flex-col gap-2 max-w-md"
+                    >
+                      <Input
+                        type="email"
+                        placeholder="Seu melhor email"
+                        value={emailNewsletter}
+                        onChange={(e) => setEmailNewsletter(e.target.value)}
+                        className="text-sm"
+                        disabled={salvandoEmail}
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
+                        disabled={salvandoEmail}
+                      >
+                        {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
+                      </Button>
+                    </form>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <img 
+                      src={emailImage} 
+                      alt="Editais culturais" 
+                      className="w-32 h-32 md:w-48 md:h-48 object-contain rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Inteligência de Mercado */}

@@ -4,7 +4,10 @@ import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileText, CheckCircle, Copy, Download, DollarSign } from 'lucide-react';
+import { Loader2, FileText, CheckCircle, Copy, Download, DollarSign, Edit } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 
@@ -57,9 +60,11 @@ const GerarTextos = () => {
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState('');
   const [mostrarInputCategoria, setMostrarInputCategoria] = useState(false);
   const [categoriasCustom, setCategoriasCustom] = useState<string[]>([]);
+  const [rubricas, setRubricas] = useState<Array<{ id: string; nome: string; valor: string }>>([]);
+  const [mostrarModalRubricas, setMostrarModalRubricas] = useState(false);
   const isMounted = useRef(true);
 
-  const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos'];
+  const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos', 'Preencher Anexos'];
   const currentStep = 3; // This page is the 4th step
 
   // Initialize and cleanup
@@ -627,6 +632,70 @@ const GerarTextos = () => {
     document.body.removeChild(element);
   };
 
+  // Função para extrair rubricas do texto do orçamento
+  const extrairRubricas = (textoOrcamento: string): Array<{ id: string; nome: string; valor: string }> => {
+    const rubricas: Array<{ id: string; nome: string; valor: string }> = [];
+    
+    // Padrões para encontrar rubricas no texto
+    // Formato comum: "Nome da Rubrica: R$ 1.000,00" ou "1. Nome da Rubrica - R$ 1.000,00"
+    const linhas = textoOrcamento.split('\n');
+    
+    linhas.forEach((linha, index) => {
+      // Remove espaços extras
+      const linhaLimpa = linha.trim();
+      
+      // Padrão 1: "Nome: R$ valor" ou "Nome - R$ valor"
+      const padrao1 = /^(.+?)\s*[:\-]\s*R\$\s*([\d.,]+)/i;
+      const match1 = linhaLimpa.match(padrao1);
+      
+      if (match1) {
+        const nome = match1[1].trim().replace(/^\d+[\.\)]\s*/, ''); // Remove numeração inicial
+        const valor = match1[2].trim();
+        if (nome && valor) {
+          rubricas.push({
+            id: `rubrica-${index}`,
+            nome,
+            valor: `R$ ${valor}`
+          });
+        }
+      }
+      
+      // Padrão 2: Linhas que contêm valores monetários
+      const padrao2 = /R\$\s*([\d.,]+)/i;
+      const match2 = linhaLimpa.match(padrao2);
+      
+      if (match2 && !match1) {
+        // Se não encontrou pelo padrão 1, tenta extrair nome antes do valor
+        const partes = linhaLimpa.split(/R\$/i);
+        if (partes.length >= 2) {
+          const nome = partes[0].trim().replace(/^\d+[\.\)]\s*/, '').replace(/[:\-]\s*$/, '');
+          const valor = match2[1].trim();
+          if (nome && valor && nome.length > 2) {
+            rubricas.push({
+              id: `rubrica-${index}`,
+              nome,
+              valor: `R$ ${valor}`
+            });
+          }
+        }
+      }
+    });
+    
+    return rubricas;
+  };
+
+  // Atualizar rubricas quando o texto do orçamento mudar
+  useEffect(() => {
+    if (textoSelecionado && (textoSelecionado.toLowerCase().includes('orcamento') || textoSelecionado.toLowerCase().includes('orçamento'))) {
+      const textoOrcamento = textos[textoSelecionado] || '';
+      if (textoOrcamento) {
+        const rubricasExtraidas = extrairRubricas(textoOrcamento);
+        setRubricas(rubricasExtraidas);
+      }
+    }
+  }, [textos, textoSelecionado]);
+
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
@@ -800,6 +869,19 @@ const GerarTextos = () => {
                     )}
                   </Button>
                   
+                  {/* Botão Editar Rubricas - só aparece para orçamento */}
+                  {(textoSelecionado.toLowerCase().includes('orcamento') || textoSelecionado.toLowerCase().includes('orçamento')) && 
+                   textos[textoSelecionado] && rubricas.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setMostrarModalRubricas(true)}
+                      className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10"
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Editar Rubricas
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="outline"
                     onClick={handleCopiarTexto}
@@ -859,6 +941,21 @@ const GerarTextos = () => {
                 </div>
               )}
             </div>
+            
+            {/* Botão para navegar para Preencher Anexos */}
+            <div className="mt-8 flex justify-end">
+              <Button
+                onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}
+                className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3"
+                size="lg"
+              >
+                Próximo: Preencher Anexos
+                <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-orange-500 text-white rounded-full">
+                  BETA
+                </span>
+                <FileText className="ml-2 h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </main>
       </div>
@@ -910,6 +1007,110 @@ const GerarTextos = () => {
           </div>
         </div>
       )}
+      
+      {/* Modal de Edição de Rubricas */}
+      <Dialog open={mostrarModalRubricas} onOpenChange={setMostrarModalRubricas}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Rubricas</DialogTitle>
+            <DialogDescription>
+              Edite o nome e o valor de cada rubrica do orçamento
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            {rubricas.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                Nenhuma rubrica encontrada no texto do orçamento.
+              </p>
+            ) : (
+              rubricas.map((rubrica) => (
+                <div key={rubrica.id} className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <Label htmlFor={`nome-${rubrica.id}`}>Nome da Rubrica</Label>
+                      <Input
+                        id={`nome-${rubrica.id}`}
+                        value={rubrica.nome}
+                        onChange={(e) => {
+                          setRubricas(prev => 
+                            prev.map(r => r.id === rubrica.id ? { ...r, nome: e.target.value } : r)
+                          );
+                        }}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`valor-${rubrica.id}`}>Valor</Label>
+                      <Input
+                        id={`valor-${rubrica.id}`}
+                        value={rubrica.valor}
+                        onChange={(e) => {
+                          let valor = e.target.value;
+                          // Garantir formato R$ se não tiver
+                          if (!valor.startsWith('R$')) {
+                            valor = `R$ ${valor}`;
+                          }
+                          setRubricas(prev => 
+                            prev.map(r => r.id === rubrica.id ? { ...r, valor } : r)
+                          );
+                        }}
+                        className="mt-1"
+                        placeholder="R$ 0,00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMostrarModalRubricas(false);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Atualizar o texto do orçamento com as rubricas editadas
+                if (textoSelecionado && textos[textoSelecionado]) {
+                  let textoAtualizado = textos[textoSelecionado];
+                  
+                  // Substituir cada rubrica no texto
+                  rubricas.forEach(rubrica => {
+                    // Buscar padrões comuns e substituir
+                    const padroes = [
+                      new RegExp(`(${rubrica.nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\n]*?R\\$[^\\n]*)`, 'gi'),
+                      new RegExp(`(\\d+[\.\\)]?\\s*${rubrica.nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\n]*?R\\$[^\\n]*)`, 'gi')
+                    ];
+                    
+                    padroes.forEach(padrao => {
+                      textoAtualizado = textoAtualizado.replace(padrao, `${rubrica.nome}: ${rubrica.valor}`);
+                    });
+                  });
+                  
+                  setTextos(prev => ({
+                    ...prev,
+                    [textoSelecionado]: textoAtualizado
+                  }));
+                  
+                  // Salvar no Firestore
+                  salvarNoFirestore(textoSelecionado as TextoTipo, textoAtualizado);
+                }
+                
+                setMostrarModalRubricas(false);
+              }}
+              className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+            >
+              Salvar Alterações
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

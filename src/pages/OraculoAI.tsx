@@ -23,6 +23,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Remover qualquer configuração do workerSrc para o CDN
 // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { useAuthState } from 'react-firebase-hooks/auth';
+import emailImage from '@/assets/email.png';
 
 interface DadosExtraidos {
   data_encerramento?: string | null;
@@ -65,6 +66,8 @@ const OraculoAI = () => {
   const [resumoEdital, setResumoEdital] = useState<any | null>(null);
   const [user] = useAuthState(auth);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [emailNewsletter, setEmailNewsletter] = useState('');
+  const [salvandoEmail, setSalvandoEmail] = useState(false);
 
   // Função para deletar um projeto
   const handleDeleteProjeto = async (projetoId: string, e: React.MouseEvent) => {
@@ -92,7 +95,7 @@ const OraculoAI = () => {
         setLoading(true);
         setLoadingProjetos(true);
         
-        // Fetch Editais
+        // Fetch Editais - apenas os que ainda não encerraram
         const editaisSnapshot = await getDocs(collection(db, "editais"));
         const editais: Edital[] = [];
         const now = new Date();
@@ -100,23 +103,32 @@ const OraculoAI = () => {
         editaisSnapshot.forEach((doc) => {
           const edital = { id: doc.id, ...doc.data() } as Edital;
           
-          if (edital.deadline) {
-            let deadlineDate: Date;
-            
+          // Verifica data_encerramento primeiro (campo principal)
+          let dataEncerramento: Date | null = null;
+          
+          if (edital.data_encerramento) {
+            if (edital.data_encerramento?.toDate) {
+              dataEncerramento = edital.data_encerramento.toDate();
+            } else if (edital.data_encerramento?.seconds) {
+              dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
+            } else if (typeof edital.data_encerramento === 'string') {
+              dataEncerramento = new Date(edital.data_encerramento);
+            }
+          }
+          
+          // Se não tem data_encerramento, verifica deadline como fallback
+          if (!dataEncerramento && edital.deadline) {
             if (edital.deadline && typeof edital.deadline === 'object' && 'toDate' in edital.deadline) {
-              deadlineDate = edital.deadline.toDate();
+              dataEncerramento = edital.deadline.toDate();
             } else if (edital.deadline && typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
-              deadlineDate = new Date(edital.deadline.seconds * 1000);
+              dataEncerramento = new Date(edital.deadline.seconds * 1000);
             } else if (typeof edital.deadline === 'string') {
-              deadlineDate = new Date(edital.deadline);
-            } else {
-              deadlineDate = new Date();
+              dataEncerramento = new Date(edital.deadline);
             }
-            
-            if (!isNaN(deadlineDate.getTime()) && deadlineDate >= now) {
-              editais.push(edital);
-            }
-          } else {
+          }
+          
+          // Só adiciona se a data de encerramento for válida e ainda não passou
+          if (dataEncerramento && !isNaN(dataEncerramento.getTime()) && dataEncerramento > now) {
             editais.push(edital);
           }
         });
@@ -535,6 +547,80 @@ const OraculoAI = () => {
                     );
                   })
                 )}
+              </div>
+              
+              {/* Formulário de cadastro de email para receber editais */}
+              <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
+                <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+                  <div className="flex-1 w-full md:w-auto">
+                    <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
+                      Receba em seu email os últimos editais
+                    </h3>
+                    <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-4">
+                      Todo o conteúdo é destrinchado por nossa inteligência artificial, facilitando sua compreensão e aumentando suas chances de aprovação
+                    </p>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!emailNewsletter.trim()) {
+                          toast.error('Por favor, insira um email válido');
+                          return;
+                        }
+                        
+                        // Validar formato de email
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailRegex.test(emailNewsletter.trim())) {
+                          toast.error('Por favor, insira um email válido');
+                          return;
+                        }
+                        
+                        setSalvandoEmail(true);
+                        try {
+                          // Salvar email no Firestore
+                          await addDoc(collection(db, 'newsletter_emails'), {
+                            email: emailNewsletter.trim(),
+                            userId: user?.uid || null,
+                            criadoEm: Timestamp.now(),
+                            origem: 'editais_abertos'
+                          });
+                          
+                          toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
+                          setEmailNewsletter('');
+                        } catch (error) {
+                          console.error('Erro ao salvar email:', error);
+                          toast.error('Erro ao cadastrar email. Tente novamente.');
+                        } finally {
+                          setSalvandoEmail(false);
+                        }
+                      }}
+                      className="flex flex-col gap-2 max-w-md"
+                    >
+                      <Input
+                        type="email"
+                        placeholder="Seu melhor email"
+                        value={emailNewsletter}
+                        onChange={(e) => setEmailNewsletter(e.target.value)}
+                        className="text-sm"
+                        disabled={salvandoEmail}
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
+                        disabled={salvandoEmail}
+                      >
+                        {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
+                      </Button>
+                    </form>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <img 
+                      src={emailImage} 
+                      alt="Editais culturais" 
+                      className="w-32 h-32 md:w-48 md:h-48 object-contain rounded-lg"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -1,44 +1,40 @@
-# Force MIME types for JavaScript files - ADICIONE ISSO NO INÍCIO
-
-<IfModule mod_mime.c>
-  AddType application/javascript js mjs
-  AddType text/css css
-  AddType image/svg+xml svg
-  AddType image/jpeg jpg jpeg
-  AddType image/png png
-  AddType image/webp webp
-</IfModule>
-
-# CORS Headers - Permitir acesso às imagens de qualquer origem
-<IfModule mod_headers.c>
-  # Permitir CORS para todos os arquivos estáticos
-  <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico|css|js|woff|woff2|ttf|eot)$">
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type"
-    Header set Cache-Control "public, max-age=31536000"
-  </FilesMatch>
-</IfModule>
-
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  
-  # IMPORTANTE: Excluir o diretório oraculocultural das regras de rewrite
-  RewriteCond %{REQUEST_URI} ^/oraculocultural/ [NC]
-  RewriteRule ^ - [L]
-  
-  # Regras para o site principal (raiz)
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_FILENAME} !-l
-  RewriteRule . /index.html [L]
-</IfModule>
-
-# php -- BEGIN cPanel-generated handler, do not edit
-# Defina o pacote "ea-php82" como a linguagem padrão de programação "PHP".
-<IfModule mime_module>
-  AddHandler application/x-httpd-ea-php82___lsphp .php .php8 .phtml
-</IfModule>
-# php -- END cPanel-generated handler, do not edit
+PreencherAnexos.tsx:222  POST https://us-central1-culturalapp-fb9b0.cloudfunctions.net/preencherAnexoPDF 500 (Internal Server Error)
+handleProcessarPDF @ PreencherAnexos.tsx:222
+handleClick @ button.tsx:63
+callCallback2 @ chunk-RPCDYKBN.js?v=b26b406e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=b26b406e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=b26b406e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=b26b406e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=b26b406e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=b26b406e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=b26b406e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=b26b406e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=b26b406e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=b26b406e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=b26b406e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=b26b406e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=b26b406e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=b26b406e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=b26b406e:5449Understand this error
+installHook.js:1 Erro da API: {error: 'Erro ao processar PDF', message: 'Não foi possível extrair texto do PDF. Certifique-se de que o PDF contém texto.'}
+overrideMethod @ installHook.js:1
+handleProcessarPDF @ PreencherAnexos.tsx:245
+await in handleProcessarPDF
+handleClick @ button.tsx:63
+callCallback2 @ chunk-RPCDYKBN.js?v=b26b406e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=b26b406e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=b26b406e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=b26b406e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=b26b406e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=b26b406e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=b26b406e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=b26b406e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=b26b406e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=b26b406e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=b26b406e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=b26b406e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=b26b406e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=b26b406e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=b26b406e:5449Understand this error
+installHook.js:1 Erro ao processar PDF: Error: Não foi possível extrair texto do PDF. Certifique-se de que o PDF contém texto.
+    at handleProcessarPDF (PreencherAnexos.tsx:246:15)

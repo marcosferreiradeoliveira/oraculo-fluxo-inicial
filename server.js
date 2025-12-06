@@ -16,6 +16,8 @@ app.use(express.json());
 const mp = new mercadopago.MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
 const preference = new mercadopago.Preference(mp);
 const payment = new mercadopago.Payment(mp);
+const preapproval = new mercadopago.Preapproval(mp);
+const preapprovalPlan = new mercadopago.PreapprovalPlan(mp);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Initialize Firebase Admin
@@ -30,6 +32,101 @@ const db = admin.firestore();
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'Oraculo API is running' });
+});
+
+// Create checkout premium endpoint (single payment)
+app.post('/criarCheckoutPremium', async (req, res) => {
+  try {
+    const { userEmail, userId, planType } = req.body;
+    
+    if (!userEmail || !userId) {
+      return res.status(400).json({ error: 'Email e userId são obrigatórios' });
+    }
+
+    // Buscar dados do usuário no Firestore para obter nome completo
+    let firstName = '';
+    let lastName = '';
+    
+    try {
+      const userDoc = await db.collection('usuarios').doc(userId).get();
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const nomeCompleto = userData.nome_completo || '';
+        
+        // Dividir nome completo em primeiro e último nome
+        if (nomeCompleto) {
+          const nomeParts = nomeCompleto.trim().split(/\s+/);
+          firstName = nomeParts[0] || '';
+          lastName = nomeParts.length > 1 ? nomeParts.slice(1).join(' ') : '';
+        }
+        
+        console.log('[criarCheckoutPremium] Nome do usuário:', { nomeCompleto, firstName, lastName });
+      }
+    } catch (error) {
+      console.error('[criarCheckoutPremium] Erro ao buscar dados do usuário:', error);
+      // Continua sem nome se houver erro
+    }
+
+    // Definir o preço como 5 reais (valor mínimo do MercadoPago)
+    const unitPrice = 5.00;
+    console.log('[criarCheckoutPremium] Unit price definido como:', unitPrice);
+
+    // Construir objeto payer com nome completo
+    const payerData = {
+      email: userEmail
+    };
+    
+    // Adicionar first_name e last_name se disponíveis
+    if (firstName) {
+      payerData.first_name = firstName;
+    }
+    if (lastName) {
+      payerData.last_name = lastName;
+    }
+
+    const preferenceData = {
+      items: [
+        {
+          id: "premium-plan",
+          title: "Assinatura Oráculo Premium",
+          description: "Plano Premium do Oráculo Cultural",
+          category_id: "services",
+          quantity: 1,
+          currency_id: "BRL",
+          unit_price: unitPrice
+        },
+      ],
+      payer: payerData,
+      back_urls: {
+        success: "https://oraculocultural.com.br/cadastro-premium?status=success",
+        failure: "https://oraculocultural.com.br/cadastro-premium?status=failure",
+        pending: "https://oraculocultural.com.br/cadastro-premium?status=pending",
+      },
+      auto_return: "approved",
+      notification_url: process.env.WEBHOOK_URL || "https://criarcheckoutpremium-v3odkawqzq-uc.a.run.app/webhook",
+      statement_descriptor: "ORACULO PREMIUM",
+      external_reference: userId,
+      payment_methods: {
+        excluded_payment_types: [],
+        excluded_payment_methods: [],
+        installments: 1
+      }
+    };
+
+    console.log('[criarCheckoutPremium] Creating preference with data:', JSON.stringify(preferenceData));
+    
+    const response = await preference.create({ body: preferenceData });
+    console.log('[criarCheckoutPremium] Preference created successfully:', response.id);
+    console.log('[criarCheckoutPremium] Init point:', response.init_point);
+
+    res.status(200).json({ init_point: response.init_point });
+  } catch (error) {
+    console.error('[criarCheckoutPremium] Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ error: 'Failed to create checkout', details: error.message });
+  }
 });
 
 // Analyze project endpoint
@@ -58,7 +155,7 @@ app.post('/analisarProjeto', async (req, res) => {
   }
 });
 
-// Create premium subscription endpoint
+// Create premium subscription endpoint (recurring monthly subscription)
 app.post('/criarAssinaturaPremium', async (req, res) => {
   try {
     const { email, userId } = req.body;
@@ -67,7 +164,31 @@ app.post('/criarAssinaturaPremium', async (req, res) => {
       return res.status(400).json({ error: 'Email e userId são obrigatórios' });
     }
 
-    // Criar o plano de assinatura
+    // Buscar dados do usuário no Firestore para obter nome completo
+    let firstName = '';
+    let lastName = '';
+    
+    try {
+      const userDoc = await db.collection('usuarios').doc(userId).get();
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const nomeCompleto = userData.nome_completo || '';
+        
+        // Dividir nome completo em primeiro e último nome
+        if (nomeCompleto) {
+          const nomeParts = nomeCompleto.trim().split(/\s+/);
+          firstName = nomeParts[0] || '';
+          lastName = nomeParts.length > 1 ? nomeParts.slice(1).join(' ') : '';
+        }
+        
+        console.log('[criarAssinaturaPremium] Nome do usuário:', { nomeCompleto, firstName, lastName });
+      }
+    } catch (error) {
+      console.error('[criarAssinaturaPremium] Erro ao buscar dados do usuário:', error);
+      // Continua sem nome se houver erro
+    }
+
+    // Criar o plano de assinatura recorrente mensal
     const subscriptionData = {
       reason: 'Plano Premium Mensal - Oráculo Cultural',
       auto_recurring: {
@@ -76,24 +197,38 @@ app.post('/criarAssinaturaPremium', async (req, res) => {
         repetitions: 0, // 0 para assinatura sem fim
         billing_day: new Date().getDate(),
         billing_day_proportional: true,
-        transaction_amount: 29.90,
+        transaction_amount: 5.00,
         currency_id: 'BRL',
         start_date: new Date().toISOString()
       },
-      back_url: 'https://culturalapp-fb9b0.web.app/assinatura-status',
+      back_url: 'https://oraculocultural.com.br/cadastro-premium?status=success',
       status: 'authorized'
     };
 
     // Criar o plano
-    const plan = await mercadopago.preapproval_plan.create({ body: subscriptionData });
+    const plan = await preapprovalPlan.create({ body: subscriptionData });
     
-    // Criar a assinatura
-    const subscription = await mercadopago.preapproval.create({
+    // Construir objeto payer com nome completo
+    const payerData = {
+      email: email
+    };
+    
+    // Adicionar first_name e last_name se disponíveis
+    if (firstName) {
+      payerData.first_name = firstName;
+    }
+    if (lastName) {
+      payerData.last_name = lastName;
+    }
+    
+    // Criar a assinatura recorrente
+    const subscription = await preapproval.create({
       body: {
         preapproval_plan_id: plan.id,
         payer_email: email,
+        payer: payerData,
         external_reference: userId, // Referência para identificar o usuário
-        back_url: 'https://culturalapp-fb9b0.web.app/assinatura-status',
+        back_url: 'https://oraculocultural.com.br/cadastro-premium?status=success',
         status: 'authorized'
       }
     });
@@ -136,7 +271,7 @@ app.post('/webhook', async (req, res) => {
     async function handleSubscriptionUpdate(subscriptionId) {
       try {
         // Get subscription details
-        const subscription = await mercadopago.preapproval.get({ id: subscriptionId });
+        const subscription = await preapproval.get({ id: subscriptionId });
         console.log('Subscription info:', { 
           id: subscriptionId, 
           status: subscription.status,
