@@ -62,6 +62,12 @@ const Conta = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (!firebaseUser) {
+        // Se o usuário não estiver logado, redirecionar para a página de cadastro
+        setLoading(false);
+        navigate('/cadastro');
+        return;
+      }
       if (firebaseUser) {
         try {
           const db = getFirestore();
