@@ -46,10 +46,14 @@ interface Edital {
 }
 
 
+// Função para capitalizar apenas a primeira letra do título
+const capitalizarTitulo = (titulo: string): string => {
+  if (!titulo) return '';
+  // Converte para minúsculas e depois capitaliza a primeira letra
+  return titulo.charAt(0).toUpperCase() + titulo.slice(1).toLowerCase();
+};
+
 const OraculoAI = () => {
-  // Novo state para os editais vindos do Firestore
-  const [editaisAbertos, setEditaisAbertos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [meusProjetos, setMeusProjetos] = useState<any[]>([]);
   const [loadingProjetos, setLoadingProjetos] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
@@ -68,72 +72,46 @@ const OraculoAI = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [emailNewsletter, setEmailNewsletter] = useState('');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [mostrarModalApagar, setMostrarModalApagar] = useState(false);
+  const [projetoParaApagar, setProjetoParaApagar] = useState<string | null>(null);
+  const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
-  // Função para deletar um projeto
-  const handleDeleteProjeto = async (projetoId: string, e: React.MouseEvent) => {
+  // Função para abrir modal de confirmação de exclusão
+  const abrirModalApagar = (projetoId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setProjetoParaApagar(projetoId);
+    setConfirmacaoTexto('');
+    setMostrarModalApagar(true);
+  };
+
+  // Função para deletar um projeto
+  const handleDeleteProjeto = async () => {
+    if (!user || !projetoParaApagar) return;
     
-    if (!user) return;
+    if (confirmacaoTexto.toLowerCase().trim() !== 'apagar') {
+      toast.error('Por favor, digite "apagar" para confirmar a exclusão.');
+      return;
+    }
     
-    if (window.confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) {
-      try {
-        await deleteDoc(doc(db, 'projetos', projetoId));
-        // Atualiza a lista de projetos após a exclusão
-        setMeusProjetos(prev => prev.filter(proj => proj.id !== projetoId));
-        toast.success('Projeto excluído com sucesso!');
-      } catch (error) {
-        console.error('Erro ao excluir projeto:', error);
-        toast.error('Erro ao excluir o projeto. Tente novamente.');
-      }
+    try {
+      await deleteDoc(doc(db, 'projetos', projetoParaApagar));
+      // Atualiza a lista de projetos após a exclusão
+      setMeusProjetos(prev => prev.filter(proj => proj.id !== projetoParaApagar));
+      toast.success('Projeto excluído com sucesso!');
+      setMostrarModalApagar(false);
+      setProjetoParaApagar(null);
+      setConfirmacaoTexto('');
+    } catch (error) {
+      console.error('Erro ao excluir projeto:', error);
+      toast.error('Erro ao excluir o projeto. Tente novamente.');
     }
   };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
         setLoadingProjetos(true);
-        
-        // Fetch Editais - apenas os que ainda não encerraram
-        const editaisSnapshot = await getDocs(collection(db, "editais"));
-        const editais: Edital[] = [];
-        const now = new Date();
-        
-        editaisSnapshot.forEach((doc) => {
-          const edital = { id: doc.id, ...doc.data() } as Edital;
-          
-          // Verifica data_encerramento primeiro (campo principal)
-          let dataEncerramento: Date | null = null;
-          
-          if (edital.data_encerramento) {
-            if (edital.data_encerramento?.toDate) {
-              dataEncerramento = edital.data_encerramento.toDate();
-            } else if (edital.data_encerramento?.seconds) {
-              dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
-            } else if (typeof edital.data_encerramento === 'string') {
-              dataEncerramento = new Date(edital.data_encerramento);
-            }
-          }
-          
-          // Se não tem data_encerramento, verifica deadline como fallback
-          if (!dataEncerramento && edital.deadline) {
-            if (edital.deadline && typeof edital.deadline === 'object' && 'toDate' in edital.deadline) {
-              dataEncerramento = edital.deadline.toDate();
-            } else if (edital.deadline && typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
-              dataEncerramento = new Date(edital.deadline.seconds * 1000);
-            } else if (typeof edital.deadline === 'string') {
-              dataEncerramento = new Date(edital.deadline);
-            }
-          }
-          
-          // Só adiciona se a data de encerramento for válida e ainda não passou
-          if (dataEncerramento && !isNaN(dataEncerramento.getTime()) && dataEncerramento > now) {
-            editais.push(edital);
-          }
-        });
-        
-        setEditaisAbertos(editais);
         
         // Fetch Projetos
         if (user) {
@@ -165,9 +143,8 @@ const OraculoAI = () => {
           }
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching projetos:", error);
       } finally {
-        setLoading(false);
         setLoadingProjetos(false);
       }
     };
@@ -199,25 +176,6 @@ const OraculoAI = () => {
     }
   };
 
-  const handleDeleteEdital = async (editalId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este edital?')) {
-      try {
-        await deleteDoc(doc(db, 'editais', editalId));
-        setEditaisAbertos(editaisAbertos.filter(edital => edital.id !== editalId));
-        alert('Edital excluído com sucesso!');
-      } catch (error) {
-        console.error('Erro ao excluir edital:', error);
-        alert('Erro ao excluir edital. Tente novamente.');
-      }
-    }
-  };
-
-  const getPrioridade = (diffDays: number) => {
-    if (diffDays <= 3) return { label: 'Alta', color: 'bg-red-500' };
-    if (diffDays <= 7) return { label: 'Média', color: 'bg-oraculo-gold' };
-    if (diffDays > 7) return { label: 'Baixa', color: 'bg-green-500' };
-    return { label: '', color: 'bg-gray-500' };
-  };
 
   const handleCadastrarEdital = async () => {
     setCadastrando(true);
@@ -418,7 +376,7 @@ const OraculoAI = () => {
                         </Card>
                       </Link>
                       <button
-                        onClick={(e) => handleDeleteProjeto(projeto.id, e)}
+                        onClick={(e) => abrirModalApagar(projeto.id, e)}
                         className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10"
                         title="Excluir projeto"
                       >
@@ -430,127 +388,8 @@ const OraculoAI = () => {
               </div>
             </div>
 
-            {/* Seção Editais Abertos */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Calendar className="h-6 w-6 text-oraculo-magenta" />
-                  Editais Abertos
-                </h2>
-                {user && (
-                  <Button 
-                    className="ml-2 bg-oraculo-blue text-white" 
-                    onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
-                  >
-                    Cadastrar Edital
-                  </Button>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {loading ? (
-                  <div className="flex items-center justify-center p-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-oraculo-blue"></div>
-                    <span className="ml-2">Carregando editais...</span>
-                  </div>
-                ) : editaisAbertos.length === 0 ? (
-                  <div className="text-center p-4 text-gray-500">
-                    Nenhum edital aberto no momento.
-                  </div>
-                ) : (
-                  editaisAbertos.map((edital, index) => {let diffDays = null;
-                    if (edital.deadline) {
-                      let deadlineDate: Date;
-                      if (typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
-                        // Handle Firestore Timestamp
-                        deadlineDate = new Date(edital.deadline.seconds * 1000);
-                      } else if (typeof edital.deadline === 'string') {
-                        // Handle string date
-                        deadlineDate = new Date(edital.deadline);
-                      } else {
-                        // Handle other cases or throw an error
-                        console.error('Unexpected deadline format:', edital.deadline);
-                        return null; // or handle the error case appropriately
-                      }
-                      const now = new Date();
-                      const diffTime = deadlineDate.getTime() - now.getTime();
-                      diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    }
-                    const prioridade = diffDays !== null ? getPrioridade(diffDays) : null;
-                    return (
-                      <Card 
-                        key={edital.id || index} 
-                        className="relative hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
-                        onClick={() => navigate(`/edital/${edital.id}`)}
-                      >
-                      {/* Action Buttons - Only visible to admin */}
-                      {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
-                        <div className="absolute top-2 right-2 flex gap-1 z-10">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Navigate to edit page with edital ID
-                              navigate(`/editar-edital/${edital.id}`);
-                            }}
-                            className="p-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-colors"
-                            title="Editar edital"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteEdital(edital.id);
-                            }}
-                            className="p-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-colors"
-                            title="Excluir edital"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      )}
-                      
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between mb-2">
-                          <CardTitle className="text-lg flex-1">{edital.nome || 'Edital sem nome'}</CardTitle>
-                          {prioridade && prioridade.label && (
-                            <Badge className={`${prioridade.color} text-white`}>
-                              Prioridade: {prioridade.label}
-                            </Badge>
-                          )}
-                        </div>
-                        {edital.descricao && (
-                          <p className="text-sm text-gray-600 mb-2">{edital.descricao}</p>
-                        )}
-                        <div className="flex items-center text-sm text-gray-500 gap-4">
-                          {edital.data_encerramento && (
-                            <span className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-1" />
-                              {edital.data_encerramento?.toDate ? 
-                                edital.data_encerramento.toDate().toLocaleDateString('pt-BR') :
-                                new Date(edital.data_encerramento).toLocaleDateString('pt-BR')
-                              }
-                            </span>
-                          )}
-                          {edital.valor_maximo_premiacao && (
-                            <span className="flex items-center">
-                              <DollarSign className="h-4 w-4 mr-1" />
-                              {edital.valor_maximo_premiacao}
-                            </span>
-                          )}
-                        </div>
-                      </CardHeader>
-                    </Card>
-                    );
-                  })
-                )}
-              </div>
-              
-              {/* Formulário de cadastro de email para receber editais */}
-              <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
+            {/* Formulário de cadastro de email para receber editais */}
+            <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
                 <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
                   <div className="flex-1 w-full md:w-auto">
                     <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
@@ -583,6 +422,36 @@ const OraculoAI = () => {
                             criadoEm: Timestamp.now(),
                             origem: 'editais_abertos'
                           });
+                          
+                          // Adicionar email ao Brevo
+                          try {
+                            console.log('[Newsletter] Chamando função Brevo para:', emailNewsletter.trim());
+                            const response = await fetch('https://adicionarcontatobrevo-v3odkawqzq-uc.a.run.app', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                email: emailNewsletter.trim(),
+                                nome: user?.displayName || null
+                              })
+                            });
+                            
+                            console.log('[Newsletter] Resposta do Brevo - Status:', response.status);
+                            const result = await response.json();
+                            console.log('[Newsletter] Resposta do Brevo - Body:', result);
+                            
+                            if (!response.ok) {
+                              console.error('[Newsletter] Erro ao adicionar ao Brevo:', result);
+                              // Não bloquear o fluxo se o Brevo falhar, mas logar o erro
+                            } else {
+                              console.log('[Newsletter] Email adicionado ao Brevo com sucesso');
+                            }
+                          } catch (brevoError: any) {
+                            console.error('[Newsletter] Erro ao chamar função Brevo:', brevoError);
+                            console.error('[Newsletter] Detalhes do erro:', brevoError.message, brevoError.stack);
+                            // Não bloquear o fluxo se o Brevo falhar
+                          }
                           
                           toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
                           setEmailNewsletter('');
@@ -621,9 +490,7 @@ const OraculoAI = () => {
                     />
                   </div>
                 </div>
-              </div>
             </div>
-
 
             {/* Exibir resumo do edital extraído diretamente na página, fora do Dialog */}
             {resumoEdital && (
@@ -706,6 +573,65 @@ const OraculoAI = () => {
           }}>
             OK
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação para Apagar Projeto */}
+      <Dialog open={mostrarModalApagar} onOpenChange={setMostrarModalApagar}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 text-xl font-bold">⚠️ Confirmar Exclusão</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Esta ação não pode ser desfeita. Todos os dados do projeto serão permanentemente removidos.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 space-y-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+              <p className="text-red-800 font-semibold text-sm mb-2">
+                ⚠️ ATENÇÃO: Esta ação é irreversível!
+              </p>
+              <p className="text-red-700 text-sm">
+                Ao confirmar, o projeto será permanentemente excluído e não poderá ser recuperado.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="confirmacao" className="text-sm font-medium text-gray-700">
+                Digite <span className="font-bold text-red-600">"apagar"</span> para confirmar:
+              </label>
+              <Input
+                id="confirmacao"
+                type="text"
+                value={confirmacaoTexto}
+                onChange={(e) => setConfirmacaoTexto(e.target.value)}
+                placeholder="Digite 'apagar' aqui"
+                className="w-full"
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMostrarModalApagar(false);
+                setConfirmacaoTexto('');
+                setProjetoParaApagar(null);
+              }}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleDeleteProjeto}
+              disabled={confirmacaoTexto.toLowerCase().trim() !== 'apagar'}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Apagar Projeto
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

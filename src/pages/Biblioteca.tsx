@@ -8,9 +8,10 @@ import { BookOpen, Download, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { trackGuiaDownloaded } from '@/lib/analytics';
 
 const Biblioteca = () => {
   const navigate = useNavigate();
@@ -18,6 +19,26 @@ const Biblioteca = () => {
   const [guias, setGuias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      if (user?.uid) {
+        try {
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setIsSuperAdmin(userData.role === 'super_admin');
+          }
+        } catch (error) {
+          console.error('Erro ao verificar role do usuário:', error);
+        }
+      }
+    };
+
+    checkSuperAdmin();
+  }, [user]);
 
   useEffect(() => {
     const fetchGuias = async () => {
@@ -35,11 +56,24 @@ const Biblioteca = () => {
     fetchGuias();
   }, []);
 
-  const handleDownload = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, pdfUrl: string) => {
+  const handleDownload = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, pdfUrl: string, guiaTitulo: string) => {
     if (!user) {
       e.preventDefault();
       setShowAuthModal(true);
+      return;
     }
+    
+    // Track guia download
+    // Extrair nome do guia (tentar identificar tipo: PNAB, RioFilme, etc)
+    const guiaNome = guiaTitulo.toLowerCase().includes('pnab') ? 'PNAB' :
+                     guiaTitulo.toLowerCase().includes('riofilme') ? 'RioFilme' :
+                     guiaTitulo.toLowerCase().includes('aldir') ? 'Aldir_Blanc' :
+                     guiaTitulo;
+    
+    trackGuiaDownloaded({
+      guiaNome: guiaNome,
+      conversaoTipo: user ? 'lead' : undefined, // Lead já está autenticado
+    });
   };
 
   return (
@@ -61,7 +95,7 @@ const Biblioteca = () => {
                   Acesse nossa coleção completa de guias estratégicos, ebooks e estudos especializados em cultura.
                 </p>
               </div>
-              {user && user.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
+              {isSuperAdmin && (
                 <Button className="bg-oraculo-blue text-white" onClick={() => navigate('/cadastrar-guia')}>
                   + Cadastrar Guia
                 </Button>
@@ -114,7 +148,7 @@ const Biblioteca = () => {
                           href={user ? guia.pdfUrl : undefined}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={e => handleDownload(e, guia.pdfUrl)}
+                          onClick={e => handleDownload(e, guia.pdfUrl, guia.titulo)}
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Baixar Guia

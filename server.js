@@ -385,9 +385,9 @@ app.post('/webhook', async (req, res) => {
             
           case 'pending':
           case 'in_mediation':
-            // Payment issues - give grace period
+            // Payment issues - keep premium active
             userUpdate.isPremium = true;
-            userUpdate.premiumExpiresAt = new Date(now.setDate(now.getDate() + 7)); // 7-day grace period
+            userUpdate.premiumExpiresAt = userData.nextBillingDate || new Date(now.setMonth(now.getMonth() + 1));
             break;
             
           case 'rejected':

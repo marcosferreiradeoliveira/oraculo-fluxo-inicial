@@ -1,3 +1,4 @@
+
 // Script para limpar o campo 'premium' antigo do Firestore
 // Execute este script no console do Firebase ou como uma Cloud Function
 

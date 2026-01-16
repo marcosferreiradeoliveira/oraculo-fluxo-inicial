@@ -18,6 +18,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from 'sonner';
 import emailImage from '@/assets/email.png';
 import logo from '@/assets/logo.png';
+import { trackNewsletterSubscribed } from '@/lib/analytics';
+
+// Função para capitalizar apenas a primeira letra do título
+const capitalizarTitulo = (titulo: string): string => {
+  if (!titulo) return '';
+  // Converte para minúsculas e depois capitaliza a primeira letra
+  return titulo.charAt(0).toUpperCase() + titulo.slice(1).toLowerCase();
+};
 
 const Index = () => {
   const navigate = useNavigate();
@@ -104,20 +112,36 @@ const Index = () => {
         const data = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(edital => {
-            if (!edital.data_encerramento) return false;
+            let dataEncerramento: Date | null = null;
             
-            let dataEncerramento: Date;
-            if (edital.data_encerramento?.toDate) {
-              dataEncerramento = edital.data_encerramento.toDate();
-            } else if (edital.data_encerramento?.seconds) {
-              dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
-            } else if (typeof edital.data_encerramento === 'string') {
-              dataEncerramento = new Date(edital.data_encerramento);
-            } else {
+            // Verifica data_encerramento primeiro
+            if (edital.data_encerramento) {
+              if (edital.data_encerramento?.toDate) {
+                dataEncerramento = edital.data_encerramento.toDate();
+              } else if (edital.data_encerramento?.seconds) {
+                dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
+              } else if (typeof edital.data_encerramento === 'string') {
+                dataEncerramento = new Date(edital.data_encerramento);
+              }
+            }
+            
+            // Se não tem data_encerramento ou já passou, verifica dataEncerramento (com E maiúsculo)
+            if ((!dataEncerramento || (dataEncerramento && dataEncerramento <= now)) && edital.dataEncerramento) {
+              if (edital.dataEncerramento?.toDate) {
+                dataEncerramento = edital.dataEncerramento.toDate();
+              } else if (edital.dataEncerramento?.seconds) {
+                dataEncerramento = new Date(edital.dataEncerramento.seconds * 1000);
+              } else if (typeof edital.dataEncerramento === 'string') {
+                dataEncerramento = new Date(edital.dataEncerramento);
+              }
+            }
+            
+            // Se ainda não tem data válida, retorna false
+            if (!dataEncerramento || isNaN(dataEncerramento.getTime())) {
               return false;
             }
             
-            return !isNaN(dataEncerramento.getTime()) && dataEncerramento > now;
+            return dataEncerramento > now;
           })
           .slice(0, 4); // Limita a 4 após filtrar
         
@@ -195,9 +219,22 @@ const Index = () => {
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                   Bem-vinda ao seu Oráculo Cultural! ✨
                 </h1>
-                <p className="text-gray-600 text-sm md:text-base">
+                <p className="text-gray-600 text-sm md:text-base mb-4">
                   Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.
                 </p>
+                <Button 
+                  onClick={() => {
+                    if (user) {
+                      navigate('/criar-projeto');
+                    } else {
+                      navigate('/cadastro');
+                    }
+                  }}
+                  className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white font-semibold px-6 py-3 text-base md:text-lg"
+                >
+                  <Brain className="h-5 w-5 mr-2" />
+                  Avalie seu projeto agora!
+                </Button>
               </div>
             </div>
 
@@ -241,7 +278,7 @@ const Index = () => {
                       >
                         <CardHeader className="pb-3">
                           <CardTitle className="text-lg leading-tight line-clamp-2">
-                            {edital.nome || 'Edital sem nome'}
+                            {edital.nome ? capitalizarTitulo(edital.nome) : 'Edital sem nome'}
                           </CardTitle>
                           {edital.proponente && (
                             <CardDescription className="line-clamp-1">
@@ -319,6 +356,42 @@ const Index = () => {
                             userId: user?.uid || null,
                             criadoEm: Timestamp.now(),
                             origem: 'home_editais_abertos'
+                          });
+                          
+                          // Adicionar email ao Brevo
+                          try {
+                            console.log('[Newsletter] Chamando função Brevo para:', emailNewsletter.trim());
+                            const response = await fetch('https://adicionarcontatobrevo-v3odkawqzq-uc.a.run.app', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                email: emailNewsletter.trim(),
+                                nome: user?.displayName || null
+                              })
+                            });
+                            
+                            console.log('[Newsletter] Resposta do Brevo - Status:', response.status);
+                            const result = await response.json();
+                            console.log('[Newsletter] Resposta do Brevo - Body:', result);
+                            
+                            if (!response.ok) {
+                              console.error('[Newsletter] Erro ao adicionar ao Brevo:', result);
+                              // Não bloquear o fluxo se o Brevo falhar, mas logar o erro
+                            } else {
+                              console.log('[Newsletter] Email adicionado ao Brevo com sucesso');
+                            }
+                          } catch (brevoError: any) {
+                            console.error('[Newsletter] Erro ao chamar função Brevo:', brevoError);
+                            console.error('[Newsletter] Detalhes do erro:', brevoError.message, brevoError.stack);
+                            // Não bloquear o fluxo se o Brevo falhar
+                          }
+                          
+                          // Track newsletter subscription
+                          trackNewsletterSubscribed({
+                            source: 'home_editais_abertos',
+                            isLoggedIn: !!user,
                           });
                           
                           toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');

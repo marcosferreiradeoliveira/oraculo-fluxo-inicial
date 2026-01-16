@@ -1,7 +1,10 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { defineSecret } = require("firebase-functions/params");
 const functions = require("firebase-functions");
 const { OpenAI } = require("openai");
 const mercadopago = require("mercadopago");
+const stripe = require("stripe");
 const cors = require("cors")({ origin: true });
 const admin = require("firebase-admin");
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
@@ -22,6 +25,13 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Definir secret para Access Token do Mercado Pago
+const mercadoPagoAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
+
+// Definir secrets para Stripe
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+
 // Lazy initialization helpers
 let openaiInstance = null;
 let mpInstance = null;
@@ -40,7 +50,90 @@ function getOpenAI() {
 
 function getMercadoPago() {
   if (!mpInstance) {
-    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || functions.config().mercadopago?.token || "";
+    // NOTA: O Mercado Pago pode ter credenciais de teste que começam com APP_USR-
+    // O contexto da aplicação (sandbox/teste) é que determina se são de teste
+    // Firebase Functions v2: secrets são injetados como variáveis de ambiente após deploy
+    // Tentar obter do secret (via value() se disponível), depois variável de ambiente, depois fallback
+    let accessToken;
+    try {
+      // Tentar obter do secret definido (funciona em runtime)
+      accessToken = mercadoPagoAccessToken.value();
+    } catch (e) {
+      // Se não disponível, tentar variável de ambiente (após deploy com secrets)
+      accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    }
+    // Fallback para desenvolvimento local
+    accessToken = accessToken || "APP_USR-783906941666085-010213-a7124ca4d6ae0e9ad0fb28935a13a1b4-2448199655";
+    
+    // Limpar o token: remover espaços, quebras de linha e prefixo "Bearer " se presente
+    if (accessToken) {
+      const originalToken = accessToken.toString();
+      accessToken = originalToken.trim();
+      // Remover prefixo "Bearer " se presente
+      if (accessToken.startsWith('Bearer ')) {
+        accessToken = accessToken.substring(7).trim();
+      }
+      // Remover qualquer caractere de nova linha ou espaço extra
+      accessToken = accessToken.replace(/\s+/g, '').trim();
+      
+      // Log para debug (sem expor o token completo)
+      console.log('[getMercadoPago] Token original length:', originalToken.length);
+      console.log('[getMercadoPago] Token limpo length:', accessToken.length);
+      console.log('[getMercadoPago] Token começa com:', accessToken.substring(0, 10));
+    }
+    
+    // Flag para indicar modo de teste (pode ser configurado via variável de ambiente)
+    const isTestMode = process.env.MERCADO_PAGO_TEST_MODE === 'true' || true; // Default para true em desenvolvimento
+    
+    // Debug: mostrar origem do token (sem expor o token completo)
+    let tokenSource = 'fallback (hardcoded)';
+    try {
+      if (mercadoPagoAccessToken.value()) {
+        tokenSource = 'secret (defineSecret)';
+      }
+    } catch (e) {
+      if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+        tokenSource = 'variável de ambiente';
+      }
+    }
+    
+    if (!accessToken) {
+      const errorMsg = `MERCADO_PAGO_ACCESS_TOKEN não configurado. 
+        Configure via variável de ambiente:
+        - No Firebase Console: Functions > Configurações > Variáveis de ambiente
+        - Ou via CLI: firebase functions:secrets:set MERCADO_PAGO_ACCESS_TOKEN
+        - Ou no código: process.env.MERCADO_PAGO_ACCESS_TOKEN`;
+      console.error('[getMercadoPago]', errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Validar formato básico do token
+    const isTestToken = accessToken.startsWith('TEST-');
+    const isAppUsrToken = accessToken.startsWith('APP_USR-');
+    
+    // Mostrar primeiros caracteres do token para debug (sem expor completo)
+    const tokenPreview = accessToken.substring(0, 15) + '...' + accessToken.substring(accessToken.length - 4);
+    
+    console.log('[getMercadoPago] Token obtido de:', tokenSource);
+    console.log('[getMercadoPago] Token preview:', tokenPreview);
+    console.log('[getMercadoPago] Modo de teste:', isTestMode ? 'SIM' : 'NÃO');
+    
+    if (!isTestToken && !isAppUsrToken) {
+      console.error('[getMercadoPago] ❌ Token não reconhecido! Deve começar com TEST- ou APP_USR-');
+      console.error('[getMercadoPago] Token atual começa com:', accessToken.substring(0, 10));
+      throw new Error('Token do Mercado Pago inválido. Deve começar com TEST- ou APP_USR-');
+    }
+    
+    if (isTestToken) {
+      console.log('[getMercadoPago] ✅ Usando credenciais de TESTE (formato TEST-)');
+    } else if (isAppUsrToken) {
+      if (isTestMode) {
+        console.log('[getMercadoPago] ✅ Usando credenciais de TESTE (formato APP_USR- em modo sandbox)');
+      } else {
+        console.log('[getMercadoPago] ⚠️ Usando credenciais de PRODUÇÃO (formato APP_USR-)');
+      }
+    }
+    
     mpInstance = new mercadopago.MercadoPagoConfig({ 
       accessToken: accessToken
     });
@@ -113,47 +206,56 @@ exports.avaliarProjetoIA = onRequest(async (req, res) => {
     
     // Construir o prompt detalhado de avaliação
     const prompt = `Você é um avaliador experiente de projetos culturais para leis de incentivo fiscal. 
-Sua tarefa é avaliar rigorosamente o projeto apresentado contra os critérios específicos do edital e o histórico do proponente.
+Sua tarefa é avaliar rigorosamente o projeto apresentado contra os critérios específicos do edital.
+
+PRIORIDADE PRINCIPAL: A avaliação deve ser baseada PRIMARIAMENTE no TEXTO DO PROJETO abaixo. Os demais dados (portfolio, equipe) são apenas contexto adicional para entender melhor a capacidade de execução.
 
 ${nomeProjeto ? `**PROJETO:** ${nomeProjeto}` : ''}
 
-**TEXTO DO PROJETO PARA AVALIAÇÃO:**
+**TEXTO DO PROJETO PARA AVALIAÇÃO (PRIORIDADE PRINCIPAL):**
 ${textoProjeto}
 
 **EDITAL:** ${nomeEdital || 'Não especificado'}
 
 **CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS:**
+Os critérios abaixo são os critérios de avaliação reais do edital, obtidos diretamente do campo "criterios" do documento do edital na collection "editais". Você deve usar APENAS e EXCLUSIVAMENTE estes critérios para avaliar o projeto:
 ${criteriosEdital}
+
+IMPORTANTE: 
+- Os critérios de avaliação estão listados acima. Estes são os ÚNICOS critérios que devem ser considerados na avaliação.
+- A seção "1. ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL" na sua resposta é apenas um título da análise, não é um critério em si.
+- Avalie o projeto usando APENAS os critérios listados acima no campo "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS".
+- Não invente ou assuma critérios que não estejam explicitamente listados acima.
 
 ${textoEdital ? `**TEXTO COMPLETO DO EDITAL (para contexto adicional):**\n${textoEdital}` : ''}
 
-${equipeBio ? `**EQUIPE E BIOGRAFIA DO PROPONENTE:**\n${equipeBio}\n\nConsidere a qualificação e experiência da equipe ao avaliar a viabilidade do projeto.` : ''}
-
-${userPortfolio ? `**PORTFOLIO E EXPERIÊNCIAS DO PROPONENTE:**\n${userPortfolio}\n\nUse estas informações para avaliar a capacidade técnica e operacional do proponente de executar o projeto.` : ''}
-
 ${projetosSelecionados ? `**PROJETOS JÁ SELECIONADOS NESTE EDITAL (para referência comparativa):**\n${projetosSelecionados.slice(0, 2000)}\n\nUse como referência de qualidade e adequação esperada.` : ''}
+
+${equipeBio ? `**EQUIPE E BIOGRAFIA DO PROPONENTE (contexto adicional):**\n${equipeBio}\n\nUse apenas para entender a capacidade de execução, mas a avaliação deve focar no texto do projeto.` : ''}
+
+${userPortfolio ? `**PORTFOLIO E EXPERIÊNCIAS DO PROPONENTE (contexto adicional):**\n${userPortfolio}\n\nUse apenas como contexto para avaliar capacidade de execução, mas a análise deve focar no texto do projeto apresentado.` : ''}
 
 **INSTRUÇÕES DE AVALIAÇÃO:**
 
-1. **ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL**: Analise item por item como o projeto atende (ou não atende) cada critério específico. Cite exatamente os critérios e avalie com ✅ ou ❌.
+1. **ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL**: Analise item por item como o projeto atende (ou não atende) CADA critério específico listado na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS" acima. Use APENAS os critérios fornecidos nessa seção - não use critérios genéricos ou inventados. Baseie-se PRINCIPALMENTE no TEXTO DO PROJETO. Cite exatamente os critérios daquela seção e avalie cada um. IMPORTANTE: "ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL" é apenas um título desta seção da resposta - os critérios reais estão na seção acima.
 
-2. **PONTOS FORTES DO PROJETO**: Destaque 3-4 pontos fortes bem fundamentados e específicos.
+2. **PONTOS FORTES DO PROJETO**: Destaque 3-4 pontos fortes bem fundamentados e específicos baseados no TEXTO DO PROJETO, relacionados aos critérios do edital.
 
-3. **PONTOS FRACOS E GAPS**: Identifique claramente o que falta no projeto ou o que precisa ser melhorado.
+3. **PONTOS FRACOS E GAPS**: Identifique claramente o que falta no projeto ou o que precisa ser melhorado, baseando-se nos CRITÉRIOS DO EDITAL e no TEXTO DO PROJETO.
 
 4. **SUGESTÕES DE MELHORIA**: Forneça 4-5 sugestões práticas e específicas para aumentar a chance de aprovação. Cada sugestão deve:
    - Começar com "Sugestão: "
    - Ser acionável e implementável
-   - Relacionar-se diretamente com os critérios do edital
-   - Considerar o portfolio do proponente (se fornecido)
+   - Relacionar-se diretamente com os CRITÉRIOS ESPECÍFICOS DO EDITAL fornecidos acima e o TEXTO DO PROJETO
+   - O portfolio pode ser considerado apenas como contexto adicional para sugestões sobre capacidade de execução
 
-5. **NOTA ESTIMADA (0-100)**: Atribua uma nota justificada considerando:
-   - Adequação aos critérios do edital (peso: 40%)
-   - Viabilidade e capacidade de execução (peso: 30%)
-   - Qualidade técnica e inovação (peso: 20%)
-   - Impacto cultural e relevância (peso: 10%)
+5. **NOTA ESTIMADA (0-100)**: Atribua uma nota justificada considerando PRINCIPALMENTE o TEXTO DO PROJETO e os CRITÉRIOS ESPECÍFICOS DO EDITAL fornecidos acima. 
+   - Use APENAS os critérios e pontuações especificados na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS"
+   - Se os critérios especificarem pontuações individuais, respeite essas pontuações
+   - Se os critérios não especificarem pesos, distribua a pontuação de forma proporcional entre os critérios listados
+   - NÃO use critérios genéricos como "Viabilidade e capacidade de execução", "Qualidade técnica e inovação", "Impacto cultural e relevância" - use APENAS os critérios fornecidos acima
 
-Seja objetivo, específico e construtivo. Baseie sua análise nos critérios reais do edital fornecido.`;
+Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no TEXTO DO PROJETO e APENAS nos critérios específicos do edital fornecidos na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS" acima.`;
 
     const openai = getOpenAI();
     const completion = await openai.chat.completions.create({
@@ -205,19 +307,25 @@ exports.gerarTexto = onRequest(async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Buscar dados do usuário (equipeBio e portfolio) se userId fornecido
-    let equipeBio = '';
+    // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
+    let equipeBio = dadosProjeto.equipeBio || '';
     let userPortfolio = dadosProjeto.portfolio || '';
+    let dadosCadastrais = dadosProjeto.dadosCadastrais || '';
     
     if (userId) {
       try {
         const userDoc = await db.collection('usuarios').doc(userId).get();
         if (userDoc.exists) {
           const userData = userDoc.data();
-          equipeBio = userData.equipeBio || '';
-          // Se portfolio não foi enviado no dadosProjeto, buscar do usuário
+          // Se não foi enviado no dadosProjeto, buscar do usuário
+          if (!equipeBio) {
+            equipeBio = userData.equipeBio || '';
+          }
           if (!userPortfolio) {
             userPortfolio = userData.portfolio || '';
+          }
+          if (!dadosCadastrais) {
+            dadosCadastrais = userData.dadosCadastrais || '';
           }
         }
       } catch (error) {
@@ -249,13 +357,16 @@ exports.gerarTexto = onRequest(async (req, res) => {
       Gere um orçamento completo e profissional:`;
     }
     
-    // Adicionar equipeBio e portfolio ao prompt se disponíveis
+    // Adicionar equipeBio, portfolio e dadosCadastrais ao prompt se disponíveis
     let contextInfo = '';
-    if (equipeBio) {
-      contextInfo += `\n\nEQUIPE E BIOGRAFIA DO PROPONENTE:\n${equipeBio}\n\nConsidere a qualificação e experiência da equipe ao gerar o texto.`;
+    if (equipeBio && equipeBio.trim()) {
+      contextInfo += `\n\nEQUIPE E BIOGRAFIA DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${equipeBio}\n\nIMPORTANTE: Use apenas como contexto adicional para entender capacidade de execução. NÃO inclua o texto do equipeBio literalmente no texto gerado. Se necessário mencionar experiência da equipe, faça de forma sutil e integrada, sem copiar trechos.`;
     }
-    if (userPortfolio) {
-      contextInfo += `\n\nPORTFOLIO E EXPERIÊNCIAS DO PROPONENTE:\n${userPortfolio}\n\nUse estas informações para contextualizar e enriquecer o texto gerado.`;
+    if (userPortfolio && userPortfolio.trim()) {
+      contextInfo += `\n\nPORTFOLIO E EXPERIÊNCIAS DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${userPortfolio}\n\nIMPORTANTE: O portfolio é apenas contexto de referência sobre histórico e experiência. NÃO inclua o portfolio literalmente no texto gerado. Use-o apenas quando a geração exigir menção a experiência/capacidade, mas faça isso de forma SUTIL e INTEGRADA, sem copiar trechos do portfolio. O texto gerado deve focar nos dados do projeto.`;
+    }
+    if (dadosCadastrais && dadosCadastrais.trim()) {
+      contextInfo += `\n\nDADOS CADASTRAIS DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${dadosCadastrais}\n\nIMPORTANTE: Use apenas como contexto adicional. NÃO inclua os dados cadastrais literalmente no texto gerado. O texto gerado deve focar nos dados do projeto.`;
     }
     const promptFinal = promptEspecifico + contextInfo;
     
@@ -287,6 +398,118 @@ exports.gerarTexto = onRequest(async (req, res) => {
     console.error('Error generating text:', error);
     return res.status(500).json({ 
       error: error.message || 'Failed to generate text' 
+    });
+  }
+});
+
+exports.alterarTextoComIA = onRequest(async (req, res) => {
+  // Set CORS headers BEFORE any checks
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Max-Age', '3600');
+  
+  // Handle preflight requests FIRST
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+  
+  try {
+    const { textoAtual, sugestao, portfolio, userId } = req.body;
+    
+    if (!textoAtual || !sugestao) {
+      return res.status(400).json({ error: 'textoAtual e sugestao são obrigatórios' });
+    }
+    
+    // Validar que os campos não estão vazios
+    if (typeof textoAtual !== 'string' || textoAtual.trim().length === 0) {
+      return res.status(400).json({ error: 'textoAtual não pode estar vazio' });
+    }
+    
+    if (typeof sugestao !== 'string' || sugestao.trim().length === 0) {
+      return res.status(400).json({ error: 'sugestao não pode estar vazia' });
+    }
+    
+    // Buscar portfolio do usuário se userId fornecido e portfolio não foi enviado
+    let userPortfolio = portfolio || '';
+    if (userId && !userPortfolio) {
+      try {
+        const userDoc = await db.collection('usuarios').doc(userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          userPortfolio = userData.portfolio || '';
+        }
+      } catch (error) {
+        console.error('Error fetching user portfolio:', error);
+        // Continuar sem portfolio em caso de erro
+      }
+    }
+    
+    let portfolioContext = '';
+    if (userPortfolio && userPortfolio.trim()) {
+      portfolioContext = `\n\nCONTEXTO ADICIONAL - PORTFOLIO DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR NO TEXTO):\n${userPortfolio}\n\nIMPORTANTE: O portfolio acima é apenas contexto de referência sobre o histórico e experiência do proponente. NÃO inclua o portfolio literalmente no texto reescrito. Use-o apenas para entender melhor o contexto quando a sugestão exigir menção a experiência/capacidade, mas faça isso de forma sutil e integrada ao projeto, sem copiar trechos do portfolio.`;
+    }
+    
+    const prompt = `Com base na sugestão abaixo, reescreva o projeto de forma completa e integrada.
+
+SUGESTÃO:
+${sugestao}
+
+PROJETO ATUAL:
+${textoAtual}${portfolioContext}
+
+INSTRUÇÕES CRÍTICAS:
+- Reescreva o projeto completo incorporando a sugestão de forma natural
+- A sugestão deve estar integrada ao texto, não apenas mencionada
+- Mantenha a estrutura, tom e estilo do projeto original
+- O resultado deve ser uma versão melhorada do projeto que incorpora a sugestão
+- NÃO inclua o portfolio literalmente no texto reescrito
+- Se a sugestão exigir menção a experiência/capacidade, use o contexto do portfolio apenas para dar credibilidade, mas de forma SUTIL e INTEGRADA, sem copiar trechos
+- O texto gerado deve focar APENAS no projeto reescrito, incorporando a sugestão
+
+PROJETO REESCRITO:`;
+
+    const openai = getOpenAI();
+    
+    // Configurar streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'Você é um especialista em projetos culturais. Quando receber uma sugestão e um projeto, reescreva o projeto completo incorporando a sugestão de forma natural e integrada. Não apenas mencione a sugestão, mas incorpore-a ao texto do projeto.' 
+        },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 2000,
+      temperature: 0.3,
+      stream: true,
+    });
+    
+    for await (const chunk of stream) {
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) {
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+    
+    res.write('data: [DONE]\n\n');
+    res.end();
+    
+  } catch (error) {
+    console.error('Error altering text with AI:', error);
+    return res.status(500).json({ 
+      error: error.message || 'Failed to alter text with AI' 
     });
   }
 });
@@ -316,19 +539,25 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Buscar dados do usuário (equipeBio e portfolio) se userId fornecido
-    let equipeBio = '';
+    // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
+    let equipeBio = dadosProjeto.equipeBio || '';
     let userPortfolio = dadosProjeto.portfolio || '';
+    let dadosCadastrais = dadosProjeto.dadosCadastrais || '';
     
     if (userId) {
       try {
         const userDoc = await db.collection('usuarios').doc(userId).get();
         if (userDoc.exists) {
           const userData = userDoc.data();
-          equipeBio = userData.equipeBio || '';
-          // Se portfolio não foi enviado no dadosProjeto, buscar do usuário
+          // Se não foi enviado no dadosProjeto, buscar do usuário
+          if (!equipeBio) {
+            equipeBio = userData.equipeBio || '';
+          }
           if (!userPortfolio) {
             userPortfolio = userData.portfolio || '';
+          }
+          if (!dadosCadastrais) {
+            dadosCadastrais = userData.dadosCadastrais || '';
           }
         }
       } catch (error) {
@@ -360,18 +589,27 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
       Gere um orçamento completo e profissional:`;
     }
     
-    // Adicionar equipeBio e portfolio ao prompt se disponíveis
+    // Adicionar equipeBio, portfolio e dadosCadastrais ao prompt se disponíveis
     let contextInfo = '';
-    if (equipeBio) {
-      contextInfo += `\n\nEQUIPE E BIOGRAFIA DO PROPONENTE:\n${equipeBio}\n\nConsidere a qualificação e experiência da equipe ao gerar o texto.`;
+    if (equipeBio && equipeBio.trim()) {
+      contextInfo += `\n\nEQUIPE E BIOGRAFIA DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${equipeBio}\n\nIMPORTANTE: Use apenas como contexto adicional para entender capacidade de execução. NÃO inclua o texto do equipeBio literalmente no texto gerado. Se necessário mencionar experiência da equipe, faça de forma sutil e integrada, sem copiar trechos.`;
     }
-    if (userPortfolio) {
-      contextInfo += `\n\nPORTFOLIO E EXPERIÊNCIAS DO PROPONENTE:\n${userPortfolio}\n\nUse estas informações para contextualizar e enriquecer o texto gerado.`;
+    if (userPortfolio && userPortfolio.trim()) {
+      contextInfo += `\n\nPORTFOLIO E EXPERIÊNCIAS DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${userPortfolio}\n\nIMPORTANTE: O portfolio é apenas contexto de referência sobre histórico e experiência. NÃO inclua o portfolio literalmente no texto gerado. Use-o apenas quando a geração exigir menção a experiência/capacidade, mas faça isso de forma SUTIL e INTEGRADA, sem copiar trechos do portfolio. O texto gerado deve focar nos dados do projeto.`;
+    }
+    if (dadosCadastrais && dadosCadastrais.trim()) {
+      contextInfo += `\n\nDADOS CADASTRAIS DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${dadosCadastrais}\n\nIMPORTANTE: Use apenas como contexto adicional. NÃO inclua os dados cadastrais literalmente no texto gerado. O texto gerado deve focar nos dados do projeto.`;
     }
     const promptFinal = promptEspecifico + contextInfo;
     
     const openai = getOpenAI();
-    const completion = await openai.chat.completions.create({
+    
+    // Configurar streaming para exibir texto em tempo real
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { 
@@ -384,21 +622,32 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
       ],
       max_tokens: 2000,
       temperature: 0.3,
+      stream: true,
     });
     
-    const textoGerado = completion.choices[0].message?.content || 'Erro ao gerar texto.';
+    for await (const chunk of stream) {
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) {
+        res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
+      }
+    }
     
-    return res.status(200).json({ 
-      texto: textoGerado,
-      tipo: tipo,
-      projetoId: projetoId
-    });
+    res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+    res.end();
     
   } catch (error) {
     console.error('Error generating text:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to generate text' 
-    });
+    
+    // Se ainda não enviamos headers de streaming, retornar JSON
+    if (!res.headersSent) {
+      return res.status(500).json({ 
+        error: error.message || 'Failed to generate text' 
+      });
+    }
+    
+    // Se já começamos streaming, enviar erro via stream
+    res.write(`data: ${JSON.stringify({ type: 'error', message: error.message || 'Failed to generate text' })}\n\n`);
+    res.end();
   }
 });
 
@@ -425,14 +674,20 @@ exports.criarCheckoutPremium = onRequest(
     console.log('[criarCheckoutPremium] Request body:', req.body);
     
     try {
-      // Verificar se as variáveis de ambiente estão configuradas
-      const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || functions.config().mercadopago?.token;
-      if (!accessToken) {
-        throw new Error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
-      }
-      
       console.log('[criarCheckoutPremium] Getting MercadoPago instance...');
-      const { preference } = getMercadoPago();
+      let preference;
+      try {
+        const mpInstance = getMercadoPago();
+        preference = mpInstance.preference;
+        console.log('[criarCheckoutPremium] ✅ Instância do Mercado Pago criada com sucesso');
+      } catch (mpError) {
+        console.error('[criarCheckoutPremium] ❌ Erro ao criar instância do Mercado Pago:', mpError.message);
+        return res.status(500).json({ 
+          error: 'Erro de configuração do Mercado Pago',
+          message: mpError.message,
+          hint: 'Verifique se as credenciais estão configuradas corretamente. Para teste, use token que começa com TEST-'
+        });
+      }
       
       // Validar userId obrigatório
       const userId = req.body.userId;
@@ -464,8 +719,8 @@ exports.criarCheckoutPremium = onRequest(
         // Continua sem nome se houver erro
       }
       
-      // Definir o preço como 5 reais (valor mínimo do MercadoPago)
-      const unitPrice = 5.00;
+      // Definir o preço do plano premium (R$ 99,00/mês)
+      const unitPrice = 99.00;
       console.log('[criarCheckoutPremium] Unit price definido como:', unitPrice);
       
       // Construir objeto payer com nome completo
@@ -495,18 +750,23 @@ exports.criarCheckoutPremium = onRequest(
         ],
         payer: payerData,
         back_urls: {
-          success: "https://oraculocultural.com.br/cadastro-premium?status=success",
-          failure: "https://oraculocultural.com.br/cadastro-premium?status=failure",
-          pending: "https://oraculocultural.com.br/cadastro-premium?status=pending",
+          success: process.env.MP_SUCCESS_URL || "https://oraculocultural.com.br/cadastro-premium?status=success",
+          failure: process.env.MP_FAILURE_URL || "https://oraculocultural.com.br/cadastro-premium?status=failure",
+          pending: process.env.MP_PENDING_URL || "https://oraculocultural.com.br/cadastro-premium?status=pending",
         },
         auto_return: "approved",
         notification_url: process.env.WEBHOOK_URL || "https://us-central1-culturalapp-fb9b0.cloudfunctions.net/webhookMercadoPago",
         statement_descriptor: "ORACULO PREMIUM",
         external_reference: userId,
+        binary_mode: false, // Permite pagamentos pendentes
         payment_methods: {
           excluded_payment_types: [],
           excluded_payment_methods: [],
           installments: 1
+        },
+        // Configurações para facilitar testes
+        metadata: {
+          test_mode: true // Indica que está em modo de teste
         }
       };
       
@@ -516,8 +776,31 @@ exports.criarCheckoutPremium = onRequest(
       const response = await preference.create({ body: preferenceData });
       console.log('[criarCheckoutPremium] Preference created successfully:', response.id);
       console.log('[criarCheckoutPremium] Init point:', response.init_point);
+      console.log('[criarCheckoutPremium] Sandbox init point:', response.sandbox_init_point);
       
-      res.status(200).json({ init_point: response.init_point });
+      // Em modo de teste, usar sandbox_init_point se disponível (não requer autenticação)
+      // Em produção, usar init_point
+      const checkoutUrl = response.sandbox_init_point || response.init_point;
+      
+      // Salvar preferência no Firestore para rastreamento
+      try {
+        await db.collection('preferences').doc(response.id).set({
+          userId: userId,
+          preferenceId: response.id,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          status: 'pending'
+        });
+        console.log(`[criarCheckoutPremium] Preference ${response.id} saved to Firestore`);
+      } catch (error) {
+        console.error('[criarCheckoutPremium] Error saving preference to Firestore:', error);
+        // Não falhar se não conseguir salvar
+      }
+      
+      res.status(200).json({ 
+        init_point: checkoutUrl,
+        preference_id: response.id,
+        sandbox_mode: !!response.sandbox_init_point
+      });
     } catch (error) {
       console.error('[criarCheckoutPremium] Error details:', {
         message: error.message,
@@ -537,7 +820,8 @@ exports.criarAssinaturaPremium = onRequest(
   { 
     cors: true,
     maxInstances: 10,
-    invoker: 'public'
+    invoker: 'public',
+    secrets: [mercadoPagoAccessToken]
   }, 
   async (req, res) => {
     // Set CORS headers explicitly
@@ -556,12 +840,6 @@ exports.criarAssinaturaPremium = onRequest(
     console.log('[criarAssinaturaPremium] Request body:', req.body);
     
     try {
-      // Verificar se as variáveis de ambiente estão configuradas
-      const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || functions.config().mercadopago?.token;
-      if (!accessToken) {
-        throw new Error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
-      }
-      
       const { email, userId } = req.body;
       
       if (!email || !userId) {
@@ -592,33 +870,52 @@ exports.criarAssinaturaPremium = onRequest(
         // Continua sem nome se houver erro
       }
 
-      const { preapproval, preapprovalPlan } = getMercadoPago();
-
-      // Criar o plano de assinatura recorrente mensal
-      const subscriptionData = {
-        reason: 'Plano Premium Mensal - Oráculo Cultural',
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          repetitions: 0, // 0 para assinatura sem fim
-          billing_day: new Date().getDate(),
-          billing_day_proportional: true,
-          transaction_amount: 5.00,
-          currency_id: 'BRL',
-          start_date: new Date().toISOString()
-        },
-        back_url: 'https://oraculocultural.com.br/cadastro-premium?status=success',
-        status: 'authorized'
-      };
-
-      console.log('[criarAssinaturaPremium] Creating subscription plan...');
-      // Criar o plano
-      const plan = await preapprovalPlan.create({ body: subscriptionData });
-      console.log('[criarAssinaturaPremium] Plan created:', plan.id);
+      const { preapproval } = getMercadoPago();
+      
+      // Verificar se estamos em modo sandbox/teste
+      let accessToken;
+      try {
+        accessToken = mercadoPagoAccessToken.value();
+      } catch (e) {
+        accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+      }
+      accessToken = accessToken || "APP_USR-783906941666085-010213-a7124ca4d6ae0e9ad0fb28935a13a1b4-2448199655";
+      
+      // Limpar o token
+      if (accessToken) {
+        accessToken = accessToken.toString().trim();
+        if (accessToken.startsWith('Bearer ')) {
+          accessToken = accessToken.substring(7).trim();
+        }
+        accessToken = accessToken.replace(/\s+/g, '').trim();
+      }
+      
+      const isTestToken = accessToken.startsWith('TEST-');
+      // Para tokens APP_USR-, assumir que são de teste se não houver indicação contrária
+      // O Mercado Pago pode ter credenciais APP_USR- em modo sandbox
+      const isTestMode = isTestToken || process.env.MERCADO_PAGO_TEST_MODE === 'true' || true; // Default para true
+      
+      console.log('[criarAssinaturaPremium] 🔍 Verificando ambiente:', {
+        tokenStartsWith: accessToken.substring(0, 10),
+        isTestToken: isTestToken,
+        isTestMode: isTestMode,
+        originalEmail: email,
+        MERCADO_PAGO_TEST_MODE: process.env.MERCADO_PAGO_TEST_MODE
+      });
+      
+      // Em modo sandbox, SEMPRE usar email de teste do Mercado Pago
+      // O Mercado Pago requer que payer e collector sejam ambos usuários de teste
+      // Como estamos usando credenciais de teste (APP_USR-), sempre usar email de teste
+      // O formato correto é test_user_@testuser.com ou test@testuser.com
+      let payerEmail = 'test_user_' + Date.now() + '@testuser.com';
+      
+      console.log('[criarAssinaturaPremium] ⚠️ Usando email de teste para sandbox:', payerEmail);
+      console.log('[criarAssinaturaPremium] ⚠️ Email original do usuário:', email);
+      console.log('[criarAssinaturaPremium] ⚠️ O usuário poderá alterar o email no checkout do Mercado Pago');
       
       // Construir objeto payer com nome completo
       const payerData = {
-        email: email
+        email: payerEmail
       };
       
       // Adicionar first_name e last_name se disponíveis
@@ -629,33 +926,74 @@ exports.criarAssinaturaPremium = onRequest(
         payerData.last_name = lastName;
       }
       
-      // Criar a assinatura recorrente
+      // Criar a assinatura recorrente diretamente (sem plano associado)
+      // Isso permite criar uma assinatura sem card_token_id, gerando um init_point para aprovação
+      // start_date deve ser uma data futura (pelo menos 1 minuto à frente)
+      const now = new Date();
+      const startDate = new Date(now.getTime() + 2 * 60 * 1000); // 2 minutos no futuro para evitar problemas de sincronização
+      
+      const subscriptionData = {
+        reason: 'Plano Premium Mensal - Oráculo Cultural',
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: 'months',
+          billing_day: startDate.getDate(),
+          billing_day_proportional: true,
+          transaction_amount: 99.00,
+          currency_id: 'BRL',
+          start_date: startDate.toISOString()
+        },
+        payer_email: payerEmail,
+        payer: payerData,
+        external_reference: userId,
+        back_url: process.env.MP_SUCCESS_URL || 'https://oraculocultural.com.br/cadastro-premium?status=success',
+        notification_url: process.env.WEBHOOK_URL || 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/webhookMercadoPago'
+      };
+      
+      // Em modo sandbox, adicionar metadata para facilitar identificação
+      if (isTestToken || process.env.MERCADO_PAGO_TEST_MODE === 'true') {
+        subscriptionData.metadata = {
+          test_mode: true,
+          environment: 'sandbox'
+        };
+        console.log('[criarAssinaturaPremium] ✅ Criando assinatura em modo SANDBOX');
+      }
+      
+      console.log('[criarAssinaturaPremium] Creating subscription directly (without plan)...');
+      console.log('[criarAssinaturaPremium] Subscription data:', JSON.stringify(subscriptionData, null, 2));
+      
       const subscription = await preapproval.create({
-        body: {
-          preapproval_plan_id: plan.id,
-          payer_email: email,
-          payer: payerData,
-          external_reference: userId,
-          back_url: 'https://oraculocultural.com.br/cadastro-premium?status=success',
-          status: 'authorized'
-        }
+        body: subscriptionData
       });
 
       console.log('[criarAssinaturaPremium] Subscription created:', subscription.id);
+      console.log('[criarAssinaturaPremium] Subscription response:', JSON.stringify({
+        id: subscription.id,
+        status: subscription.status,
+        init_point: subscription.init_point,
+        sandbox_init_point: subscription.sandbox_init_point,
+        // Verificar se há indicação de sandbox na resposta
+        has_sandbox_url: !!subscription.sandbox_init_point
+      }, null, 2));
 
       // Salvar informações da assinatura no Firestore
       await db.collection('subscriptions').doc(subscription.id).set({
         userId: userId,
         status: 'pending',
-        planId: plan.id,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Próximo mês
       });
 
       // Retornar URL de aprovação
+      // Em modo sandbox, usar sandbox_init_point se disponível
+      const checkoutUrl = subscription.sandbox_init_point || subscription.init_point;
+      
+      console.log('[criarAssinaturaPremium] ✅ Modo SANDBOX:', !!subscription.sandbox_init_point ? 'SIM (usando sandbox_init_point)' : 'NÃO (usando init_point padrão)');
+      
       res.status(200).json({ 
-        init_point: subscription.init_point,
-        subscriptionId: subscription.id
+        init_point: checkoutUrl,
+        subscriptionId: subscription.id,
+        sandbox_mode: !!subscription.sandbox_init_point
       });
     } catch (error) {
       console.error('[criarAssinaturaPremium] Error details:', {
@@ -666,6 +1004,231 @@ exports.criarAssinaturaPremium = onRequest(
       res.status(500).json({ 
         error: error.message || 'Erro ao criar assinatura',
         details: error.cause ? error.cause.message : undefined
+      });
+    }
+  }
+);
+
+// Create premium subscription endpoint using Stripe (recurring monthly subscription)
+exports.criarAssinaturaPremiumStripe = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    // Set CORS headers BEFORE any checks
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+    
+    // Handle preflight requests FIRST
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+      console.log('[criarAssinaturaPremiumStripe] Request received:', req.method);
+      console.log('[criarAssinaturaPremiumStripe] Request body:', req.body);
+      
+      try {
+        const { email, userId, planType, isAnnual } = req.body;
+        
+        if (!email || !userId) {
+          return res.status(400).json({ error: 'Email e userId são obrigatórios' });
+        }
+
+        // Normalizar planType (remover acentos e converter para lowercase)
+        const normalizedPlanType = planType ? planType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : 'basico';
+        const isAnnualPlan = isAnnual === true || isAnnual === 'true';
+        
+        console.log('[criarAssinaturaPremiumStripe] PlanType recebido:', planType);
+        console.log('[criarAssinaturaPremiumStripe] PlanType normalizado:', normalizedPlanType);
+        console.log('[criarAssinaturaPremiumStripe] isAnnual:', isAnnualPlan);
+        
+        // Validar e definir preço baseado no plano
+        let unitAmount;
+        let planName;
+        let planDescription;
+        let stripePriceId = null; // Price ID do Stripe (se configurado)
+        let stripeProductId = null; // Product ID do Stripe (para buscar preços)
+        
+        if (normalizedPlanType === 'essencial') {
+          if (isAnnualPlan) {
+            // Plano anual: R$ 3.476,04 / 12 = R$ 289,67 por mês (12 parcelas)
+            unitAmount = 28967; // R$ 289,67 em centavos
+            planName = 'Plano Essencial Anual - Oráculo Cultural (12x)';
+            planDescription = 'Assinatura anual do Plano Essencial parcelada em 12x de R$ 289,67 - Oráculo Cultural';
+          } else {
+            unitAmount = 34900; // R$ 349,00 em centavos
+            planName = 'Plano Essencial Mensal - Oráculo Cultural';
+            planDescription = 'Assinatura mensal recorrente do Plano Essencial - Oráculo Cultural';
+          }
+          // Price ID do Essencial (configurado diretamente ou via env) - só usar se for mensal
+          if (!isAnnualPlan) {
+            stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL || 'price_1SlFRL0mRGa1jLimzgQ0hNmU';
+          }
+          // Product ID do Essencial (para referência)
+          stripeProductId = process.env.STRIPE_PRODUCT_ID_ESSENCIAL || 'prod_TigoFGd2m1X3rx';
+        } else if (normalizedPlanType === 'premium') {
+          unitAmount = 100; // R$ 1,00 em centavos
+          planName = 'Plano Premium Enterprise Mensal - Oráculo Cultural';
+          planDescription = 'Assinatura mensal recorrente do Plano Premium Enterprise - Oráculo Cultural';
+          // Price ID do Premium (configurado diretamente ou via env)
+          stripePriceId = process.env.STRIPE_PRICE_ID_PREMIUM || 'price_1SlFzC0mRGa1jLimlPql975q';
+          // Product ID do Premium (para referência, se disponível)
+          stripeProductId = process.env.STRIPE_PRODUCT_ID_PREMIUM || null;
+        } else if (normalizedPlanType === 'basico' || !planType) {
+          // Default para básico se não especificado
+          if (isAnnualPlan) {
+            // Plano anual: R$ 990,00 / 12 = R$ 82,50 por mês (12 parcelas)
+            unitAmount = 8250; // R$ 82,50 em centavos
+            planName = 'Plano Básico Anual - Oráculo Cultural (12x)';
+            planDescription = 'Assinatura anual do Plano Básico parcelada em 12x de R$ 82,50 - Oráculo Cultural';
+          } else {
+            unitAmount = 9900; // R$ 99,00 em centavos
+            planName = 'Plano Básico Mensal - Oráculo Cultural';
+            planDescription = 'Assinatura mensal recorrente do Plano Básico - Oráculo Cultural';
+          }
+          // Price ID do Básico (configurado diretamente ou via env) - só usar se for mensal
+          if (!isAnnualPlan) {
+            stripePriceId = process.env.STRIPE_PRICE_ID_BASICO || 'price_1SlFPv0mRGa1jLimP7s0ry11';
+          }
+          // Product ID do Básico (para referência)
+          stripeProductId = process.env.STRIPE_PRODUCT_ID_BASICO || 'prod_TignB0SK0S1EUo';
+        } else {
+          return res.status(400).json({ error: 'Tipo de plano inválido. Use "basico", "essencial" ou "premium"' });
+        }
+        
+        console.log('[criarAssinaturaPremiumStripe] Preço definido:', unitAmount, 'centavos');
+        console.log('[criarAssinaturaPremiumStripe] Stripe Product ID:', stripeProductId);
+        console.log('[criarAssinaturaPremiumStripe] Stripe Price ID:', stripePriceId);
+
+        // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      // Em produção, sempre usar secrets do Firebase (não usar fallback)
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado. Configure via secret do Firebase.');
+      }
+      
+      // Limpar a chave
+      if (stripeKey) {
+        stripeKey = stripeKey.toString().trim();
+      }
+      
+      const stripeInstance = stripe(stripeKey);
+      
+      console.log('[criarAssinaturaPremiumStripe] Stripe inicializado com chave:', stripeKey.substring(0, 20) + '...');
+      
+      // Validar se o Price ID existe no Stripe (opcional, para debug)
+      if (stripePriceId && stripePriceId.startsWith('price_')) {
+        try {
+          const price = await stripeInstance.prices.retrieve(stripePriceId);
+          console.log('[criarAssinaturaPremiumStripe] ✅ Price ID validado:', stripePriceId);
+          console.log('[criarAssinaturaPremiumStripe] Valor do preço no Stripe:', price.unit_amount, price.currency);
+          console.log('[criarAssinaturaPremiumStripe] Intervalo:', price.recurring?.interval);
+        } catch (error) {
+          console.error('[criarAssinaturaPremiumStripe] ⚠️ Erro ao validar Price ID:', error.message);
+          console.log('[criarAssinaturaPremiumStripe] Continuando mesmo assim...');
+        }
+      }
+      
+      // Buscar dados do usuário no Firestore para obter nome completo
+      let customerName = '';
+      try {
+        const userDoc = await db.collection('usuarios').doc(userId).get();
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          customerName = userData.nome_completo || '';
+          console.log('[criarAssinaturaPremiumStripe] Nome do usuário:', customerName);
+        }
+      } catch (error) {
+        console.error('[criarAssinaturaPremiumStripe] Erro ao buscar dados do usuário:', error);
+      }
+
+      // Criar Checkout Session do Stripe para assinatura recorrente
+      // Se temos Price ID configurado, usar ele. Caso contrário, criar preço dinamicamente
+      const lineItems = stripePriceId 
+        ? [
+            {
+              price: stripePriceId, // Usar Price ID do Stripe
+              quantity: 1,
+            },
+          ]
+        : [
+            {
+              price_data: {
+                currency: 'brl',
+                product_data: {
+                  name: planName,
+                  description: planDescription,
+                },
+                unit_amount: unitAmount,
+                recurring: {
+                  interval: 'month',
+                },
+              },
+              quantity: 1,
+            },
+          ];
+      
+      const session = await stripeInstance.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        customer_email: email,
+        line_items: lineItems,
+        success_url: process.env.STRIPE_SUCCESS_URL || 'https://oraculocultural.com.br/cadastro-premium?status=success&session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: process.env.STRIPE_CANCEL_URL || 'https://oraculocultural.com.br/conta?status=cancelled',
+        metadata: {
+          userId: userId,
+          userEmail: email,
+          userName: customerName,
+          planType: normalizedPlanType, // Salvar o tipo de plano normalizado nos metadados
+          isAnnual: isAnnualPlan ? 'true' : 'false', // Salvar se é anual
+        },
+        subscription_data: {
+          metadata: {
+            userId: userId,
+            userEmail: email,
+            planType: normalizedPlanType, // Salvar também nos metadados da assinatura
+            isAnnual: isAnnualPlan ? 'true' : 'false', // Salvar se é anual
+          },
+        },
+      });
+
+      console.log('[criarAssinaturaPremiumStripe] Stripe Checkout Session criada:', session.id);
+      console.log('[criarAssinaturaPremiumStripe] URL do checkout:', session.url);
+
+      // Salvar informações da sessão no Firestore
+      await db.collection('stripe_sessions').doc(session.id).set({
+        userId: userId,
+        email: email,
+        planType: planType || 'basico',
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Retornar URL do checkout
+      res.status(200).json({ 
+        checkout_url: session.url,
+        session_id: session.id
+      });
+    } catch (error) {
+      console.error('[criarAssinaturaPremiumStripe] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause
+      });
+      res.status(500).json({ 
+        error: 'Erro ao criar assinatura', 
+        details: error.message 
       });
     }
   }
@@ -941,9 +1504,27 @@ IMPORTANTE:
           }
         }
         
-        // Se ainda não temos texto suficiente, lançar erro
+        // Se ainda não temos texto suficiente
         if (!pdfText || pdfText.trim().length < 10) {
-          throw new Error('Não foi possível extrair texto do PDF. O PDF pode estar corrompido, ser uma imagem escaneada sem OCR disponível, ou não conter texto selecionável.');
+          console.warn('[preencherAnexoPDF] Não foi possível extrair texto do PDF');
+          
+          // Para PDFs sem campos de formulário, precisamos do texto para processar
+          // Se não conseguimos extrair texto e não tem campos de formulário, criar texto básico dos dados
+          if (!hasFormFields) {
+            // Criar um texto básico baseado nos dados para poder processar
+            const textoBasico = `PROJETO CULTURAL: ${nomeProjeto}\n\nDADOS DO PROPONENTE:\n${dadosCadastrais}`;
+            if (textoBasico.trim().length >= 10) {
+              pdfText = textoBasico;
+              console.log('[preencherAnexoPDF] Criando texto básico a partir dos dados para processar');
+            } else {
+              // Se nem isso funcionou, então realmente não temos dados suficientes
+              throw new Error('Não foi possível extrair texto do PDF e não há dados suficientes para processar. O PDF pode estar corrompido, ser uma imagem escaneada sem OCR disponível, ou não conter texto selecionável. Por favor, verifique se o PDF tem texto selecionável ou campos de formulário editáveis.');
+            }
+          } else {
+            // Se tem campos de formulário, podemos continuar sem texto extraído
+            console.log('[preencherAnexoPDF] PDF tem campos de formulário, continuando sem texto extraído');
+            pdfText = '';
+          }
         }
         
         console.log('[preencherAnexoPDF] Texto final extraído, tamanho:', pdfText.length);
@@ -1300,8 +1881,8 @@ exports.enviarEmailBoasVindas = onRequest(
       }
 
       // Configurar SMTP do Gmail
-      const gmailUser = process.env.GMAIL_USER || functions.config().gmail?.user;
-      const gmailPassword = process.env.GMAIL_PASSWORD || functions.config().gmail?.password;
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPassword = process.env.GMAIL_PASSWORD;
       
       if (!gmailUser || !gmailPassword) {
         console.error('[enviarEmailBoasVindas] Credenciais do Gmail não configuradas');
@@ -1429,6 +2010,260 @@ A Equipe mobCONTENT e Oráculo Cultural
   }
 );
 
+// Função para enviar email de solicitação de conta premium
+exports.solicitarContaPremium = onRequest(
+  {
+    cors: [
+      'http://localhost:8080',
+      'http://localhost:5173',
+      'https://oraculocultural.com.br',
+      'https://www.oraculocultural.com.br'
+    ],
+    invoker: 'public',
+  },
+  async (req, res) => {
+    // Handle preflight OPTIONS request
+    if (req.method === 'OPTIONS') {
+      res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.set('Access-Control-Max-Age', '3600');
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Método não permitido' });
+      return;
+    }
+
+    try {
+      const { nome, email, userId, empresa } = req.body;
+
+      if (!nome || !email || !userId) {
+        res.status(400).json({ error: 'Nome, email e userId são obrigatórios' });
+        return;
+      }
+
+      // Configurar SMTP do Gmail
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPassword = process.env.GMAIL_PASSWORD;
+      
+      if (!gmailUser || !gmailPassword) {
+        console.error('[solicitarContaPremium] Credenciais do Gmail não configuradas');
+        res.status(500).json({ error: 'Configuração de email não disponível. Credenciais do Gmail não encontradas.' });
+        return;
+      }
+
+      // Criar transporter do nodemailer
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailPassword,
+        },
+      });
+
+      const emailText = `
+Nova solicitação de conta Premium - Oráculo Cultural
+
+Dados do solicitante:
+- Nome: ${nome}
+- Email: ${email}
+- Empresa: ${empresa || 'Não informado'}
+- User ID: ${userId}
+- Data da solicitação: ${new Date().toLocaleString('pt-BR')}
+
+Por favor, entre em contato com o usuário para ativar a conta premium.
+      `;
+
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">🔔 Nova Solicitação de Conta Premium</h1>
+  </div>
+  
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+    <p style="font-size: 16px; margin-top: 0;">Uma nova solicitação de conta premium foi recebida:</p>
+    
+    <div style="background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #667eea; border-radius: 5px;">
+      <p style="margin: 5px 0;"><strong>Nome:</strong> ${nome}</p>
+      <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+      <p style="margin: 5px 0;"><strong>Empresa:</strong> ${empresa || 'Não informado'}</p>
+      <p style="margin: 5px 0;"><strong>User ID:</strong> ${userId}</p>
+      <p style="margin: 5px 0;"><strong>Data da solicitação:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    
+    <p style="margin-top: 30px;">Por favor, entre em contato com o usuário para ativar a conta premium.</p>
+    
+    <p style="margin-top: 30px;">Atenciosamente,<br>
+    <strong>Sistema Oráculo Cultural</strong></p>
+  </div>
+</body>
+</html>
+      `;
+
+      const mailOptions = {
+        from: `"Oráculo Cultural" <${gmailUser}>`,
+        to: 'marcosferreira@mobcontent.com.br',
+        subject: `🔔 Nova Solicitação de Conta Premium - ${nome}`,
+        text: emailText,
+        html: emailHtml,
+      };
+
+      await transporter.sendMail(mailOptions);
+      
+      console.log('[solicitarContaPremium] Email enviado com sucesso para marcosferreira@mobcontent.com.br');
+      
+      // Garantir que os headers CORS estão definidos antes de enviar a resposta
+      res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.status(200).json({ success: true, message: 'Solicitação enviada com sucesso' });
+    } catch (error) {
+      console.error('[solicitarContaPremium] Erro ao enviar email:', error);
+      // Garantir que os headers CORS estão definidos mesmo em caso de erro
+      res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.status(500).json({ 
+        error: 'Erro ao enviar solicitação', 
+        message: error.message 
+      });
+    }
+  }
+);
+
+// Função para enviar formulário de contato Premium
+exports.enviarContatoPremium = onRequest(
+  {
+    cors: [
+      'http://localhost:8080',
+      'http://localhost:5173',
+      'https://oraculocultural.com.br',
+      'https://www.oraculocultural.com.br'
+    ],
+    invoker: 'public',
+  },
+  async (req, res) => {
+    // Set CORS headers BEFORE any checks
+    res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { nome, email, empresa, telefone } = req.body;
+      
+      if (!nome || !email || !empresa || !telefone) {
+        res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+        return;
+      }
+      
+      // Configurar SMTP do Gmail (mesma configuração de solicitarContaPremium)
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPassword = process.env.GMAIL_PASSWORD;
+      
+      if (!gmailUser || !gmailPassword) {
+        console.error('[enviarContatoPremium] Credenciais do Gmail não configuradas');
+        // Garantir que os headers CORS estão definidos mesmo em caso de erro
+        res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.status(500).json({ error: 'Configuração de email não disponível. Credenciais do Gmail não encontradas.' });
+        return;
+      }
+      
+      // Criar transporter do nodemailer
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailPassword,
+        },
+      });
+      
+      const emailText = `
+Nova solicitação de contato - Plano Premium Enterprise - Oráculo Cultural
+
+Dados do solicitante:
+- Nome: ${nome}
+- Email: ${email}
+- Empresa: ${empresa}
+- Telefone: ${telefone}
+- Data da solicitação: ${new Date().toLocaleString('pt-BR')}
+
+Por favor, entre em contato com o solicitante para apresentar o plano Premium Enterprise.
+      `;
+      
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">🔔 Nova Solicitação - Plano Premium Enterprise</h1>
+  </div>
+  
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+    <p style="font-size: 16px; margin-top: 0;">Uma nova solicitação de contato para o plano Premium Enterprise foi recebida:</p>
+    
+    <div style="background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #667eea; border-radius: 5px;">
+      <p style="margin: 5px 0;"><strong>Nome:</strong> ${nome}</p>
+      <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+      <p style="margin: 5px 0;"><strong>Empresa:</strong> ${empresa}</p>
+      <p style="margin: 5px 0;"><strong>Telefone:</strong> ${telefone}</p>
+      <p style="margin: 5px 0;"><strong>Data da solicitação:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    
+    <p style="margin-top: 30px;">Por favor, entre em contato com o solicitante para apresentar o plano Premium Enterprise.</p>
+    
+    <p style="margin-top: 30px;">Atenciosamente,<br>
+    <strong>Sistema Oráculo Cultural</strong></p>
+  </div>
+</body>
+</html>
+      `;
+      
+      const mailOptions = {
+        from: `"Oráculo Cultural" <${gmailUser}>`,
+        to: 'marcosferreira@mobcontent.com.br',
+        subject: `🔔 Nova Solicitação Premium Enterprise - ${nome} (${empresa})`,
+        text: emailText,
+        html: emailHtml,
+      };
+      
+      await transporter.sendMail(mailOptions);
+      
+      console.log('[enviarContatoPremium] Email enviado com sucesso para marcosferreira@mobcontent.com.br');
+      
+      // Garantir que os headers CORS estão definidos antes de enviar a resposta
+      res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.status(200).json({ success: true, message: 'Solicitação enviada com sucesso' });
+    } catch (error) {
+      console.error('[enviarContatoPremium] Erro ao enviar email:', error);
+      // Garantir que os headers CORS estão definidos mesmo em caso de erro
+      res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.status(500).json({ 
+        error: 'Erro ao enviar solicitação', 
+        message: error.message 
+      });
+    }
+  }
+);
+
 // Função para adicionar contato ao Brevo
 exports.adicionarContatoBrevo = onRequest(
   {
@@ -1453,22 +2288,22 @@ exports.adicionarContatoBrevo = onRequest(
 
     try {
       const { email, nome } = req.body;
+      
+      console.log('[adicionarContatoBrevo] Recebida requisição:', { email, nome });
 
       if (!email) {
+        console.error('[adicionarContatoBrevo] Email não fornecido');
         res.status(400).json({ error: 'Email é obrigatório' });
         return;
       }
 
-      // Recuperar a chave API do Brevo das variáveis de ambiente
-      const BREVO_API_KEY = process.env.BREVO_API_KEY || functions.config().brevo?.api_key;
+      // Chave API do Brevo
+      const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
       const BREVO_LIST_ID = 12; // ID da lista no Brevo
       const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
-
-      if (!BREVO_API_KEY) {
-        console.error('[adicionarContatoBrevo] BREVO_API_KEY não configurada');
-        res.status(500).json({ error: 'Configuração do Brevo não disponível' });
-        return;
-      }
+      
+      console.log('[adicionarContatoBrevo] API Key configurada:', BREVO_API_KEY ? 'SIM' : 'NÃO');
+      console.log('[adicionarContatoBrevo] Lista ID:', BREVO_LIST_ID);
 
       // Dados que serão enviados para a API Brevo
       const contactData = {
@@ -1482,6 +2317,8 @@ exports.adicionarContatoBrevo = onRequest(
         smsBlacklisted: false,
         updateEnabled: true, // Atualiza se o contato já existir
       };
+      
+      console.log('[adicionarContatoBrevo] Dados a serem enviados:', JSON.stringify(contactData));
 
       // Faz a chamada POST para a API de Contatos do Brevo
       const response = await axios.post(BREVO_API_URL, contactData, {
@@ -1492,24 +2329,44 @@ exports.adicionarContatoBrevo = onRequest(
       });
 
       console.log(`[adicionarContatoBrevo] Usuário ${email} adicionado com sucesso ao Brevo. Status: ${response.status}`);
+      console.log('[adicionarContatoBrevo] Resposta do Brevo:', JSON.stringify(response.data));
       
       res.status(200).json({ 
         success: true, 
         message: 'Contato adicionado ao Brevo com sucesso',
-        status: response.status 
+        status: response.status,
+        data: response.data
       });
     } catch (error) {
-      console.error('[adicionarContatoBrevo] Erro ao adicionar contato ao Brevo:', error.response ? error.response.data : error.message);
+      console.error('[adicionarContatoBrevo] Erro capturado:', error.message);
+      console.error('[adicionarContatoBrevo] Erro completo:', error);
+      if (error.response) {
+        console.error('[adicionarContatoBrevo] Erro response status:', error.response.status);
+        console.error('[adicionarContatoBrevo] Erro response data:', JSON.stringify(error.response.data));
+      }
       
-      // Se o erro for porque o contato já existe (409), ainda retornamos sucesso
-      if (error.response && error.response.status === 400) {
+      // Se o erro for porque o contato já existe (400 ou 409), ainda retornamos sucesso
+      if (error.response && (error.response.status === 400 || error.response.status === 409)) {
         const errorData = error.response.data;
+        
+        // Se for erro 409 (duplicado), retornar sucesso diretamente
+        if (error.response.status === 409) {
+          console.log(`[adicionarContatoBrevo] Contato ${req.body.email} já existe no Brevo (409)`);
+          res.status(200).json({ 
+            success: true, 
+            message: 'Contato já existe no Brevo',
+            status: 409 
+          });
+          return;
+        }
+        
+        // Se for erro 400 com código duplicate_parameter, tentar atualizar
         if (errorData.code === 'duplicate_parameter') {
           console.log(`[adicionarContatoBrevo] Contato ${req.body.email} já existe no Brevo, tentando atualizar...`);
           
           // Tentar atualizar o contato existente
           try {
-            const BREVO_API_KEY = process.env.BREVO_API_KEY || functions.config().brevo?.api_key;
+            const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
             const BREVO_LIST_ID = 12;
             const BREVO_API_URL = `https://api.brevo.com/v3/contacts/${encodeURIComponent(req.body.email)}`;
             
@@ -1537,6 +2394,12 @@ exports.adicionarContatoBrevo = onRequest(
             return;
           } catch (updateError) {
             console.error('[adicionarContatoBrevo] Erro ao atualizar contato:', updateError.response?.data || updateError.message);
+            // Se a atualização falhar, ainda retornar sucesso se o contato já existe
+            res.status(200).json({ 
+              success: true, 
+              message: 'Contato já existe no Brevo (atualização não necessária)',
+            });
+            return;
           }
         }
       }
@@ -1574,8 +2437,71 @@ exports.webhookMercadoPago = onRequest(
     }
     
     try {
-      const { type, action, data } = req.body;
-      console.log('[webhookMercadoPago] Webhook received:', { type, action, data });
+      // Firebase Functions v2 pode não parsear automaticamente o body
+      // Precisamos parsear manualmente se necessário
+      let bodyData = req.body;
+      
+      // Se o body for uma string, tentar parsear como JSON
+      if (typeof req.body === 'string') {
+        try {
+          bodyData = JSON.parse(req.body);
+        } catch (e) {
+          console.log('[webhookMercadoPago] Body não é JSON válido, usando como string');
+        }
+      }
+      
+      // Se body estiver vazio ou undefined, tentar ler do raw body
+      if (!bodyData || (typeof bodyData === 'object' && Object.keys(bodyData).length === 0)) {
+        // Em Firebase Functions v2, pode precisar ler do buffer
+        if (req.rawBody) {
+          try {
+            bodyData = JSON.parse(req.rawBody.toString());
+          } catch (e) {
+            console.log('[webhookMercadoPago] Não foi possível parsear rawBody');
+          }
+        }
+      }
+      
+      // Log completo para debug
+      console.log('[webhookMercadoPago] Raw body:', JSON.stringify(bodyData));
+      console.log('[webhookMercadoPago] Body type:', typeof bodyData);
+      console.log('[webhookMercadoPago] Body keys:', Object.keys(bodyData || {}));
+      console.log('[webhookMercadoPago] Content-Type:', req.headers['content-type']);
+      console.log('[webhookMercadoPago] Query params:', req.query);
+      
+      // Mercado Pago pode enviar dados em diferentes formatos
+      // Formato 1: { type, action, data: { id } }
+      // Formato 2: { type, data_id }
+      // Formato 3: query parameters (type, data.id)
+      let type, action, data;
+      
+      if (bodyData && typeof bodyData === 'object') {
+        type = bodyData.type;
+        action = bodyData.action;
+        data = bodyData.data;
+        
+        // Se não tiver data separado, pode estar como data_id
+        if (!data && bodyData.data_id) {
+          data = { id: bodyData.data_id };
+        }
+        
+        // Se não tiver data separado, pode estar no body direto
+        if (!data && bodyData.id) {
+          data = { id: bodyData.id };
+        }
+      }
+      
+      // Verificar query parameters também (Mercado Pago pode enviar assim)
+      if (!type && req.query.type) {
+        type = req.query.type;
+        if (req.query['data.id']) {
+          data = { id: req.query['data.id'] };
+        } else if (req.query.data_id) {
+          data = { id: req.query.data_id };
+        }
+      }
+      
+      console.log('[webhookMercadoPago] Parsed:', { type, action, data });
       
       const { mp, preapproval } = getMercadoPago();
       
@@ -1621,13 +2547,14 @@ exports.webhookMercadoPago = onRequest(
               
               const now = new Date();
               
-              if (subscription.status === 'authorized') {
+              // Status válidos do Mercado Pago: active, inactive, cancelled
+              if (subscription.status === 'active' || subscription.status === 'authorized') {
                 userUpdate.isPremium = true;
                 userUpdate.premiumActivatedAt = userData.premiumActivatedAt || admin.firestore.FieldValue.serverTimestamp();
                 userUpdate.premiumExpiresAt = null;
                 userUpdate.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
                 userUpdate.nextBillingDate = new Date(now.setMonth(now.getMonth() + 1));
-              } else if (subscription.status === 'cancelled' || subscription.status === 'paused') {
+              } else if (subscription.status === 'cancelled' || subscription.status === 'paused' || subscription.status === 'inactive') {
                 userUpdate.isPremium = true; // Keep premium until period ends
                 userUpdate.premiumExpiresAt = userData.nextBillingDate || new Date(now.setMonth(now.getMonth() + 1));
               } else if (subscription.status === 'rejected' || subscription.status === 'expired') {
@@ -1646,36 +2573,133 @@ exports.webhookMercadoPago = onRequest(
       // Handle payment notifications (for subscription payments and single payments)
       else if (type === 'payment' && data?.id) {
         try {
+          const paymentId = data.id.toString();
+          console.log(`[webhookMercadoPago] Processing payment notification for ID: ${paymentId}`);
+          
           const payment = new mercadopago.Payment(mp);
-          const paymentInfo = await payment.get({ id: data.id });
+          
+          // Tentar buscar o pagamento com retry (pode demorar alguns segundos para estar disponível)
+          let paymentInfo = null;
+          let retries = 3;
+          let delay = 2000; // 2 segundos
+          
+          while (retries > 0 && !paymentInfo) {
+            try {
+              paymentInfo = await payment.get({ id: paymentId });
+              console.log(`[webhookMercadoPago] Payment found on attempt ${4 - retries}`);
+              break;
+            } catch (error) {
+              if (error.status === 404 && retries > 1) {
+                console.log(`[webhookMercadoPago] Payment not found yet, waiting ${delay}ms before retry... (${retries - 1} retries left)`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Aumentar delay a cada tentativa
+                retries--;
+              } else {
+                throw error;
+              }
+            }
+          }
+          
+          if (!paymentInfo) {
+            console.error(`[webhookMercadoPago] ❌ Could not fetch payment ${paymentId} after retries`);
+            // Salvar para processar depois
+            await db.collection('pending_payments').doc(paymentId).set({
+              paymentId: paymentId,
+              receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+              type: type,
+              action: action
+            });
+            return res.status(200).json({ received: true, message: 'Payment queued for later processing' });
+          }
           
           console.log('[webhookMercadoPago] Payment info:', {
-            id: data.id,
+            id: paymentInfo.id,
             status: paymentInfo.status,
             external_reference: paymentInfo.external_reference,
-            payer: paymentInfo.payer
+            payer: paymentInfo.payer?.email,
+            payment_type_id: paymentInfo.payment_type_id,
+            date_approved: paymentInfo.date_approved
           });
           
           // If payment is approved, update user premium status
           if (paymentInfo.status === 'approved' && paymentInfo.external_reference) {
             const userId = paymentInfo.external_reference;
+            console.log(`[webhookMercadoPago] Processing approved payment for user: ${userId}`);
+            
             const userRef = db.collection('usuarios').doc(userId);
             const userDoc = await userRef.get();
             
             if (userDoc.exists()) {
-              await userRef.update({
+              const updateData = {
                 isPremium: true,
                 premiumStatus: 'authorized',
                 premiumActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-                paymentId: data.id
-              });
+                paymentId: paymentId
+              };
               
-              console.log(`[webhookMercadoPago] User ${userId} premium status updated to authorized`);
+              console.log(`[webhookMercadoPago] Updating user ${userId} with:`, updateData);
+              
+              await userRef.update(updateData);
+              
+              console.log(`[webhookMercadoPago] ✅ User ${userId} premium status updated to authorized`);
+            } else {
+              console.error(`[webhookMercadoPago] ❌ User ${userId} not found in Firestore`);
             }
+          } else {
+            console.log(`[webhookMercadoPago] Payment not approved or missing external_reference. Status: ${paymentInfo.status}, external_reference: ${paymentInfo.external_reference}`);
           }
         } catch (error) {
-          console.error('[webhookMercadoPago] Error handling payment:', error);
+          console.error('[webhookMercadoPago] Error handling payment:', {
+            message: error.message,
+            status: error.status,
+            error: error.error,
+            cause: error.cause
+          });
+          console.error('[webhookMercadoPago] Error stack:', error.stack);
+        }
+      }
+      // Se não tiver type ou data, tentar processar como pagamento direto
+      else if (!type && bodyData) {
+        console.log('[webhookMercadoPago] No type found, trying to process as direct payment notification');
+        
+        // Tentar buscar payment_id de diferentes lugares
+        const paymentId = bodyData.id || bodyData.payment_id || bodyData.data?.id || req.query.id || req.query['data.id'];
+        
+        if (paymentId) {
+          try {
+            console.log(`[webhookMercadoPago] Attempting to fetch payment with ID: ${paymentId}`);
+            const payment = new mercadopago.Payment(mp);
+            const paymentInfo = await payment.get({ id: paymentId });
+            
+            console.log('[webhookMercadoPago] Payment info (no type):', {
+              id: paymentId,
+              status: paymentInfo.status,
+              external_reference: paymentInfo.external_reference
+            });
+            
+            if (paymentInfo.status === 'approved' && paymentInfo.external_reference) {
+              const userId = paymentInfo.external_reference;
+              console.log(`[webhookMercadoPago] Processing approved payment for user: ${userId}`);
+              
+              const userRef = db.collection('usuarios').doc(userId);
+              const userDoc = await userRef.get();
+              
+              if (userDoc.exists()) {
+                await userRef.update({
+                  isPremium: true,
+                  premiumStatus: 'authorized',
+                  premiumActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+                  paymentId: paymentId.toString()
+                });
+                
+                console.log(`[webhookMercadoPago] ✅ User ${userId} premium status updated to authorized (no type)`);
+              }
+            }
+          } catch (error) {
+            console.error('[webhookMercadoPago] Error handling payment (no type):', error);
+          }
         }
       }
       
@@ -1684,6 +2708,841 @@ exports.webhookMercadoPago = onRequest(
     } catch (error) {
       console.error('[webhookMercadoPago] Webhook error:', error);
       res.status(200).json({ received: true }); // Still respond 200 to avoid retries
+    }
+  }
+);
+
+// Stripe Webhook endpoint for processing subscription events
+exports.webhookStripe = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey, stripeWebhookSecret]
+  },
+  async (req, res) => {
+    // Set CORS headers
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Stripe-Signature');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      // Em produção, sempre usar secrets do Firebase (não usar fallback)
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado. Configure via secret do Firebase.');
+      }
+      
+      if (stripeKey) {
+        stripeKey = stripeKey.toString().trim();
+      }
+      
+      const stripeInstance = stripe(stripeKey);
+      
+      // Obter webhook secret
+      let webhookSecret;
+      try {
+        webhookSecret = stripeWebhookSecret.value();
+      } catch (e) {
+        webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      }
+      // Fallback apenas para desenvolvimento local (remover em produção)
+      // Em produção, sempre usar secrets do Firebase
+      webhookSecret = webhookSecret || (process.env.NODE_ENV === 'production' ? null : "whsec_D1K2azX5XruwE26ImWkR0f4CswE7rVVO");
+      
+      if (webhookSecret) {
+        webhookSecret = webhookSecret.toString().trim();
+      }
+      
+      // Obter o signature do header para verificar a autenticidade
+      const sig = req.headers['stripe-signature'];
+      
+      let event;
+      
+      try {
+        // Verificar o webhook signature (importante para produção)
+        if (sig && webhookSecret) {
+          // Tentar obter rawBody de diferentes formas (Firebase Functions v2)
+          let rawBody = req.rawBody;
+          if (!rawBody && typeof req.body === 'string') {
+            rawBody = Buffer.from(req.body);
+          } else if (!rawBody) {
+            rawBody = Buffer.from(JSON.stringify(req.body));
+          }
+          
+          event = stripeInstance.webhooks.constructEvent(
+            rawBody,
+            sig,
+            webhookSecret
+          );
+          console.log('[webhookStripe] ✅ Webhook signature verificada com sucesso');
+        } else {
+          // Em desenvolvimento/teste, parsear diretamente
+          event = req.body;
+          console.log('[webhookStripe] ⚠️ Webhook sem signature - modo desenvolvimento');
+        }
+      } catch (err) {
+        console.error('[webhookStripe] Erro ao verificar signature:', err.message);
+        // Em desenvolvimento, continuar mesmo sem signature válida
+        event = req.body;
+      }
+      
+      console.log('[webhookStripe] Evento recebido:', event.type, event.id);
+      
+      // Processar diferentes tipos de eventos
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.metadata?.userId;
+        
+        if (userId && session.mode === 'subscription') {
+          console.log('[webhookStripe] Checkout completado para usuário:', userId);
+          console.log('[webhookStripe] Payment status:', session.payment_status);
+          console.log('[webhookStripe] Session metadata:', session.metadata);
+          
+          // Obter planType dos metadados da sessão
+          let planType = session.metadata?.planType;
+          
+          // Se não encontrou nos metadados da sessão, tentar buscar da assinatura
+          if (!planType && session.subscription) {
+            try {
+              const subscription = await stripeInstance.subscriptions.retrieve(session.subscription);
+              planType = subscription.metadata?.planType;
+              console.log('[webhookStripe] PlanType da assinatura:', planType);
+            } catch (error) {
+              console.error('[webhookStripe] Erro ao buscar assinatura:', error);
+            }
+          }
+          
+          // Fallback para 'basico' se não encontrou
+          if (!planType) {
+            planType = 'basico';
+            console.log('[webhookStripe] ⚠️ PlanType não encontrado, usando padrão: basico');
+          }
+          
+          // Só atualizar para active se o pagamento foi bem-sucedido
+          const updateData = {
+            stripeCustomerId: session.customer,
+            stripeSubscriptionId: session.subscription,
+            planType: planType, // Sempre salvar o tipo de plano
+            lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          
+          if (session.payment_status === 'paid') {
+            updateData.isPremium = true;
+            updateData.premiumStatus = 'active';
+            updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
+          } else {
+            // Pagamento ainda não processado
+            updateData.premiumStatus = session.payment_status || 'pending';
+          }
+          
+          // Atualizar status do usuário no Firestore
+          const userRef = db.collection('usuarios').doc(userId);
+          await userRef.update(updateData);
+          
+          console.log('[webhookStripe] ✅ Usuário', userId, 'atualizado com plano:', planType, 'status:', updateData.premiumStatus);
+        }
+      } else if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
+        const subscription = event.data.object;
+        const userId = subscription.metadata?.userId;
+        
+        if (userId) {
+          const userRef = db.collection('usuarios').doc(userId);
+          // Obter planType dos metadados da assinatura ou buscar do documento existente
+          let planType = subscription.metadata?.planType;
+          
+          // Se não encontrou nos metadados, buscar do documento existente
+          if (!planType) {
+            try {
+              const userDoc = await userRef.get();
+              if (userDoc.exists()) {
+                planType = userDoc.data()?.planType || 'basico';
+              } else {
+                planType = 'basico';
+              }
+            } catch (error) {
+              console.error('[webhookStripe] Erro ao buscar planType:', error);
+              planType = 'basico';
+            }
+          }
+          
+          const updateData = {
+            stripeSubscriptionId: subscription.id,
+            stripeCustomerId: subscription.customer,
+            planType: planType, // Sempre salvar o tipo de plano
+            cancelAtPeriodEnd: subscription.cancel_at_period_end || false, // Salvar se está marcado para cancelar
+            lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          
+          // Se está marcado para cancelar no final do período, ainda está ativa mas será cancelada
+          if (subscription.cancel_at_period_end && subscription.status === 'active') {
+            updateData.premiumStatus = 'active';
+            updateData.isPremium = true; // Ainda tem acesso até o final do período
+            console.log('[webhookStripe] Assinatura marcada para cancelamento no final do período');
+          }
+          // Só atualizar premiumStatus e isPremium se a assinatura estiver ativa
+          else if (subscription.status === 'active' || subscription.status === 'trialing') {
+            updateData.premiumStatus = 'active';
+            updateData.isPremium = true;
+            updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
+          } else if (subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') {
+            // Manter o status atual se ainda estiver incompleto (não atualizar para false ainda)
+            updateData.premiumStatus = subscription.status;
+            // Não alterar isPremium ainda
+          } else if (subscription.status === 'canceled' || subscription.status === 'unpaid' || subscription.status === 'past_due') {
+            updateData.premiumStatus = subscription.status;
+            updateData.isPremium = false;
+            updateData.cancelAtPeriodEnd = false; // Já foi cancelada
+          } else {
+            // Outros status (active_period, etc)
+            updateData.premiumStatus = subscription.status;
+          }
+          
+          await userRef.update(updateData);
+          console.log('[webhookStripe] ✅ Assinatura', subscription.id, 'atualizada para usuário', userId, 'com plano:', planType, 'status:', subscription.status);
+        }
+      } else if (event.type === 'customer.subscription.deleted') {
+        const subscription = event.data.object;
+        const userId = subscription.metadata?.userId;
+        
+        if (userId) {
+          const userRef = db.collection('usuarios').doc(userId);
+          await userRef.update({
+            isPremium: false,
+            premiumStatus: 'canceled',
+            stripeSubscriptionId: null,
+          });
+          
+          console.log('[webhookStripe] ✅ Assinatura cancelada para usuário', userId);
+        }
+      } else if (event.type === 'invoice.payment_succeeded') {
+        const invoice = event.data.object;
+        const subscriptionId = invoice.subscription;
+        
+        if (subscriptionId) {
+          // Buscar usuário pela subscription ID
+          const usersSnapshot = await db.collection('usuarios')
+            .where('stripeSubscriptionId', '==', subscriptionId)
+            .limit(1)
+            .get();
+          
+          if (!usersSnapshot.empty) {
+            const userDoc = usersSnapshot.docs[0];
+            const userId = userDoc.id;
+            
+            // Buscar planType da assinatura se não estiver salvo
+            let planType = userDoc.data()?.planType;
+            if (!planType) {
+              try {
+                const subscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
+                planType = subscription.metadata?.planType || 'basico';
+                console.log('[webhookStripe] PlanType encontrado na assinatura:', planType);
+              } catch (error) {
+                console.error('[webhookStripe] Erro ao buscar assinatura:', error);
+                planType = 'basico';
+              }
+            }
+            
+            await userDoc.ref.update({
+              lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+              isPremium: true,
+              premiumStatus: 'active',
+              planType: planType, // Garantir que planType está salvo
+            });
+            
+            console.log('[webhookStripe] ✅ Pagamento processado para usuário', userId, 'com plano:', planType);
+          }
+        }
+      }
+      
+      res.status(200).json({ received: true });
+    } catch (error) {
+      console.error('[webhookStripe] Erro ao processar webhook:', {
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(400).json({ error: `Webhook Error: ${error.message}` });
+    }
+  }
+);
+
+// Função para buscar planType de uma assinatura do Stripe
+exports.buscarPlanTypeStripe = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { subscriptionId } = req.body;
+      
+      if (!subscriptionId) {
+        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+      }
+      
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+      
+      // Buscar assinatura no Stripe
+      const subscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
+      
+      // Obter planType dos metadados
+      const planType = subscription.metadata?.planType || 'basico';
+      
+      console.log('[buscarPlanTypeStripe] PlanType encontrado:', planType, 'para subscription:', subscriptionId);
+      
+      res.status(200).json({ 
+        planType: planType,
+        subscriptionStatus: subscription.status
+      });
+    } catch (error) {
+      console.error('[buscarPlanTypeStripe] Erro:', error);
+      res.status(500).json({ 
+        error: 'Erro ao buscar planType',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Função para buscar detalhes completos de uma assinatura
+exports.buscarDetalhesAssinatura = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { subscriptionId } = req.body;
+      
+      if (!subscriptionId) {
+        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+      }
+      
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+      
+      // Buscar assinatura no Stripe
+      const subscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
+      
+      // Buscar o preço/item da assinatura
+      const priceId = subscription.items.data[0]?.price?.id;
+      const amount = subscription.items.data[0]?.price?.unit_amount || 0;
+      const currency = subscription.items.data[0]?.price?.currency || 'brl';
+      const interval = subscription.items.data[0]?.price?.recurring?.interval || 'month';
+      
+      res.status(200).json({ 
+        planType: subscription.metadata?.planType || 'basico',
+        status: subscription.status,
+        currentPeriodEnd: subscription.current_period_end,
+        currentPeriodStart: subscription.current_period_start,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        canceledAt: subscription.canceled_at,
+        amount: amount,
+        currency: currency,
+        interval: interval,
+      });
+    } catch (error) {
+      console.error('[buscarDetalhesAssinatura] Erro:', error);
+      res.status(500).json({ 
+        error: 'Erro ao buscar detalhes da assinatura',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Função para listar pagamentos de uma assinatura
+exports.listarPagamentosAssinatura = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { subscriptionId } = req.body;
+      
+      if (!subscriptionId) {
+        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+      }
+      
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+      
+      // Buscar invoices da assinatura
+      const invoices = await stripeInstance.invoices.list({
+        subscription: subscriptionId,
+        limit: 12, // Últimos 12 pagamentos
+      });
+      
+      const payments = invoices.data.map(invoice => ({
+        id: invoice.id,
+        amount: invoice.amount_paid,
+        currency: invoice.currency,
+        date: invoice.created,
+        status: invoice.status === 'paid' ? 'paid' : invoice.status === 'open' ? 'pending' : 'failed',
+        description: invoice.description || `Pagamento - ${new Date(invoice.created * 1000).toLocaleDateString('pt-BR')}`,
+      }));
+      
+      res.status(200).json({ 
+        payments: payments
+      });
+    } catch (error) {
+      console.error('[listarPagamentosAssinatura] Erro:', error);
+      res.status(500).json({ 
+        error: 'Erro ao listar pagamentos',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Função para cancelar uma assinatura
+exports.cancelarAssinatura = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { subscriptionId } = req.body;
+      
+      if (!subscriptionId) {
+        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+      }
+      
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+      
+      // Cancelar assinatura no final do período (não imediatamente)
+      const subscription = await stripeInstance.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+      
+      console.log('[cancelarAssinatura] Assinatura', subscriptionId, 'marcada para cancelamento no final do período');
+      
+      // Buscar userId da assinatura para atualizar o Firestore
+      const userId = subscription.metadata?.userId;
+      if (userId) {
+        try {
+          const userRef = db.collection('usuarios').doc(userId);
+          await userRef.update({
+            cancelAtPeriodEnd: true,
+            premiumStatus: 'active', // Ainda está ativa até o final do período
+            lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log('[cancelarAssinatura] ✅ Firestore atualizado para usuário', userId);
+        } catch (error) {
+          console.error('[cancelarAssinatura] Erro ao atualizar Firestore:', error);
+          // Continuar mesmo se falhar a atualização do Firestore
+        }
+      }
+      
+      res.status(200).json({ 
+        success: true,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodEnd: subscription.current_period_end,
+        message: 'Assinatura será cancelada no final do período pago. Você continuará tendo acesso até então.',
+      });
+    } catch (error) {
+      console.error('[cancelarAssinatura] Erro:', error);
+      res.status(500).json({ 
+        error: 'Erro ao cancelar assinatura',
+        details: error.message
+      });
+    }
+  }
+);
+
+// ==========================================
+// AUTOMAÇÃO BREVO - Sincronização de Usuários
+// ==========================================
+
+/**
+ * Função auxiliar para adicionar/atualizar contato no Brevo
+ */
+async function adicionarContatoBrevo(email, nome, empresa = null) {
+  const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
+  const BREVO_LIST_ID = 12;
+  const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
+  
+  if (!email) {
+    throw new Error('Email é obrigatório');
+  }
+
+  const contactData = {
+    email: email,
+    listIds: [BREVO_LIST_ID],
+    attributes: {
+      NOME: nome || 'Novo Usuário',
+      PRIMEIRO_NOME: nome ? nome.split(' ')[0] : 'Usuário',
+    },
+    emailBlacklisted: false,
+    smsBlacklisted: false,
+    updateEnabled: true,
+  };
+
+  // Adicionar empresa se fornecida
+  if (empresa) {
+    contactData.attributes.EMPRESA = empresa;
+  }
+
+  try {
+    // Tentar criar o contato
+    const response = await axios.post(BREVO_API_URL, contactData, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log(`[Brevo] Contato ${email} criado com sucesso. Status: ${response.status}`);
+    return { success: true, created: true, email };
+  } catch (error) {
+    // Se o contato já existe (409), verificar se está na lista
+    if (error.response && (error.response.status === 400 || error.response.status === 409)) {
+      console.log(`[Brevo] Contato ${email} já existe. Verificando se está na lista...`);
+      
+      try {
+        // Verificar se o contato existe e está na lista correta
+        const checkUrl = `https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`;
+        const checkResponse = await axios.get(checkUrl, {
+          headers: {
+            'api-key': BREVO_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        const contact = checkResponse.data;
+        const isInList = contact.listIds && contact.listIds.includes(BREVO_LIST_ID);
+        
+        if (isInList) {
+          console.log(`[Brevo] Contato ${email} já existe e está na lista ${BREVO_LIST_ID}`);
+          return { success: true, created: false, email, exists: true };
+        } else {
+          // Adicionar à lista sem criar novo contato
+          const updateData = {
+            listIds: [...(contact.listIds || []), BREVO_LIST_ID],
+          };
+          
+          // Atualizar atributos se necessário
+          if (nome && (!contact.attributes || !contact.attributes.NOME || contact.attributes.NOME === 'Novo Usuário')) {
+            updateData.attributes = {
+              NOME: nome,
+              PRIMEIRO_NOME: nome ? nome.split(' ')[0] : 'Usuário',
+            };
+            if (empresa) {
+              updateData.attributes.EMPRESA = empresa;
+            }
+          }
+          
+          await axios.put(checkUrl, updateData, {
+            headers: {
+              'api-key': BREVO_API_KEY,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          console.log(`[Brevo] Contato ${email} adicionado à lista ${BREVO_LIST_ID}`);
+          return { success: true, created: false, email, addedToList: true };
+        }
+      } catch (checkError) {
+        console.error(`[Brevo] Erro ao verificar contato ${email}:`, checkError.message);
+        // Se não conseguir verificar, considerar como sucesso (já existe)
+        return { success: true, created: false, email, exists: true };
+      }
+    }
+    
+    // Outro tipo de erro
+    console.error(`[Brevo] Erro ao adicionar contato ${email}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Cloud Function que detecta criação de usuários e sincroniza com Brevo
+ */
+exports.sincronizarUsuarioBrevo = onDocumentCreated(
+  {
+    document: "usuarios/{userId}",
+  },
+  async (event) => {
+    try {
+      const snapshot = event.data;
+      if (!snapshot.exists) {
+        console.log('[sincronizarUsuarioBrevo] Documento não existe, ignorando...');
+        return;
+      }
+
+      const userData = snapshot.data();
+      const userId = event.params.userId;
+      
+      console.log(`[sincronizarUsuarioBrevo] Novo usuário criado: ${userId}`);
+      console.log('[sincronizarUsuarioBrevo] Dados do usuário:', { 
+        email: userData.email, 
+        nome: userData.nome_completo,
+        empresa: userData.empresa 
+      });
+
+      if (!userData.email) {
+        console.warn(`[sincronizarUsuarioBrevo] Usuário ${userId} não tem email, ignorando...`);
+        return;
+      }
+
+      const email = userData.email;
+      const nome = userData.nome_completo || userData.nome || 'Novo Usuário';
+      const empresa = userData.empresa || null;
+
+      const result = await adicionarContatoBrevo(email, nome, empresa);
+      
+      console.log(`[sincronizarUsuarioBrevo] ✅ Usuário ${email} sincronizado com Brevo:`, result);
+      
+      return result;
+    } catch (error) {
+      console.error('[sincronizarUsuarioBrevo] ❌ Erro ao sincronizar usuário:', error);
+      // Não relançar o erro para não quebrar o processo de criação do usuário
+      return null;
+    }
+  }
+);
+
+/**
+ * Função HTTP para sincronizar todos os usuários existentes do Firestore para o Brevo
+ * Use esta função uma vez para migrar usuários existentes
+ */
+exports.sincronizarTodosUsuariosBrevo = onRequest(
+  {
+    cors: true,
+  },
+  async (req, res) => {
+    // Set CORS headers
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    try {
+      console.log('[sincronizarTodosUsuariosBrevo] Iniciando sincronização de todos os usuários...');
+
+      // Buscar todos os usuários do Firestore
+      const usuariosRef = db.collection('usuarios');
+      const snapshot = await usuariosRef.get();
+
+      if (snapshot.empty) {
+        console.log('[sincronizarTodosUsuariosBrevo] Nenhum usuário encontrado no Firestore');
+        res.status(200).json({
+          success: true,
+          message: 'Nenhum usuário encontrado',
+          total: 0,
+          criados: 0,
+          existentes: 0,
+          erros: 0,
+        });
+        return;
+      }
+
+      let criados = 0;
+      let existentes = 0;
+      let erros = 0;
+      const resultados = [];
+
+      console.log(`[sincronizarTodosUsuariosBrevo] Processando ${snapshot.size} usuários...`);
+
+      // Processar cada usuário
+      for (const doc of snapshot.docs) {
+        const userData = doc.data();
+        const userId = doc.id;
+
+        if (!userData.email) {
+          console.warn(`[sincronizarTodosUsuariosBrevo] Usuário ${userId} não tem email, pulando...`);
+          continue;
+        }
+
+        try {
+          const email = userData.email;
+          const nome = userData.nome_completo || userData.nome || 'Novo Usuário';
+          const empresa = userData.empresa || null;
+
+          const result = await adicionarContatoBrevo(email, nome, empresa);
+          
+          if (result.created) {
+            criados++;
+          } else {
+            existentes++;
+          }
+
+          resultados.push({
+            userId,
+            email,
+            status: result.created ? 'criado' : (result.exists ? 'já existia' : 'adicionado à lista'),
+          });
+
+          // Pequeno delay para não sobrecarregar a API do Brevo
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          erros++;
+          console.error(`[sincronizarTodosUsuariosBrevo] Erro ao processar usuário ${userId}:`, error.message);
+          resultados.push({
+            userId,
+            email: userData.email || 'N/A',
+            status: 'erro',
+            error: error.message,
+          });
+        }
+      }
+
+      console.log(`[sincronizarTodosUsuariosBrevo] ✅ Sincronização concluída!`);
+      console.log(`[sincronizarTodosUsuariosBrevo] Criados: ${criados}, Existentes: ${existentes}, Erros: ${erros}`);
+
+      res.status(200).json({
+        success: true,
+        message: 'Sincronização concluída',
+        total: snapshot.size,
+        criados,
+        existentes,
+        erros,
+        resultados,
+      });
+    } catch (error) {
+      console.error('[sincronizarTodosUsuariosBrevo] ❌ Erro na sincronização:', error);
+      res.status(500).json({
+        error: 'Erro ao sincronizar usuários',
+        message: error.message,
+      });
     }
   }
 );

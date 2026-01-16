@@ -157,7 +157,7 @@ const PodcastDetalhes = () => {
       <div className="flex-1 flex flex-col">
         <DashboardHeader />
         <main className="flex-1 p-8 animate-fade-in">
-          <div className="max-w-2xl pl-8 text-left">
+          <div className="w-full px-8 text-left">
             <nav className="flex items-center text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
               <Link to="/" className="flex items-center hover:text-oraculo-blue">
                 <Home className="h-4 w-4 mr-1" />Início
@@ -182,11 +182,11 @@ const PodcastDetalhes = () => {
                     <img 
                       src={episodio.capaUrl} 
                       alt="Capa do episódio" 
-                      className="h-56 w-56 rounded object-cover border" 
+                      className="h-56 w-56 rounded object-cover border flex-shrink-0" 
                     />
                   )}
-                  <div className="flex-1 text-left">
-                    <div className="text-lg mb-2">
+                  <div className="flex-1 text-left min-w-0 w-full">
+                    <div className="text-lg mb-2 w-full">
                       {showFullDescription
                         ? episodio.descricao
                         : (episodio.descricao?.split('. ')[0] + (episodio.descricao?.split('. ').length > 1 ? '...' : ''))}

@@ -6,12 +6,14 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { identifyMixpanelUser } from '@/lib/analytics';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
 
   const fixEmptyNomeCompleto = async (userDocRef: any, firebaseUser: any) => {
     try {
@@ -59,6 +61,25 @@ export function DashboardHeader() {
           console.log('Boolean(isPremium):', Boolean(userData.isPremium));
           
           setIsPremium(userData.isPremium === true);
+          
+          // Identificar usuário no Mixpanel
+          identifyMixpanelUser(firebaseUser.uid, {
+            email: firebaseUser.email || userData.email,
+            name: userData.nome_completo || firebaseUser.displayName,
+            planType: userData.planType,
+            isPremium: userData.isPremium === true,
+            empresa: userData.empresa,
+          });
+          
+          // Buscar foto do usuário no Firestore
+          if (userData.photoURL) {
+            setPhotoURL(userData.photoURL);
+          } else if (firebaseUser.photoURL) {
+            setPhotoURL(firebaseUser.photoURL);
+          } else {
+            setPhotoURL(null);
+          }
+          
           // Buscar nome na collection usuarios
           if (userData.nome_completo && userData.nome_completo.trim()) {
             const primeiroNome = userData.nome_completo.trim().split(' ')[0];
@@ -78,6 +99,7 @@ export function DashboardHeader() {
       } else {
         setNomeUsuario(null);
         setIsPremium(false);
+        setPhotoURL(null);
       }
     });
     return () => unsubscribe();
@@ -107,21 +129,47 @@ export function DashboardHeader() {
                   </div>
                   <p className="text-xs text-gray-500">Bem-vindo de volta</p>
                 </div>
-                <button
-                  className="focus:outline-none"
-                  onClick={() => setShowMenu((v) => !v)}
-                  aria-label="Abrir menu do usuário"
-                >
-                  <Avatar>
-                    {user.photoURL ? (
-                      <AvatarImage src={user.photoURL} />
-                    ) : (
-                      <AvatarFallback className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
-                        {nomeUsuario ? nomeUsuario[0] : (user.displayName || user.email)[0]}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                </button>
+                <div className="relative group">
+                  <button
+                    className="focus:outline-none transition-transform hover:scale-105"
+                    onClick={() => setShowMenu((v) => !v)}
+                    aria-label="Abrir menu do usuário"
+                  >
+                    <Avatar className="cursor-pointer ring-2 ring-transparent group-hover:ring-oraculo-blue transition-all">
+                      {photoURL || user.photoURL ? (
+                        <AvatarImage src={photoURL || user.photoURL || ''} />
+                      ) : (
+                        <AvatarFallback className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
+                          {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                  </button>
+                  {/* Imagem ampliada no hover */}
+                  <div className="absolute right-0 top-full mt-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 ease-out z-50 pointer-events-none transform scale-95 group-hover:scale-100">
+                    <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-100 p-3">
+                      {(photoURL || user.photoURL) ? (
+                        <img 
+                          src={photoURL || user.photoURL || ''} 
+                          alt={nomeUsuario || 'Usuário'}
+                          className="w-40 h-40 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="w-40 h-40 rounded-lg bg-gradient-to-r from-oraculo-blue to-oraculo-purple flex items-center justify-center">
+                          <span className="text-6xl font-bold text-white">
+                            {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="mt-2 text-center">
+                        <p className="text-sm font-semibold text-gray-900">{nomeUsuario || 'Usuário'}</p>
+                        {isPremium && (
+                          <span className="inline-block mt-1 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border rounded-lg shadow-lg z-50">
                     <button

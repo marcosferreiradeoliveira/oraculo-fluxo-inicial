@@ -13,17 +13,23 @@ import {
   Plus,
   TrendingUp,
   PlayCircle,
-  ExternalLink
+  ExternalLink,
+  Calendar,
+  Briefcase
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
+import { Badge } from '@/components/ui/badge';
+import { trackMenuClick } from '@/lib/analytics';
 
 const menuItems = [
   { title: 'Início', url: '/', icon: Home },
-  { title: 'Criar Projeto', url: '/oraculo-ai', icon: Plus },
-  { title: 'Executar Projeto', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, external: true },
-  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp },
+  { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus },
+  { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar },
+  { title: 'Portfolio', url: '/portfolio', icon: Briefcase },
   { title: 'Conta', url: '/conta', icon: User },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle },
+  { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, external: true, outline: true },
+  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp, outline: true },
 ];
 
 export function DashboardSidebar() {
@@ -132,7 +138,12 @@ export function DashboardSidebar() {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 hover:bg-purple-800/30 hover:translate-x-1"
+                    onClick={() => trackMenuClick({ section: item.title, url: item.url })}
+                    className={`flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+                      item.outline 
+                        ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20' 
+                        : 'hover:bg-purple-800/30'
+                    } hover:translate-x-1`}
                   >
                     <div className="flex items-center space-x-3">
                       <item.icon className="h-5 w-5" />
@@ -143,16 +154,24 @@ export function DashboardSidebar() {
                 ) : (
                   <NavLink
                     to={item.url}
+                    onClick={() => trackMenuClick({ section: item.title, url: item.url })}
                     className={({ isActive }) =>
-                      `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                      `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
                         isActive
                           ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
-                          : 'hover:bg-purple-800/30 hover:translate-x-1'
-                      }`
+                          : item.outline
+                          ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20'
+                          : 'hover:bg-purple-800/30'
+                      } hover:translate-x-1`
                     }
                   >
-                    <item.icon className="h-5 w-5" />
-                    <span className="font-medium">{item.title}</span>
+                    <div className="flex items-center space-x-3">
+                      <item.icon className="h-5 w-5" />
+                      <span className="font-medium">{item.title}</span>
+                    </div>
+                    {item.title === 'Portfolio' && (
+                      <Badge className="bg-orange-500 text-white text-xs px-1.5 py-0.5 ml-2">BETA</Badge>
+                    )}
                   </NavLink>
                 )}
               </li>
@@ -163,7 +182,7 @@ export function DashboardSidebar() {
         {/* Footer */}
         <div className="p-4 border-t border-purple-800/30 mt-auto">
           <div className="text-center text-sm text-purple-300">
-            <p> 2024 Oráculo Cultural</p>
+            <p> 2026 Oráculo Cultural</p>
           </div>
         </div>
       </div>

@@ -4,9 +4,8 @@ import { getFirestore, doc, getDoc, updateDoc, DocumentData } from 'firebase/fir
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Brain, Loader2 } from 'lucide-react';
+import { Brain, Loader2, CheckCircle } from 'lucide-react';
 import AnalisarImg from '@/assets/Analisar.jpeg';
-import OpenAI from 'openai';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 
@@ -279,31 +278,84 @@ const AlterarComIA = () => {
     novasAprovacoes[idx] = true;
     setAprovacoes(novasAprovacoes);
     setGerando(true);
+    
     try {
-      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
-      const prompt = `Você é um especialista em projetos culturais. Reescreva o texto do projeto abaixo, incorporando a seguinte sugestão de alteração para aumentar as chances de aprovação em editais. Mantenha o texto claro, objetivo e profissional.\n\nTEXTO ATUAL DO PROJETO:\n${descricaoEditada}\n\nSUGESTÃO DE ALTERAÇÃO:\n${sugestoes[idx]}\n\nNOVO TEXTO DO PROJETO:`;
-      let novoTexto = '';
-      const stream = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'Você é um especialista em projetos culturais.' },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 1200,
-        temperature: 0.3,
-        stream: true,
+      const textoBase = descricaoEditada || projeto?.descricao || '';
+      
+      if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
+        console.error('Texto ou sugestão vazios');
+        alert('Erro: texto ou sugestão inválidos');
+        setGerando(false);
+        // Reverter a aprovação em caso de erro
+        const novasAprovacoes = [...aprovacoes];
+        novasAprovacoes[idx] = false;
+        setAprovacoes(novasAprovacoes);
+        return;
+      }
+      
+      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+      
+      console.log('Enviando texto e sugestão para o backend...');
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          textoAtual: textoBase,
+          sugestao: sugestoes[idx],
+        }),
       });
-      for await (const chunk of stream) {
-        const content = chunk.choices?.[0]?.delta?.content;
-        if (content) {
-          novoTexto += content;
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Erro ao alterar texto: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      // Processar resposta streaming
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let novoTexto = '';
+      
+      if (!reader) {
+        throw new Error('Não foi possível ler a resposta do servidor');
+      }
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                novoTexto += parsed.content;
           setDescricaoEditada(novoTexto);
+              }
+            } catch (e) {
+              // Ignorar erros de parsing
+            }
+          }
         }
       }
+      
       setGerando(false);
     } catch (e) {
+      console.error('Erro ao processar sugestão:', e);
+      alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
       setGerando(false);
-      setDescricaoEditada(prev => prev + '\n' + sugestoes[idx]);
+      // Reverter a aprovação em caso de erro
+      const novasAprovacoes = [...aprovacoes];
+      novasAprovacoes[idx] = false;
+      setAprovacoes(novasAprovacoes);
     }
   };
 
@@ -700,17 +752,29 @@ const AlterarComIA = () => {
                   <h2 className="text-lg font-semibold mb-4 text-oraculo-blue">Sugestões de Alteração da IA</h2>
                   <ul className="space-y-3">
                     {sugestoes.map((sug, idx) => (
-                      <li key={idx} className="flex items-start gap-3 p-3 bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 rounded-lg">
+                      <li key={idx} className={`flex items-start gap-3 p-3 rounded-lg ${aprovacoes[idx] ? 'bg-green-50 border-2 border-green-200' : 'bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5'}`}>
                         <Button 
                           size="sm" 
                           variant={aprovacoes[idx] ? 'default' : 'outline'} 
                           disabled={aprovacoes[idx] || gerando} 
                           onClick={() => handleAprovar(idx)}
-                          className={aprovacoes[idx] ? 'bg-green-500 hover:bg-green-600' : ''}
+                          className={aprovacoes[idx] ? 'bg-green-500 hover:bg-green-600 text-white' : ''}
                         >
-                          {aprovacoes[idx] ? '✓ Aprovada' : 'Aprovar'}
+                          {gerando && !aprovacoes[idx] ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Aplicando...
+                            </>
+                          ) : aprovacoes[idx] ? (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Sugestão aplicada
+                            </>
+                          ) : (
+                            'Aprovar'
+                          )}
                         </Button>
-                        <span className={`flex-1 ${aprovacoes[idx] ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                        <span className={`flex-1 ${aprovacoes[idx] ? 'text-green-700 font-medium' : 'text-gray-800'}`}>
                           {limparMarkdown(sug)}
                         </span>
                       </li>

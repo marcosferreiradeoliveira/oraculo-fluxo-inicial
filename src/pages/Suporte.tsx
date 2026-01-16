@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import emailjs from '@emailjs/browser';
 
 const Suporte = () => {
+  const [nome, setNome] = useState('');
   const [assunto, setAssunto] = useState('');
   const [email, setEmail] = useState('');
   const [mensagem, setMensagem] = useState('');
@@ -43,7 +44,7 @@ const Suporte = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!assunto.trim() || !email.trim() || !mensagem.trim()) {
+    if (!nome.trim() || !assunto.trim() || !email.trim() || !mensagem.trim()) {
       toast.error('Por favor, preencha todos os campos');
       return;
     }
@@ -63,7 +64,7 @@ const Suporte = () => {
       
       // Dados do template
       const templateParams = {
-        from_name: email,
+        from_name: nome,
         from_email: email,
         subject: assunto,
         message: mensagem,
@@ -76,6 +77,7 @@ const Suporte = () => {
       toast.success('Mensagem enviada com sucesso! Entraremos em contato em breve.');
       
       // Limpar formulário
+      setNome('');
       setAssunto('');
       setEmail('');
       setMensagem('');
@@ -151,6 +153,18 @@ const Suporte = () => {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nome">Seu Nome</Label>
+                      <Input 
+                        id="nome" 
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        placeholder="Seu nome completo"
+                        disabled={enviando}
+                        required
+                      />
+                    </div>
+                    
                     <div className="space-y-2">
                       <Label htmlFor="assunto">Assunto</Label>
                       <Input 

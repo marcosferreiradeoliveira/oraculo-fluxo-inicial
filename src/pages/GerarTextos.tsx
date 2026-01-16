@@ -62,7 +62,10 @@ const GerarTextos = () => {
   const [categoriasCustom, setCategoriasCustom] = useState<string[]>([]);
   const [rubricas, setRubricas] = useState<Array<{ id: string; nome: string; valor: string }>>([]);
   const [mostrarModalRubricas, setMostrarModalRubricas] = useState(false);
+  const [sugestaoTexto, setSugestaoTexto] = useState<string>('');
+  const [aplicandoSugestao, setAplicandoSugestao] = useState(false);
   const isMounted = useRef(true);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos', 'Preencher Anexos'];
   const currentStep = 3; // This page is the 4th step
@@ -307,18 +310,23 @@ const GerarTextos = () => {
       // 5. Prepara a requisição
       setProgresso('Preparando dados...');
       
-      // Buscar dados do usuário (incluindo portfolio) para incluir na geração
+      // Buscar dados do usuário (portfolio, equipeBio e dadosCadastrais) para incluir na geração
       let userPortfolio = '';
+      let equipeBio = '';
+      let dadosCadastrais = '';
       if (user) {
         try {
           const db = getFirestore();
           const userDocRef = doc(db, 'usuarios', user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
-            userPortfolio = userDoc.data().portfolio || '';
+            const userData = userDoc.data();
+            userPortfolio = userData.portfolio || '';
+            equipeBio = userData.equipeBio || '';
+            dadosCadastrais = userData.dadosCadastrais || '';
           }
         } catch (err) {
-          console.error('Erro ao buscar portfolio do usuário:', err);
+          console.error('Erro ao buscar dados do usuário:', err);
         }
       }
       
@@ -328,10 +336,12 @@ const GerarTextos = () => {
         tipo: tipoMapeado,
         dadosProjeto: {
           ...projeto,
-          portfolio: userPortfolio // Adiciona o portfolio aos dados do projeto
+          portfolio: userPortfolio, // Adiciona o portfolio aos dados do projeto
+          equipeBio: equipeBio, // Adiciona equipeBio aos dados do projeto
+          dadosCadastrais: dadosCadastrais // Adiciona dadosCadastrais aos dados do projeto
         },
         prompt: GERAR_TEXTO_PROMPT + tipoMapeado,
-        userId: user?.uid // Adicionar userId para buscar equipeBio e portfolio do Firestore
+        userId: user?.uid // Adicionar userId para buscar dados do usuário do Firestore
       };
       
       log('Dados da requisição:', { 
@@ -439,6 +449,7 @@ const GerarTextos = () => {
                   fullText += data.content;
                   
                   console.log('[STREAM] Updating UI with new text length:', fullText.length);
+                  
                   // Update the state with the latest text
                   setTextos(prev => {
                     const newTexts = {
@@ -449,12 +460,19 @@ const GerarTextos = () => {
                     return newTexts;
                   });
                   
-                  // Update the textarea directly for better performance
-                  const textarea = document.querySelector('.text-display') as HTMLTextAreaElement;
-                  if (textarea) {
-                    textarea.value = fullText;
-                    textarea.scrollTop = textarea.scrollHeight;
+                  // Update the textarea directly for immediate visual feedback
+                  if (textareaRef.current) {
+                    textareaRef.current.value = fullText;
+                    textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
                   }
+                  
+                  // Also use requestAnimationFrame to ensure smooth updates
+                  requestAnimationFrame(() => {
+                    if (textareaRef.current) {
+                      textareaRef.current.value = fullText;
+                      textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+                    }
+                  });
                   
                   // Save to Firestore every 3 seconds or when text is complete
                   if (Date.now() % 3000 < 50) { // Roughly every 3 seconds
@@ -840,6 +858,29 @@ const GerarTextos = () => {
                   );
                 })}
                 
+                {/* Categorias personalizadas */}
+                {categoriasCustom.map((categoria) => {
+                  return (
+                    <button
+                      key={categoria}
+                      onClick={() => setTextoSelecionado(categoria)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        textoSelecionado === categoria
+                          ? 'border-oraculo-purple bg-oraculo-purple/5'
+                          : 'border-oraculo-purple/50 hover:border-oraculo-purple'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-oraculo-purple" />
+                        <span className="font-medium text-gray-800">{categoria}</span>
+                        {textos[categoria] && (
+                          <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+                
                 {/* Botão para adicionar categoria personalizada */}
                 <button
                   onClick={() => setMostrarInputCategoria(true)}
@@ -908,6 +949,7 @@ const GerarTextos = () => {
                     {gerando === textoSelecionado ? (
                       <div className="relative h-full">
                         <textarea
+                          ref={textareaRef}
                           className="w-full h-full p-4 border rounded text-gray-800 bg-white text-display min-h-[300px]"
                           readOnly
                           value={textos[textoSelecionado] || ''}
@@ -919,19 +961,155 @@ const GerarTextos = () => {
                         </div>
                       </div>
                     ) : textos[textoSelecionado] ? (
-                      <div className="prose max-w-none">
-                        <textarea
-                          className="w-full h-full min-h-[300px] p-4 border rounded text-gray-800 bg-white"
-                          value={textos[textoSelecionado]}
-                          onChange={(e) => {
-                            setTextos(prev => ({
-                              ...prev,
-                              [textoSelecionado]: e.target.value
-                            }));
-                          }}
-                          placeholder={`Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
-                        />
-                      </div>
+                      <>
+                        <div className="prose max-w-none">
+                          <textarea
+                            className="w-full h-full min-h-[300px] p-4 border rounded text-gray-800 bg-white"
+                            value={textos[textoSelecionado]}
+                            onChange={(e) => {
+                              setTextos(prev => ({
+                                ...prev,
+                                [textoSelecionado]: e.target.value
+                              }));
+                            }}
+                            placeholder={`Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
+                          />
+                        </div>
+                        
+                        {/* Campo para sugestão de alteração */}
+                        <div className="mt-8 pt-8 border-t-2 border-gray-200">
+                          <h3 className="text-xl font-bold text-gray-900 mb-4">
+                            Dê uma sugestão para a IA alterar o texto
+                          </h3>
+                          <textarea
+                            className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[120px] text-gray-800 leading-relaxed resize-y mb-4"
+                            value={sugestaoTexto}
+                            onChange={(e) => setSugestaoTexto(e.target.value)}
+                            placeholder="Ex: Adicione mais detalhes sobre o cronograma de execução..."
+                            disabled={aplicandoSugestao}
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              onClick={async () => {
+                                if (!sugestaoTexto.trim()) {
+                                  alert('Por favor, digite uma sugestão antes de aplicar.');
+                                  return;
+                                }
+
+                                setAplicandoSugestao(true);
+
+                                try {
+                                  const textoBase = textos[textoSelecionado] || '';
+                                  
+                                  if (!textoBase.trim()) {
+                                    alert('Erro: texto do projeto inválido');
+                                    setAplicandoSugestao(false);
+                                    return;
+                                  }
+
+                                  // Buscar portfolio do usuário
+                                  let portfolioTexto = '';
+                                  if (user) {
+                                    try {
+                                      const db = getFirestore();
+                                      const userDocRef = doc(db, 'usuarios', user.uid);
+                                      const userDoc = await getDoc(userDocRef);
+                                      if (userDoc.exists()) {
+                                        portfolioTexto = userDoc.data().portfolio || '';
+                                      }
+                                    } catch (err) {
+                                      console.error('Erro ao buscar portfolio:', err);
+                                    }
+                                  }
+
+                                  const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+                                  
+                                  const response = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                      textoAtual: textoBase,
+                                      sugestao: sugestaoTexto,
+                                      portfolio: portfolioTexto,
+                                      userId: user?.uid,
+                                    }),
+                                  });
+                                  
+                                  if (!response.ok) {
+                                    const errorData = await response.json().catch(() => ({}));
+                                    throw new Error(`Erro ao alterar texto: ${response.status} - ${JSON.stringify(errorData)}`);
+                                  }
+                                  
+                                  // Processar resposta streaming
+                                  const reader = response.body?.getReader();
+                                  const decoder = new TextDecoder();
+                                  let novoTexto = '';
+                                  
+                                  if (!reader) {
+                                    throw new Error('Não foi possível ler a resposta do servidor');
+                                  }
+                                  
+                                  while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    
+                                    const chunk = decoder.decode(value);
+                                    const lines = chunk.split('\n');
+                                    
+                                    for (const line of lines) {
+                                      if (line.startsWith('data: ')) {
+                                        const data = line.slice(6);
+                                        if (data === '[DONE]') {
+                                          break;
+                                        }
+                                        try {
+                                          const parsed = JSON.parse(data);
+                                          if (parsed.content) {
+                                            novoTexto += parsed.content;
+                                            setTextos(prev => ({
+                                              ...prev,
+                                              [textoSelecionado]: novoTexto
+                                            }));
+                                          }
+                                        } catch (e) {
+                                          // Ignorar erros de parsing
+                                        }
+                                      }
+                                    }
+                                  }
+                                  
+                                  // Salvar o novo texto no Firestore
+                                  if (id && novoTexto.trim()) {
+                                    await salvarNoFirestore(textoSelecionado as TextoTipo, novoTexto);
+                                  }
+                                  
+                                  // Limpar o campo de sugestão
+                                  setSugestaoTexto('');
+                                  
+                                } catch (e) {
+                                  console.error('Erro ao processar sugestão:', e);
+                                  alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
+                                } finally {
+                                  setAplicandoSugestao(false);
+                                }
+                              }}
+                              disabled={aplicandoSugestao || !sugestaoTexto.trim()}
+                              className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white px-6 py-2"
+                            >
+                              {aplicandoSugestao ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Aplicando...
+                                </>
+                              ) : (
+                                'Aplicar Sugestão'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <div className="h-full flex items-center justify-center text-gray-500">
                         <p>Selecione um tipo de texto e clique em "Gerar Texto" para começar.</p>

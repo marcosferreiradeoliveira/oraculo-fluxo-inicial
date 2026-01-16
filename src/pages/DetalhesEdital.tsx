@@ -7,6 +7,7 @@ import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { trackEditalViewed } from '@/lib/analytics';
 import { 
   Calendar, 
   DollarSign, 
@@ -67,13 +68,27 @@ const DetalhesEdital = () => {
         
         if (editalSnap.exists()) {
           const data = editalSnap.data();
-          setEdital({ 
+          const editalData = { 
             id: editalSnap.id, 
             ...data,
             // Normaliza os nomes dos campos
             nome: data.nome || 'Edital sem nome',
             data_encerramento: data.data_encerramento || data.dataEncerramento
-          } as Edital);
+          } as Edital;
+          setEdital(editalData);
+          
+          // Track edital viewed (evento crítico)
+          trackEditalViewed({
+            editalId: editalSnap.id,
+            editalName: editalData.nome,
+            editalOrgao: data.orgao || data.proponente,
+            valorEdital: editalData.valor_maximo_premiacao,
+            dataEncerramento: editalData.data_encerramento?.toDate ? 
+              editalData.data_encerramento.toDate() : 
+              (typeof editalData.data_encerramento === 'string' ? 
+                new Date(editalData.data_encerramento) : 
+                editalData.data_encerramento),
+          });
         } else {
           console.error('Edital não encontrado');
           setEdital(null);

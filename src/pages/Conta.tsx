@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Crown, Settings } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
 
@@ -36,19 +36,69 @@ const Conta = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoURL, setPhotoURL] = useState('');
 
+  const handleSolicitarPremium = () => {
+    // Redirecionar para página de planos antes de ir para o Stripe
+    navigate('/cadastro-premium');
+  };
+
+  // Função para corrigir planType se não estiver presente
+  const corrigirPlanType = async (userId: string, subscriptionId: string) => {
+    try {
+      const db = getFirestore();
+      const userRef = doc(db, 'usuarios', userId);
+      
+      // Buscar planType da assinatura do Stripe via backend
+      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/buscarPlanTypeStripe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriptionId: subscriptionId,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.planType) {
+          await updateDoc(userRef, {
+            planType: data.planType,
+            premiumStatus: 'active',
+          });
+          console.log('✅ planType corrigido:', data.planType);
+          // Recarregar dados
+          const userDoc = await getDocFromServer(userRef);
+          if (userDoc.exists()) {
+            setUserData(userDoc.data());
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao corrigir planType:', error);
+    }
+  };
+
   const createUserDocument = async (firebaseUser: any) => {
     try {
       const db = getFirestore();
       const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
       
+      const timestamp = serverTimestamp();
       await setDoc(userDocRef, {
-        nome_completo: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+        createdAt: timestamp,
+        dadosCadastrais: '',
+        data_cadastro: timestamp,
         email: firebaseUser.email || '',
         empresa: '',
-        uid: firebaseUser.uid,
-        data_cadastro: serverTimestamp(),
-        ultimo_login: serverTimestamp(),
+        equipeBio: '',
         isPremium: false,
+        lastLoginAt: timestamp,
+        nome_completo: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+        origem: 'captacao',
+        portfolio: '',
+        role: 'super_admin',
+        ultimo_login: timestamp,
+        uid: firebaseUser.uid,
       });
       
       console.log('Documento do usuário criado no Firestore');
@@ -72,7 +122,16 @@ const Conta = () => {
         try {
           const db = getFirestore();
           const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          
+          // Tentar ler do servidor primeiro (sem cache), se falhar, usar cache
+          let userDoc;
+          try {
+            userDoc = await getDocFromServer(userDocRef);
+            console.log('[Conta] Dados lidos do servidor (sem cache)');
+          } catch (error) {
+            console.log('[Conta] Erro ao ler do servidor, usando cache:', error);
+            userDoc = await getDoc(userDocRef);
+          }
           
           if (userDoc.exists()) {
             const data = userDoc.data();
@@ -82,10 +141,63 @@ const Conta = () => {
             console.log('Todas as chaves do documento:', Object.keys(data));
             console.log('isPremium na página Conta:', data.isPremium);
             console.log('Tipo do isPremium na página Conta:', typeof data.isPremium);
+            console.log('planType na página Conta:', data.planType);
+            console.log('planType raw (verificação direta):', data['planType']);
+            console.log('Todas as propriedades:', JSON.stringify(data, null, 2));
+            console.log('Tipo do planType na página Conta:', typeof data.planType);
+            console.log('premiumStatus na página Conta:', data.premiumStatus);
             console.log('Empresa na página Conta:', data.empresa);
             console.log('Tipo da empresa na página Conta:', typeof data.empresa);
             console.log('Nome completo na página Conta:', data.nome_completo);
-            setUserData(data);
+            
+            // Corrigir campo origem se não existir
+            if (!data.origem) {
+              try {
+                const { updateDoc } = await import('firebase/firestore');
+                await updateDoc(userDocRef, { origem: 'captacao' });
+                console.log('✅ Campo origem adicionado ao documento do usuário');
+              } catch (error) {
+                console.error('Erro ao adicionar campo origem:', error);
+              }
+            }
+            
+            // Debug detalhado do planType
+            console.log('🔍 Debug planType:');
+            console.log('  - data.planType:', data.planType);
+            console.log('  - data["planType"]:', data['planType']);
+            console.log('  - Object.keys(data):', Object.keys(data));
+            console.log('  - "planType" in data:', 'planType' in data);
+            console.log('  - data.hasOwnProperty("planType"):', data.hasOwnProperty?.('planType'));
+            
+            // Garantir que planType existe - tentar múltiplas formas
+            let planTypeValue = data.planType || data['planType'];
+            
+            // Se ainda não encontrou, verificar todas as chaves
+            if (!planTypeValue) {
+              const allKeys = Object.keys(data);
+              console.log('  - Todas as chaves do documento:', allKeys);
+              // Verificar se há alguma variação do nome
+              const planTypeKey = allKeys.find(k => k.toLowerCase().includes('plan') || k.toLowerCase().includes('type'));
+              if (planTypeKey) {
+                planTypeValue = data[planTypeKey];
+                console.log('  - Encontrado em chave alternativa:', planTypeKey, '=', planTypeValue);
+              }
+            }
+            
+            const userDataWithPlanType = {
+              ...data,
+              planType: planTypeValue || null,
+            };
+            
+            console.log('✅ userDataWithPlanType.planType final:', userDataWithPlanType.planType);
+            
+            // Se planType não existe mas temos subscriptionId, tentar buscar do Stripe
+            if (!userDataWithPlanType.planType && data.stripeSubscriptionId) {
+              console.log('⚠️ planType não encontrado, tentando buscar do Stripe...');
+              corrigirPlanType(firebaseUser.uid, data.stripeSubscriptionId);
+            }
+            
+            setUserData(userDataWithPlanType);
             setNomeCompleto(data.nome_completo || '');
             setEmail(firebaseUser.email || '');
             setEmpresa(data.empresa || '');
@@ -427,10 +539,22 @@ const Conta = () => {
                     <div className="space-y-4">
                       <div className="text-center">
                         <Badge className={userData?.isPremium ? "bg-gradient-to-r from-oraculo-gold to-oraculo-magenta text-white mb-2" : "bg-gray-500 text-white mb-2"}>
-                          {userData?.isPremium ? 'Plano Premium' : 'Plano Gratuito'}
+                          {userData?.isPremium 
+                            ? (userData?.planType === 'essencial' 
+                                ? 'Plano Essencial' 
+                                : userData?.planType === 'premium' 
+                                  ? 'Plano Premium Enterprise' 
+                                  : 'Plano Básico')
+                            : 'Plano Gratuito'}
                         </Badge>
                         <p className="text-2xl font-bold text-gray-900">
-                          {userData?.isPremium ? 'R$ 99,00/mês' : 'Gratuito'}
+                          {userData?.isPremium 
+                            ? (userData?.planType === 'essencial' 
+                                ? 'R$ 349,00/mês' 
+                                : userData?.planType === 'premium' 
+                                  ? 'R$ 1,00/mês' 
+                                  : 'R$ 99,00/mês')
+                            : 'Gratuito'}
                         </p>
                       </div>
                       
@@ -461,13 +585,22 @@ const Conta = () => {
                         </div>
                       </div>
 
+                      {userData?.isPremium ? (
                       <Button 
                         variant="outline" 
                         className="w-full"
-                        onClick={() => navigate('/cadastro-premium')}
+                          onClick={() => navigate('/gerenciar-assinatura')}
                       >
                         Gerenciar Assinatura
                       </Button>
+                      ) : (
+                        <Button 
+                          className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                          onClick={handleSolicitarPremium}
+                        >
+                          Fazer upgrade
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

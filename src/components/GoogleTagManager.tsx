@@ -85,12 +85,36 @@ export const GoogleTagManagerRouteTracker = () => {
   
   // Track page views on route change
   useEffect(() => {
-    if (window.dataLayer) {
-      window.dataLayer.push({
-        event: 'pageview',
-        page: location.pathname + location.search,
-      });
-    }
+    // Wait a bit to ensure GTM is loaded
+    const trackPageView = () => {
+      if (window.dataLayer) {
+        const pageLocation = window.location.href;
+        const pagePath = location.pathname + location.search;
+        const pageTitle = document.title || 'Oráculo Cultural';
+
+        // Push page_view event to dataLayer (GA4 format)
+        window.dataLayer.push({
+          event: 'page_view',
+          page_location: pageLocation,
+          page_path: pagePath,
+          page_title: pageTitle,
+        });
+
+        // Also push for legacy GTM compatibility
+        window.dataLayer.push({
+          event: 'virtualPageView',
+          virtualPageURL: pagePath,
+          virtualPageTitle: pageTitle,
+        });
+
+        console.log('[GTM] Page view tracked:', pagePath);
+      }
+    };
+
+    // Small delay to ensure GTM is ready
+    const timer = setTimeout(trackPageView, 100);
+    
+    return () => clearTimeout(timer);
   }, [location]);
 
   return null;
