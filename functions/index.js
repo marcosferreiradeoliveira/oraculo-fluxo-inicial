@@ -573,20 +573,108 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
     //   return res.status(400).json({ error: 'Tipo de texto inválido' });
     // }
     
-    // Criar prompt específico para orçamento
-    let promptEspecifico = prompt;
+    // IMPORTANTE: Extrair os dados do projeto - especialmente a descrição que pode ter sido atualizada
+    const descricaoProjeto = dadosProjeto.descricao || '';
+    const nomeProjeto = dadosProjeto.nome || 'Não informado';
+    const resumoProjeto = dadosProjeto.resumo || '';
+    
+    console.log('[gerarTextosProjeto] Dados do projeto recebidos:', {
+      nome: nomeProjeto,
+      hasDescricao: !!descricaoProjeto,
+      descricaoLength: descricaoProjeto.length,
+      tipo: tipo
+    });
+    
+    // Criar prompt específico com dados do projeto
+    // IMPORTANTE: Sempre incluir a descrição completa do projeto para basear a geração
+    let promptEspecifico = '';
+    
+    // Instruções de formatação (sem asteriscos/markdown)
+    const instrucoesFormatacao = `
+REGRA CRÍTICA DE FORMATAÇÃO: 
+- NÃO use asteriscos (**texto**) para negrito
+- NÃO use markdown (##, ###, *, _, etc)
+- NÃO use símbolos de formatação
+- Use texto simples e claro
+- Use quebras de linha para separar parágrafos
+- Use listas numeradas (1., 2., 3.) se necessário, mas sem asteriscos ou símbolos
+- O texto deve estar em formato de texto puro, sem qualquer marcação especial
+`;
+
     if (tipo === 'orcamento') {
+      // Buscar teto do orçamento dos dados do projeto ou do prompt
+      let tetoMaximo = dadosProjeto.teto || 0;
+      
+      // Tentar extrair do prompt se não estiver nos dados do projeto
+      if (!tetoMaximo || tetoMaximo === 0) {
+        if (prompt) {
+          // Tentar múltiplos padrões para encontrar o teto no prompt
+          const padrao1 = prompt.match(/teto.*?R\$\s*([\d.,]+)/i);
+          const padrao2 = prompt.match(/R\$\s*([\d.,]+)/i);
+          const padraoTeto = padrao1 || padrao2;
+          
+          if (padraoTeto) {
+            const valorStr = padraoTeto[1].replace(/\./g, '').replace(',', '.');
+            tetoMaximo = parseFloat(valorStr) || 0;
+          }
+        }
+      }
+      
+      console.log('[gerarTextosProjeto] Teto máximo detectado para orçamento:', tetoMaximo);
+      
+      const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+      
       promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
-      Crie um orçamento detalhado e realista para o projeto cultural descrito abaixo.
-      Inclua todas as rubricas necessárias como: produção, divulgação, recursos humanos, materiais, equipamentos, etc.
-      Seja específico com valores e justificativas para cada item.
+Crie um orçamento detalhado e realista para o projeto cultural descrito abaixo.
+Inclua todas as rubricas necessárias como: produção, divulgação, recursos humanos, materiais, equipamentos, etc.
+Seja específico com valores e justificativas para cada item.
+
+${instrucoesFormatacao}
+
+${tetoMaximo > 0 ? `TETO MÁXIMO DO ORÇAMENTO (OBRIGATÓRIO): R$ ${tetoFormatado}
+
+REGRA CRÍTICA: A soma total de TODAS as rubricas DEVE ser IGUAL ou MENOR que R$ ${tetoFormatado}. 
+IMPORTANTE: 
+- Distribua o valor total entre as rubricas de forma coerente e realista com as necessidades do projeto
+- NÃO ultrapasse o teto máximo sob nenhuma circunstância
+- Calcule cuidadosamente para que o total não exceda R$ ${tetoFormatado}
+- Se necessário, ajuste os valores das rubricas para respeitar o limite máximo\n\n` : ''}
+
+DADOS DO PROJETO (USE ESTES DADOS PARA CRIAR O ORÇAMENTO):
+Nome: ${nomeProjeto}
+${resumoProjeto ? `Resumo: ${resumoProjeto}\n` : ''}
+${descricaoProjeto ? `Descrição completa do projeto:\n${descricaoProjeto}\n` : ''}
+
+Com base EXCLUSIVAMENTE no projeto descrito acima, gere um orçamento completo e profissional que reflita as necessidades e atividades descritas no projeto.
+${tetoMaximo > 0 ? `O orçamento DEVE respeitar rigorosamente o teto máximo de R$ ${tetoFormatado}. A soma de todas as rubricas não pode ultrapassar este valor.` : ''}
+
+Lembre-se: texto puro, sem asteriscos, sem markdown, sem símbolos de formatação.
+${tetoMaximo > 0 ? 'Formate cada rubrica como: "Nome da Rubrica: R$ X.XXX,XX" ou "Nome da Rubrica - R$ X.XXX,XX".' : ''}`;
+    } else {
+      // Para todos os outros tipos de texto, incluir a descrição completa do projeto
+      const tipoTextoFormatado = tipo.split('_').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
       
-      DADOS DO PROJETO:
-      Nome: ${dadosProjeto.nome || 'Não informado'}
-      Descrição: ${dadosProjeto.descricao || 'Não informado'}
-      Resumo: ${dadosProjeto.resumo || 'Não informado'}
-      
-      Gere um orçamento completo e profissional:`;
+      promptEspecifico = `Você é um especialista em elaboração de projetos culturais para leis de incentivo. 
+Gere um texto claro, objetivo e bem estruturado para o seguinte item do projeto: ${tipoTextoFormatado}.
+
+${instrucoesFormatacao}
+
+REGRA FUNDAMENTAL: O texto gerado DEVE ser baseado EXCLUSIVAMENTE na descrição completa do projeto fornecida abaixo. 
+NÃO invente novos projetos. NÃO use apenas o portfolio. Use APENAS os dados do projeto descrito abaixo como base.
+
+DADOS DO PROJETO (BASE PARA GERAÇÃO DO TEXTO):
+Nome: ${nomeProjeto}
+${resumoProjeto ? `Resumo: ${resumoProjeto}\n` : ''}
+${descricaoProjeto ? `Descrição completa do projeto:\n${descricaoProjeto}\n` : ''}
+
+Com base EXCLUSIVAMENTE na descrição do projeto acima, gere o texto para "${tipoTextoFormatado}" que seja:
+- Baseado nos dados, informações e objetivos do projeto descrito
+- Coerente com o projeto apresentado (nome, resumo, descrição)
+- Claro, objetivo e bem estruturado
+- Alinhado com a natureza e objetivo do projeto cultural descrito
+- Formato de texto puro, SEM asteriscos, SEM markdown, SEM símbolos de formatação
+
+CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos projetos ou use apenas o portfolio como base.`;
     }
     
     // Adicionar equipeBio, portfolio e dadosCadastrais ao prompt se disponíveis
@@ -615,8 +703,8 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
         { 
           role: 'system', 
           content: tipo === 'orcamento' 
-            ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados. IMPORTANTE: NÃO use asteriscos (**) ou marcadores markdown no texto gerado.'
-            : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados. IMPORTANTE: NÃO use asteriscos (**) ou marcadores markdown no texto gerado.'
+            ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados baseados EXCLUSIVAMENTE nos dados do projeto fornecido. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito.'
+            : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados baseados EXCLUSIVAMENTE na descrição do projeto fornecida. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito. NÃO use apenas o portfolio como base.'
         },
         { role: 'user', content: promptFinal },
       ],
@@ -625,14 +713,39 @@ exports.gerarTextosProjeto = onRequest(async (req, res) => {
       stream: true,
     });
     
+    // Função para limpar formatação markdown do texto
+    const limparFormatacao = (texto) => {
+      if (!texto) return texto;
+      return texto
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **texto** (negrito)
+        .replace(/\*(.*?)\*/g, '$1') // Remove *texto* (itálico)
+        .replace(/__(.*?)__/g, '$1') // Remove __texto__ (negrito)
+        .replace(/_(.*?)_/g, '$1') // Remove _texto_ (itálico)
+        .replace(/##\s*/g, '') // Remove ## (título)
+        .replace(/###\s*/g, '') // Remove ### (subtítulo)
+        .replace(/####\s*/g, '') // Remove #### (subtítulo)
+        .replace(/`(.*?)`/g, '$1') // Remove `código`
+        .replace(/~~(.*?)~~/g, '$1') // Remove ~~texto~~ (riscado)
+        .replace(/^\s*[-*+]\s+/gm, '') // Remove marcadores de lista (-, *, +)
+        .trim();
+    };
+    
+    let textoCompleto = '';
+    
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
-        res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
+        // Limpar formatação markdown do conteúdo
+        const conteudoLimpo = limparFormatacao(content);
+        textoCompleto += conteudoLimpo;
+        res.write(`data: ${JSON.stringify({ type: 'chunk', content: conteudoLimpo })}\n\n`);
       }
     }
     
-    res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+    // Garantir que o texto final também está limpo
+    textoCompleto = limparFormatacao(textoCompleto);
+    
+    res.write(`data: ${JSON.stringify({ type: 'complete', fullText: textoCompleto })}\n\n`);
     res.end();
     
   } catch (error) {

@@ -310,7 +310,37 @@ const GerarTextos = () => {
       // 5. Prepara a requisição
       setProgresso('Preparando dados...');
       
+      // RECARREGAR OS DADOS MAIS RECENTES DO PROJETO DO FIRESTORE
+      // para garantir que estamos usando as alterações das etapas anteriores
+      let projetoAtualizado = projeto;
+      try {
+        const db = getFirestore();
+        const projetoRef = doc(db, 'projetos', id!);
+        const projetoSnap = await getDoc(projetoRef);
+        
+        if (projetoSnap.exists()) {
+          projetoAtualizado = { 
+            id: projetoSnap.id, 
+            ...projetoSnap.data() 
+          } as ProjetoDocument;
+          
+          log('Projeto recarregado do Firestore:', { 
+            hasDescricao: !!projetoAtualizado.descricao,
+            descricaoLength: projetoAtualizado.descricao?.length || 0 
+          });
+          
+          // Atualizar o estado local também
+          setProjeto(projetoAtualizado);
+        } else {
+          log('Aviso: Projeto não encontrado no Firestore, usando estado local');
+        }
+      } catch (err) {
+        console.error('Erro ao recarregar projeto do Firestore:', err);
+        log('Erro ao recarregar projeto, usando estado local');
+      }
+      
       // Buscar dados do usuário (portfolio, equipeBio e dadosCadastrais) para incluir na geração
+      // mas apenas como complemento, não sobrescrevendo dados do projeto
       let userPortfolio = '';
       let equipeBio = '';
       let dadosCadastrais = '';
@@ -335,10 +365,11 @@ const GerarTextos = () => {
         projetoId: id,
         tipo: tipoMapeado,
         dadosProjeto: {
-          ...projeto,
-          portfolio: userPortfolio, // Adiciona o portfolio aos dados do projeto
-          equipeBio: equipeBio, // Adiciona equipeBio aos dados do projeto
-          dadosCadastrais: dadosCadastrais // Adiciona dadosCadastrais aos dados do projeto
+          ...projetoAtualizado, // Usar o projeto atualizado recarregado do Firestore
+          // Adicionar dados do usuário apenas se não existirem no projeto
+          portfolio: projetoAtualizado.portfolio || userPortfolio,
+          equipeBio: projetoAtualizado.equipeBio || equipeBio,
+          dadosCadastrais: projetoAtualizado.dadosCadastrais || dadosCadastrais
         },
         prompt: GERAR_TEXTO_PROMPT + tipoMapeado,
         userId: user?.uid // Adicionar userId para buscar dados do usuário do Firestore
@@ -353,7 +384,8 @@ const GerarTextos = () => {
       if (tipo === 'orcamento') {
         log('Gerando orçamento - tipo original:', tipo);
         log('Gerando orçamento - tipo mapeado:', tipoMapeado);
-        log('Projeto data keys:', Object.keys(projeto));
+        log('Projeto atualizado data keys:', Object.keys(projetoAtualizado));
+        log('Projeto atualizado descricao length:', projetoAtualizado.descricao?.length || 0);
       }
       
       // 6. Envia a requisição
@@ -945,12 +977,12 @@ const GerarTextos = () => {
               
               {mostrarCaixaTexto && (
                 <div className="p-4 border-t bg-gray-50">
-                  <div className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 bg-white border rounded-lg">
+                  <div className="p-4 bg-white border rounded-lg">
                     {gerando === textoSelecionado ? (
-                      <div className="relative h-full">
+                      <div className="relative">
                         <textarea
                           ref={textareaRef}
-                          className="w-full h-full p-4 border rounded text-gray-800 bg-white text-display min-h-[300px]"
+                          className="w-full min-h-[300px] max-h-[500px] p-4 border rounded text-gray-800 bg-white text-display resize-none overflow-y-auto"
                           readOnly
                           value={textos[textoSelecionado] || ''}
                           placeholder={gerando ? 'Gerando texto, aguarde...' : `Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
@@ -964,7 +996,7 @@ const GerarTextos = () => {
                       <>
                         <div className="prose max-w-none">
                           <textarea
-                            className="w-full h-full min-h-[300px] p-4 border rounded text-gray-800 bg-white"
+                            className="w-full min-h-[300px] max-h-[500px] p-4 border rounded text-gray-800 bg-white resize-none overflow-y-auto"
                             value={textos[textoSelecionado]}
                             onChange={(e) => {
                               setTextos(prev => ({
@@ -1120,8 +1152,17 @@ const GerarTextos = () => {
               )}
             </div>
             
-            {/* Botão para navegar para Preencher Anexos */}
-            <div className="mt-8 flex justify-end">
+            {/* Botões de ação */}
+            <div className="mt-8 flex justify-between items-center">
+              <Button
+                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                className="bg-gradient-to-r from-oraculo-purple to-oraculo-blue hover:opacity-90 text-white px-6 py-3"
+                size="lg"
+              >
+                <DollarSign className="mr-2 h-5 w-5" />
+                Criar Orçamento
+              </Button>
+              
               <Button
                 onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}
                 className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3"

@@ -8,7 +8,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Brain, Loader2, Check, X, CheckCircle, Trash2 } from 'lucide-react';
+import { Brain, Loader2, Check, X, CheckCircle, Trash2, Copy, Download } from 'lucide-react';
 import AnalisarImg from '@/assets/Analisar.jpeg';
 import CriarImg from '@/assets/Criar.jpeg';
 import { 
@@ -217,6 +217,8 @@ const Projeto = () => {
   const [gerandoSugestao, setGerandoSugestao] = useState<number | null>(null); // Armazena o índice da sugestão sendo processada
   const [sugestaoPersonalizada, setSugestaoPersonalizada] = useState<string>('');
   const [aplicandoSugestaoPersonalizada, setAplicandoSugestaoPersonalizada] = useState(false);
+  const [textoAnterior, setTextoAnterior] = useState<string>(''); // Armazena o texto antes de aplicar sugestão
+  const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
   const [isPremium, setIsPremium] = useState(false);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
@@ -436,36 +438,21 @@ const Projeto = () => {
         }
       }
       
-      // Update the project with the new description (texto original + sugestão adicionada)
+      // Não salvar imediatamente - aguardar aprovação do usuário
       if (id && novoTexto.trim()) {
-        const db = getFirestore();
-        const ref = doc(db, 'projetos', id);
-        await updateDoc(ref, { descricao: novoTexto });
-        setProjeto((prev: any) => ({ ...prev, descricao: novoTexto }));
+        // Salvar versão anterior antes de mostrar a nova
+        setTextoAnterior(textoBase);
+        setDescricaoEditada(novoTexto);
+        setAguardandoAprovacao(true);
         
-        // Track suggestion applied
-        if (user) {
-          const userRef = doc(db, 'usuarios', user.uid);
-          const userSnap = await getDoc(userRef);
-          const userData = userSnap.exists() ? userSnap.data() : {};
-          const planType = userData?.planType || 'free';
-          
-          trackSuggestionApplied({
-            projectId: id,
-            suggestionIndex: idx,
-            suggestionText: sugestoes[idx],
-            planType: planType,
-          });
-        }
+        // Scroll para a seção "Texto do Projeto" para ver a mudança
+        setTimeout(() => {
+          const elemento = document.getElementById('texto-do-projeto');
+          if (elemento) {
+            elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
       }
-      
-      // Scroll para a seção "Texto do Projeto"
-      setTimeout(() => {
-        const elemento = document.getElementById('texto-do-projeto');
-        if (elemento) {
-          elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 300);
       
     } catch (e) {
       console.error('Erro ao processar sugestão:', e);
@@ -477,6 +464,117 @@ const Projeto = () => {
     } finally {
       setGerandoSugestao(null); // Limpa o estado de loading
     }
+  };
+
+  // Função para aprovar a mudança e salvar no Firestore
+  const aprovarMudanca = async () => {
+    if (!id || !descricaoEditada.trim()) {
+      alert('Erro: não há mudança para aprovar');
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      const db = getFirestore();
+      const ref = doc(db, 'projetos', id);
+      await updateDoc(ref, { descricao: descricaoEditada });
+      setProjeto((prev: any) => ({ ...prev, descricao: descricaoEditada }));
+      
+      // Track suggestion applied se houver user
+      if (user) {
+        const userRef = doc(db, 'usuarios', user.uid);
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        const planType = userData?.planType || 'free';
+        
+        trackSuggestionApplied({
+          projectId: id,
+          suggestionIndex: -1, // Indica sugestão personalizada
+          suggestionText: 'Sugestão personalizada aprovada',
+          planType: planType,
+        });
+      }
+      
+      // Limpar estados de aprovação
+      setAguardandoAprovacao(false);
+      setTextoAnterior('');
+      
+      alert('Mudança aprovada e salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao aprovar mudança:', error);
+      alert('Erro ao salvar a mudança. Por favor, tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // Função para reverter para a versão anterior
+  const reverterMudanca = () => {
+    if (!textoAnterior) {
+      alert('Erro: não há versão anterior para reverter');
+      return;
+    }
+
+    setDescricaoEditada(textoAnterior);
+    setAguardandoAprovacao(false);
+    setTextoAnterior('');
+    
+    // Scroll para a seção "Texto do Projeto"
+    setTimeout(() => {
+      const elemento = document.getElementById('texto-do-projeto');
+      if (elemento) {
+        elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  };
+
+  // Função para copiar o texto do projeto
+  const copiarTextoProjeto = async () => {
+    const textoParaCopiar = descricaoEditada || projeto?.descricao || '';
+    
+    if (!textoParaCopiar.trim()) {
+      alert('Não há texto para copiar.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(textoParaCopiar);
+      alert('Texto copiado para a área de transferência!');
+    } catch (error) {
+      console.error('Erro ao copiar texto:', error);
+      // Fallback para navegadores mais antigos
+      const textarea = document.createElement('textarea');
+      textarea.value = textoParaCopiar;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        alert('Texto copiado para a área de transferência!');
+      } catch (err) {
+        alert('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
+      }
+      document.body.removeChild(textarea);
+    }
+  };
+
+  // Função para baixar o texto do projeto
+  const baixarTextoProjeto = () => {
+    const textoParaBaixar = descricaoEditada || projeto?.descricao || '';
+    
+    if (!textoParaBaixar.trim()) {
+      alert('Não há texto para baixar.');
+      return;
+    }
+
+    const elemento = document.createElement('a');
+    const arquivo = new Blob([textoParaBaixar], { type: 'text/plain;charset=utf-8' });
+    elemento.href = URL.createObjectURL(arquivo);
+    elemento.download = `${projeto?.nome || 'projeto'}_texto.txt`;
+    document.body.appendChild(elemento);
+    elemento.click();
+    document.body.removeChild(elemento);
   };
 
   // Handler para aplicar sugestão personalizada do usuário
@@ -572,17 +670,17 @@ const Projeto = () => {
         }
       }
       
-      // Update the project with the new description
+      // Não salvar imediatamente - aguardar aprovação do usuário
       if (id && novoTexto.trim()) {
-        const db = getFirestore();
-        const ref = doc(db, 'projetos', id);
-        await updateDoc(ref, { descricao: novoTexto });
-        setProjeto((prev: any) => ({ ...prev, descricao: novoTexto }));
+        // Salvar versão anterior antes de mostrar a nova
+        setTextoAnterior(textoBase);
+        setDescricaoEditada(novoTexto);
+        setAguardandoAprovacao(true);
         
         // Limpar o campo de sugestão personalizada após aplicar
         setSugestaoPersonalizada('');
         
-        // Scroll para a seção "Texto do Projeto"
+        // Scroll para a seção "Texto do Projeto" para ver a mudança
         setTimeout(() => {
           const elemento = document.getElementById('texto-do-projeto');
           if (elemento) {
@@ -1921,16 +2019,86 @@ const Projeto = () => {
                       {/* Campo editável com o texto do projeto */}
                       {projeto.analise_ia && (
                         <div id="texto-do-projeto" className="mt-8 pt-8 border-t-2 border-gray-200 px-4">
-                          <h3 className="text-xl font-bold text-gray-900 mb-6">Texto do Projeto</h3>
-                          <p className="text-sm text-gray-600 mb-6">
-                            Revise e edite o texto do seu projeto conforme necessário:
-                          </p>
+                          <div className="flex items-center justify-between mb-6">
+                            <div>
+                              <h3 className="text-xl font-bold text-gray-900 mb-2">Texto do Projeto</h3>
+                              <p className="text-sm text-gray-600">
+                                Revise e edite o texto do seu projeto conforme necessário:
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                onClick={copiarTextoProjeto}
+                                className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                                title="Copiar texto do projeto"
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copiar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={baixarTextoProjeto}
+                                className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10"
+                                title="Baixar texto do projeto"
+                              >
+                                <Download className="mr-2 h-4 w-4" />
+                                Baixar
+                              </Button>
+                            </div>
+                          </div>
                           <textarea
                             className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[600px] text-gray-800 leading-relaxed resize-y"
                             value={descricaoEditada || projeto.descricao || ''}
                             onChange={(e) => setDescricaoEditada(e.target.value)}
                             placeholder="Cole aqui todas as informações do seu projeto cultural..."
                           />
+                          
+                          {/* Banner de aprovação quando há mudança aguardando */}
+                          {aguardandoAprovacao && (
+                            <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xl">⚠️</span>
+                                  <h4 className="text-lg font-semibold text-yellow-900">
+                                    Mudança aplicada - Aprove ou reverta
+                                  </h4>
+                                </div>
+                              </div>
+                              <p className="text-sm text-yellow-800 mb-4">
+                                O texto foi modificado com a sugestão aplicada. Revise as alterações acima e decida:
+                              </p>
+                              <div className="flex gap-3">
+                                <Button
+                                  onClick={aprovarMudanca}
+                                  disabled={salvando}
+                                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                                >
+                                  {salvando ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Salvando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="mr-2 h-4 w-4" />
+                                      Aprovar e Salvar
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={reverterMudanca}
+                                  disabled={salvando}
+                                  variant="outline"
+                                  className="border-red-500 text-red-600 hover:bg-red-50 px-6 py-2"
+                                >
+                                  <X className="mr-2 h-4 w-4" />
+                                  Reverter para Versão Anterior
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          
                           <div className="mt-6 mb-16 flex gap-4 justify-start">
                             <Button
                               onClick={async () => {

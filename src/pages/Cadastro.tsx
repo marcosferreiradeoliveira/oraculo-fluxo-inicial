@@ -232,8 +232,8 @@ const Cadastro = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl border border-gray-100 overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+      <div className={`bg-white rounded-2xl shadow-xl w-full ${isLogin ? 'max-w-md' : 'max-w-5xl'} border border-gray-100 overflow-hidden`}>
+        <div className={`grid gap-0 ${isLogin ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
           {/* Coluna da Esquerda - Vídeo e Box IA (apenas no modo cadastro) */}
           {!isLogin && (
             <div className="hidden md:flex flex-col p-8 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 space-y-6">
@@ -306,14 +306,13 @@ const Cadastro = () => {
           
           {/* Coluna da Direita - Formulário */}
           <div className="p-6 md:p-8">
-            <Link to="/" className="flex flex-col items-center mb-6 group cursor-pointer">
+            <div className="flex flex-col items-center mb-6">
               <img 
                 src={logo} 
                 alt="Oráculo Cultural Logo" 
-                className="w-24 h-24 md:w-28 md:h-28 object-contain mb-2 group-hover:scale-105 transition"
+                className="w-24 h-24 md:w-28 md:h-28 object-contain"
               />
-              <span className="text-base md:text-lg font-bold text-oraculo-blue group-hover:underline">Oráculo Cultural</span>
-            </Link>
+            </div>
             
             {/* Vídeo e Mensagem para área restrita (apenas mobile) */}
             {!isLogin && (

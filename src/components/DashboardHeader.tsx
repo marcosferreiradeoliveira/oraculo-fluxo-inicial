@@ -11,7 +11,6 @@ import { identifyMixpanelUser } from '@/lib/analytics';
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
 
@@ -107,7 +106,6 @@ export function DashboardHeader() {
 
   const handleLogout = async () => {
     await signOut(auth);
-    setShowMenu(false);
   };
 
   return (
@@ -130,57 +128,25 @@ export function DashboardHeader() {
                   <p className="text-xs text-gray-500">Bem-vindo de volta</p>
                 </div>
                 <div className="relative group">
-                  <button
-                    className="focus:outline-none transition-transform hover:scale-105"
-                    onClick={() => setShowMenu((v) => !v)}
-                    aria-label="Abrir menu do usuário"
-                  >
-                    <Avatar className="cursor-pointer ring-2 ring-transparent group-hover:ring-oraculo-blue transition-all">
-                      {photoURL || user.photoURL ? (
-                        <AvatarImage src={photoURL || user.photoURL || ''} />
-                      ) : (
-                        <AvatarFallback className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
-                          {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-                  </button>
-                  {/* Imagem ampliada no hover */}
-                  <div className="absolute right-0 top-full mt-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 ease-out z-50 pointer-events-none transform scale-95 group-hover:scale-100">
-                    <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-100 p-3">
-                      {(photoURL || user.photoURL) ? (
-                        <img 
-                          src={photoURL || user.photoURL || ''} 
-                          alt={nomeUsuario || 'Usuário'}
-                          className="w-40 h-40 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-40 h-40 rounded-lg bg-gradient-to-r from-oraculo-blue to-oraculo-purple flex items-center justify-center">
-                          <span className="text-6xl font-bold text-white">
-                            {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                      <div className="mt-2 text-center">
-                        <p className="text-sm font-semibold text-gray-900">{nomeUsuario || 'Usuário'}</p>
-                        {isPremium && (
-                          <span className="inline-block mt-1 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                {showMenu && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white border rounded-lg shadow-lg z-50">
+                  <Avatar className="cursor-pointer ring-2 ring-transparent group-hover:ring-oraculo-blue transition-all">
+                    {photoURL || user.photoURL ? (
+                      <AvatarImage src={photoURL || user.photoURL || ''} className="group-hover:opacity-0 transition-opacity duration-200" />
+                    ) : null}
+                    <AvatarFallback className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
+                      {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Botão de logoff no hover */}
+                  <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-50 transform scale-95 group-hover:scale-100">
                     <button
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="flex items-center w-full px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-lg transition-colors whitespace-nowrap"
                       onClick={handleLogout}
                     >
                       <LogOut className="h-4 w-4 mr-2" />
-                      Logout
+                      Sair
                     </button>
                   </div>
-                )}
+                </div>
               </>
             ) : (
               <div className="text-right flex items-center gap-2">

@@ -33,6 +33,7 @@ import ContatoPremium from './pages/ContatoPremium';
 import GerenciarAssinatura from './pages/GerenciarAssinatura';
 import GerarTextos from './pages/GerarTextos';
 import PreencherAnexos from './pages/PreencherAnexos';
+import CriarOrcamento from './pages/CriarOrcamento';
 import Termos from './pages/Termos';
 import Privacidade from './pages/Privacidade';
 import DetalhesEdital from './pages/DetalhesEdital';
@@ -99,6 +100,7 @@ const App = () => (
           <Route path="/projeto/:id" element={<ProtectedRoute><Projeto /></ProtectedRoute>} />
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><GerarTextos /></ProtectedRoute>} />
+          <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><CriarOrcamento /></ProtectedRoute>} />
           <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><PreencherAnexos /></ProtectedRoute>} />
           <Route path="/editar-edital/:id" element={<ProtectedRoute><EditarEdital /></ProtectedRoute>} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />

@@ -4,7 +4,7 @@ import { getFirestore, doc, getDoc, updateDoc, DocumentData } from 'firebase/fir
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Brain, Loader2, CheckCircle } from 'lucide-react';
+import { Brain, Loader2, CheckCircle, Check, X, Copy, Download } from 'lucide-react';
 import AnalisarImg from '@/assets/Analisar.jpeg';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -136,6 +136,8 @@ const AlterarComIA = () => {
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [textoAnterior, setTextoAnterior] = useState<string>(''); // Armazena o texto antes de aplicar sugestão
+  const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
 
   useEffect(() => {
     document.title = 'Alterar com IA - Oráculo Cultural';
@@ -347,6 +349,13 @@ const AlterarComIA = () => {
         }
       }
       
+      // Não salvar imediatamente - mostrar nova versão e aguardar aprovação
+      if (novoTexto.trim()) {
+        setTextoAnterior(textoBase);
+        setDescricaoEditada(novoTexto);
+        setAguardandoAprovacao(true);
+      }
+      
       setGerando(false);
     } catch (e) {
       console.error('Erro ao processar sugestão:', e);
@@ -357,6 +366,74 @@ const AlterarComIA = () => {
       novasAprovacoes[idx] = false;
       setAprovacoes(novasAprovacoes);
     }
+  };
+
+  // Função para aprovar a mudança
+  const aprovarMudanca = () => {
+    setAguardandoAprovacao(false);
+    setTextoAnterior('');
+    // O texto já está em descricaoEditada, será salvo quando clicar em "Salvar"
+  };
+
+  // Função para reverter para a versão anterior
+  const reverterMudanca = () => {
+    if (!textoAnterior) {
+      alert('Erro: não há versão anterior para reverter');
+      return;
+    }
+
+    setDescricaoEditada(textoAnterior);
+    setAguardandoAprovacao(false);
+    setTextoAnterior('');
+  };
+
+  // Função para copiar o texto do projeto
+  const copiarTextoProjeto = async () => {
+    const textoParaCopiar = descricaoEditada || projeto?.descricao || '';
+    
+    if (!textoParaCopiar.trim()) {
+      alert('Não há texto para copiar.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(textoParaCopiar);
+      alert('Texto copiado para a área de transferência!');
+    } catch (error) {
+      console.error('Erro ao copiar texto:', error);
+      // Fallback para navegadores mais antigos
+      const textarea = document.createElement('textarea');
+      textarea.value = textoParaCopiar;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        alert('Texto copiado para a área de transferência!');
+      } catch (err) {
+        alert('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
+      }
+      document.body.removeChild(textarea);
+    }
+  };
+
+  // Função para baixar o texto do projeto
+  const baixarTextoProjeto = () => {
+    const textoParaBaixar = descricaoEditada || projeto?.descricao || '';
+    
+    if (!textoParaBaixar.trim()) {
+      alert('Não há texto para baixar.');
+      return;
+    }
+
+    const elemento = document.createElement('a');
+    const arquivo = new Blob([textoParaBaixar], { type: 'text/plain;charset=utf-8' });
+    elemento.href = URL.createObjectURL(arquivo);
+    elemento.download = `${projeto?.nome || 'projeto'}_texto.txt`;
+    document.body.appendChild(elemento);
+    elemento.click();
+    document.body.removeChild(elemento);
   };
 
   const handleSalvar = async () => {
@@ -450,7 +527,31 @@ const AlterarComIA = () => {
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               <div className="p-6 border-b">
-                <h2 className="text-lg font-semibold mb-3 text-oraculo-blue">Texto do Projeto</h2>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold text-oraculo-blue">Texto do Projeto</h2>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={copiarTextoProjeto}
+                      className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                      title="Copiar texto do projeto"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={baixarTextoProjeto}
+                      className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10"
+                      title="Baixar texto do projeto"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Baixar
+                    </Button>
+                  </div>
+                </div>
                 <textarea
                   className="w-full border-2 border-gray-300 rounded-lg p-4 text-gray-700 min-h-[300px] focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue outline-none resize-y"
                   value={descricaoEditada}
@@ -462,6 +563,42 @@ const AlterarComIA = () => {
                   <div className="flex items-center gap-2 text-oraculo-blue mt-3 animate-pulse">
                     <Loader2 className="animate-spin h-5 w-5" />
                     Produzindo o texto...
+                  </div>
+                )}
+                
+                {/* Banner de aprovação quando há mudança aguardando */}
+                {aguardandoAprovacao && (
+                  <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">⚠️</span>
+                        <h4 className="text-lg font-semibold text-yellow-900">
+                          Mudança aplicada - Aprove ou reverta
+                        </h4>
+                      </div>
+                    </div>
+                    <p className="text-sm text-yellow-800 mb-4">
+                      O texto foi modificado com a sugestão aplicada. Revise as alterações acima e decida:
+                    </p>
+                    <div className="flex gap-3">
+                      <Button
+                        onClick={aprovarMudanca}
+                        disabled={salvando}
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        Aprovar Mudança
+                      </Button>
+                      <Button
+                        onClick={reverterMudanca}
+                        disabled={salvando}
+                        variant="outline"
+                        className="border-red-500 text-red-600 hover:bg-red-50 px-6 py-2"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Reverter para Versão Anterior
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
