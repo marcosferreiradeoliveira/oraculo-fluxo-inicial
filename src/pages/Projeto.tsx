@@ -1329,35 +1329,40 @@ const Projeto = () => {
             {/* Progress Bar with Clickable Steps */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-2">
-                {steps.map((step, index) => (
-                  <div key={index} className="flex flex-col items-center">
-                    <button 
-                      onClick={() => navigateToStep(index)}
-                      className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                        index <= etapaAtual 
-                          ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90 cursor-pointer' 
-                          : 'bg-gray-200 text-gray-600 cursor-not-allowed'
-                      }`}
-                      disabled={index > etapaAtual}
-                      aria-label={`Ir para ${step}`}
-                    >
-                      {index + 1}
-                    </button>
-                    <button 
-                      onClick={() => navigateToStep(index)}
-                      disabled={index > etapaAtual}
-                      className={`text-xs mt-1 text-center ${
-                        index === etapaAtual 
-                          ? 'font-medium text-oraculo-blue' 
-                          : index < etapaAtual 
-                            ? 'text-oraculo-blue hover:underline cursor-pointer' 
-                            : 'text-gray-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {step}
-                    </button>
-                  </div>
-                ))}
+                {steps.map((step, index) => {
+                  // Permitir navegação para "Gerar Textos" (index 3) se já existe análise
+                  const podeNavegar = index <= etapaAtual || (index === 3 && projeto?.analise_ia);
+                  
+                  return (
+                    <div key={index} className="flex flex-col items-center">
+                      <button 
+                        onClick={() => navigateToStep(index)}
+                        className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                          podeNavegar
+                            ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90 cursor-pointer' 
+                            : 'bg-gray-200 text-gray-600 cursor-not-allowed'
+                        }`}
+                        disabled={!podeNavegar}
+                        aria-label={`Ir para ${step}`}
+                      >
+                        {index + 1}
+                      </button>
+                      <button 
+                        onClick={() => navigateToStep(index)}
+                        disabled={!podeNavegar}
+                        className={`text-xs mt-1 text-center ${
+                          index === etapaAtual 
+                            ? 'font-medium text-oraculo-blue' 
+                            : podeNavegar
+                              ? 'text-oraculo-blue hover:underline cursor-pointer' 
+                              : 'text-gray-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {step}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
@@ -1371,30 +1376,42 @@ const Projeto = () => {
               {/* Breadcrumbs/Stepper */}
               <nav className="mb-8 border-b-4 border-gray-200 pb-6 px-6 pt-6">
                 <ol className="flex flex-wrap items-center gap-2 text-sm">
-                  {steps.map((step, idx) => (
-                    <li key={step} className="flex items-center gap-2">
-                      {idx < etapaAtual ? (
-                        <button 
-                          onClick={() => navigateToStep(idx)}
-                          className="px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1 hover:bg-green-200"
-                        >
-                          <span className="font-bold">✓</span> {step}
-                        </button>
-                      ) : idx === etapaAtual ? (
-                        <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">
-                          {step}
-                        </span>
-                      ) : (
-                        <button 
-                          disabled
-                          className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700 cursor-not-allowed"
-                        >
-                          {step}
-                        </button>
-                      )}
-                      {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
-                    </li>
-                  ))}
+                  {steps.map((step, idx) => {
+                    // Permitir navegação para "Gerar Textos" (index 3) se já existe análise
+                    const podeNavegar = idx < etapaAtual || (idx === 3 && projeto?.analise_ia);
+                    
+                    return (
+                      <li key={step} className="flex items-center gap-2">
+                        {idx < etapaAtual ? (
+                          <button 
+                            onClick={() => navigateToStep(idx)}
+                            className="px-3 py-1 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1 hover:bg-green-200"
+                          >
+                            <span className="font-bold">✓</span> {step}
+                          </button>
+                        ) : idx === etapaAtual ? (
+                          <span className="px-3 py-1 rounded-full font-medium bg-oraculo-blue text-white">
+                            {step}
+                          </span>
+                        ) : podeNavegar ? (
+                          <button 
+                            onClick={() => navigateToStep(idx)}
+                            className="px-3 py-1 rounded-full font-medium bg-oraculo-blue/20 text-oraculo-blue hover:bg-oraculo-blue/30 cursor-pointer"
+                          >
+                            {step}
+                          </button>
+                        ) : (
+                          <button 
+                            disabled
+                            className="px-3 py-1 rounded-full font-medium bg-gray-200 text-gray-700 cursor-not-allowed"
+                          >
+                            {step}
+                          </button>
+                        )}
+                        {idx < steps.length - 1 && <span className="text-gray-400">→</span>}
+                      </li>
+                    );
+                  })}
                 </ol>
               </nav>
               <div className="px-6 pb-4 border-l-4 border-oraculo-blue pl-4">

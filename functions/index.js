@@ -456,24 +456,27 @@ exports.alterarTextoComIA = onRequest(async (req, res) => {
       portfolioContext = `\n\nCONTEXTO ADICIONAL - PORTFOLIO DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR NO TEXTO):\n${userPortfolio}\n\nIMPORTANTE: O portfolio acima é apenas contexto de referência sobre o histórico e experiência do proponente. NÃO inclua o portfolio literalmente no texto reescrito. Use-o apenas para entender melhor o contexto quando a sugestão exigir menção a experiência/capacidade, mas faça isso de forma sutil e integrada ao projeto, sem copiar trechos do portfolio.`;
     }
     
-    const prompt = `Com base na sugestão abaixo, reescreva o projeto de forma completa e integrada.
+    const prompt = `Com base na sugestão abaixo, reescreva APENAS o texto específico fornecido, incorporando a sugestão.
+
+IMPORTANTE: Você está reescrevendo APENAS um texto específico (como justificativa, objetivos, metodologia, etc.), NÃO o projeto completo.
 
 SUGESTÃO:
 ${sugestao}
 
-PROJETO ATUAL:
+TEXTO ATUAL (APENAS ESTE TEXTO DEVE SER REESCRITO):
 ${textoAtual}${portfolioContext}
 
 INSTRUÇÕES CRÍTICAS:
-- Reescreva o projeto completo incorporando a sugestão de forma natural
+- Reescreva APENAS o texto fornecido acima, incorporando a sugestão de forma natural
 - A sugestão deve estar integrada ao texto, não apenas mencionada
-- Mantenha a estrutura, tom e estilo do projeto original
-- O resultado deve ser uma versão melhorada do projeto que incorpora a sugestão
+- Mantenha a estrutura, tom e estilo do texto original
+- O resultado deve ser uma versão melhorada deste texto específico que incorpora a sugestão
+- NÃO reescreva o projeto completo, apenas este texto específico
 - NÃO inclua o portfolio literalmente no texto reescrito
 - Se a sugestão exigir menção a experiência/capacidade, use o contexto do portfolio apenas para dar credibilidade, mas de forma SUTIL e INTEGRADA, sem copiar trechos
-- O texto gerado deve focar APENAS no projeto reescrito, incorporando a sugestão
+- O texto gerado deve ter o mesmo foco e escopo do texto original fornecido
 
-PROJETO REESCRITO:`;
+TEXTO REESCRITO:`;
 
     const openai = getOpenAI();
     
@@ -487,7 +490,7 @@ PROJETO REESCRITO:`;
       messages: [
         { 
           role: 'system', 
-          content: 'Você é um especialista em projetos culturais. Quando receber uma sugestão e um projeto, reescreva o projeto completo incorporando a sugestão de forma natural e integrada. Não apenas mencione a sugestão, mas incorpore-a ao texto do projeto.' 
+          content: 'Você é um especialista em projetos culturais. Quando receber uma sugestão e um texto específico (como justificativa, objetivos, metodologia, etc.), reescreva APENAS esse texto específico incorporando a sugestão de forma natural e integrada. NÃO reescreva o projeto completo, apenas o texto fornecido. Não apenas mencione a sugestão, mas incorpore-a ao texto de forma natural.' 
         },
         { role: 'user', content: prompt },
       ],
@@ -625,9 +628,67 @@ REGRA CRÍTICA DE FORMATAÇÃO:
       const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
       
       promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
-Crie um orçamento detalhado e realista para o projeto cultural descrito abaixo.
-Inclua todas as rubricas necessárias como: produção, divulgação, recursos humanos, materiais, equipamentos, etc.
-Seja específico com valores e justificativas para cada item.
+Crie um orçamento COMPLETO, DETALHADO E ABRANGENTE para o projeto cultural descrito abaixo.
+
+CRÍTICO - NÃO CRIE JUSTIFICATIVAS:
+- NÃO crie linhas de texto explicando o orçamento
+- NÃO crie justificativas ou explicações sobre as rubricas
+- NÃO crie texto introdutório ou conclusivo
+- Apenas liste as rubricas com nome e valor
+- Cada linha deve ser UMA rubrica: "Nome da Rubrica: R$ valor"
+- NÃO inclua textos como "Justificativa:", "Observação:", "Nota:", etc.
+
+IMPORTANTE: Gere um orçamento COMPLETO desde o início, incluindo TODAS as rubricas necessárias:
+- Produção (coordenação, produção executiva, supervisão)
+- Recursos Humanos (mão de obra, profissionais, equipe técnica, artistas, diretores, produtores)
+- Materiais e Equipamentos (materiais gráficos, equipamentos técnicos, insumos)
+- Locação (equipamentos, espaços, veículos)
+- Transporte e Deslocamento (combustível, passagens, hospedagem)
+- Divulgação e Marketing (publicidade, assessoria de imprensa, redes sociais, material promocional)
+- Infraestrutura e Montagem (cenografia, iluminação, sonorização, palco)
+- Outros custos (taxas, impostos, seguros, etc.)
+
+Seja ESPECÍFICO e DETALHADO. Não seja genérico. Liste todas as rubricas importantes que um projeto cultural precisa.
+Cada rubrica deve ter um valor realista e proporcional ao projeto descrito.
+
+IMPORTANTE SOBRE UNIDADES - USE DIVERSIDADE DE UNIDADES:
+Para cada rubrica, SEMPRE indique a unidade apropriada. VARIE as unidades de acordo com o tipo de rubrica:
+- "mês" ou "meses" para locação/aluguel de equipamentos, espaços, veículos
+- "dia" ou "dias" para diárias, hospedagem, trabalho por dia, alimentação diária
+- "pessoa" ou "pessoas" para mão de obra, profissionais, equipe técnica, artistas, diretores, produtores
+- "km" para transporte, deslocamento, combustível, passagens, viagens
+- "serviço" para serviços diversos, divulgação, publicidade, assessoria, marketing
+- "hora" ou "horas" para serviços por hora, profissionais técnicos que cobram por hora
+- "unidade" para materiais físicos, equipamentos, insumos, itens concretos
+- "verba" para verbas gerais de produção, coordenação, administração
+- "semana" ou "semanas" para serviços ou locações semanais
+- "achê" quando apropriado
+
+NÃO use sempre "unidade" ou "serviço". Varie as unidades de acordo com a natureza real de cada rubrica!
+
+FORMATO DE CADA RUBRICA (use um por linha):
+Nome da Rubrica: R$ valor
+ou
+Nome da Rubrica - R$ valor
+ou
+Nome da Rubrica (unidade: tipo) - R$ valor
+
+IMPORTANTE SOBRE VALORES - USE VALORES BEM REDONDOS:
+- NUNCA use centavos. Todos os valores devem ser múltiplos inteiros.
+- Valores >= R$ 10.000: use múltiplos de 1.000. Exemplos: R$ 10.000,00, R$ 15.000,00, R$ 20.000,00.
+- Valores entre R$ 1.000 e R$ 9.999: use múltiplos de 100. Exemplos: R$ 1.200,00, R$ 2.500,00, R$ 5.000,00, R$ 8.400,00.
+- Valores entre R$ 100 e R$ 999: use múltiplos de 50. Exemplos: R$ 150,00, R$ 250,00, R$ 500,00, R$ 750,00.
+- Valores entre R$ 10 e R$ 99: use múltiplos de 10. Exemplos: R$ 20,00, R$ 40,00, R$ 60,00, R$ 90,00.
+- Valores < R$ 10: use múltiplos de 5. Exemplos: R$ 5,00.
+- PROIBIDO usar valores como R$ 1.234,56, R$ 857,89, R$ 123,45. Use R$ 1.200,00, R$ 800,00, R$ 100,00.
+
+Exemplos de valores redondos:
+- Locação de equipamento de som: R$ 2.500,00 (unidade: mês)
+- Material gráfico: R$ 1.200,00 (unidade: unidade)
+- Transporte: R$ 800,00 (unidade: km)
+- Mão de obra técnica: R$ 5.000,00 (unidade: pessoa)
+- Divulgação: R$ 3.000,00 (unidade: serviço)
+- Produção executiva: R$ 8.000,00 (unidade: verba)
 
 ${instrucoesFormatacao}
 
@@ -645,11 +706,23 @@ Nome: ${nomeProjeto}
 ${resumoProjeto ? `Resumo: ${resumoProjeto}\n` : ''}
 ${descricaoProjeto ? `Descrição completa do projeto:\n${descricaoProjeto}\n` : ''}
 
-Com base EXCLUSIVAMENTE no projeto descrito acima, gere um orçamento completo e profissional que reflita as necessidades e atividades descritas no projeto.
-${tetoMaximo > 0 ? `O orçamento DEVE respeitar rigorosamente o teto máximo de R$ ${tetoFormatado}. A soma de todas as rubricas não pode ultrapassar este valor.` : ''}
+Com base EXCLUSIVAMENTE no projeto descrito acima, gere um orçamento COMPLETO, DETALHADO E PROFISSIONAL que reflita TODAS as necessidades e atividades descritas no projeto.
+
+IMPORTANTE: 
+- Liste TODAS as rubricas necessárias. Não seja econômico na quantidade de rubricas.
+- Seja ABRANGENTE e DETALHADO. Inclua desde itens grandes (produção, mão de obra) até itens menores mas importantes (materiais, transporte, divulgação).
+- O orçamento deve ser REALISTA e COMPLETO, como se fosse ser apresentado em um edital real.
+- Cada rubrica deve ter um valor específico e justificado pela necessidade do projeto.
+- NÃO crie justificativas, explicações ou observações. Apenas liste as rubricas com nome e valor.
+- NÃO inclua texto explicativo entre as rubricas. Apenas as rubricas, uma por linha.
+
+${tetoMaximo > 0 ? `O orçamento DEVE respeitar rigorosamente o teto máximo de R$ ${tetoFormatado}. A soma de todas as rubricas não pode ultrapassar este valor. Distribua o valor total de forma coerente entre TODAS as rubricas necessárias.` : ''}
 
 Lembre-se: texto puro, sem asteriscos, sem markdown, sem símbolos de formatação.
-${tetoMaximo > 0 ? 'Formate cada rubrica como: "Nome da Rubrica: R$ X.XXX,XX" ou "Nome da Rubrica - R$ X.XXX,XX".' : ''}`;
+Formate cada rubrica como: "Nome da Rubrica: R$ X.XXX,XX" ou "Nome da Rubrica - R$ X.XXX,XX" ou "Nome da Rubrica (unidade: tipo) - R$ X.XXX,XX".
+Liste UMA rubrica por linha.
+
+Gere o orçamento COMPLETO agora:`;
     } else {
       // Para todos os outros tipos de texto, incluir a descrição completa do projeto
       const tipoTextoFormatado = tipo.split('_').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -713,40 +786,49 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
       stream: true,
     });
     
-    // Função para limpar formatação markdown do texto
-    const limparFormatacao = (texto) => {
-      if (!texto) return texto;
-      return texto
-        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **texto** (negrito)
-        .replace(/\*(.*?)\*/g, '$1') // Remove *texto* (itálico)
-        .replace(/__(.*?)__/g, '$1') // Remove __texto__ (negrito)
-        .replace(/_(.*?)_/g, '$1') // Remove _texto_ (itálico)
-        .replace(/##\s*/g, '') // Remove ## (título)
-        .replace(/###\s*/g, '') // Remove ### (subtítulo)
-        .replace(/####\s*/g, '') // Remove #### (subtítulo)
-        .replace(/`(.*?)`/g, '$1') // Remove `código`
-        .replace(/~~(.*?)~~/g, '$1') // Remove ~~texto~~ (riscado)
-        .replace(/^\s*[-*+]\s+/gm, '') // Remove marcadores de lista (-, *, +)
-        .trim();
-    };
-    
+    // IMPORTANTE: Preservar TODOS os espaços - não limpar em cada chunk, apenas no final
     let textoCompleto = '';
     
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) {
-        // Limpar formatação markdown do conteúdo
-        const conteudoLimpo = limparFormatacao(content);
-        textoCompleto += conteudoLimpo;
-        res.write(`data: ${JSON.stringify({ type: 'chunk', content: conteudoLimpo })}\n\n`);
+    try {
+      for await (const chunk of stream) {
+        const content = chunk.choices?.[0]?.delta?.content;
+        if (content) {
+          // Acumular o texto sem limpar - preservar espaços
+          textoCompleto += content;
+          // Enviar o conteúdo original para preservar espaços
+          res.write(`data: ${JSON.stringify({ type: 'chunk', content: content })}\n\n`);
+        }
       }
+      
+      // Apenas limpar formatação no texto completo final, preservando espaços
+      if (textoCompleto && typeof textoCompleto === 'string') {
+        textoCompleto = textoCompleto
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **texto** (negrito)
+          .replace(/\*(.*?)\*/g, '$1') // Remove *texto* (itálico) 
+          .replace(/__(.*?)__/g, '$1') // Remove __texto__ (negrito)
+          .replace(/_(.*?)_/g, '$1') // Remove _texto_ (itálico)
+          .replace(/##/g, '') // Remove ## apenas, preserva espaços ao redor
+          .replace(/###/g, '') // Remove ### apenas, preserva espaços
+          .replace(/####/g, '') // Remove #### apenas, preserva espaços
+          .replace(/`(.*?)`/g, '$1') // Remove `código`
+          .replace(/~~(.*?)~~/g, '$1') // Remove ~~texto~~
+          .replace(/^\s*[-*+]\s+/gm, ''); // Remove marcadores de lista mas preserva resto
+      }
+      
+      // Garantir que textoCompleto seja string
+      const finalText = textoCompleto || '';
+      
+      res.write(`data: ${JSON.stringify({ type: 'complete', fullText: finalText })}\n\n`);
+      res.end();
+    } catch (streamError) {
+      console.error('Erro durante streaming:', streamError);
+      if (!res.headersSent) {
+        throw streamError;
+      }
+      // Se já começamos streaming, enviar erro via stream
+      res.write(`data: ${JSON.stringify({ type: 'error', message: streamError.message || 'Erro ao gerar texto' })}\n\n`);
+      res.end();
     }
-    
-    // Garantir que o texto final também está limpo
-    textoCompleto = limparFormatacao(textoCompleto);
-    
-    res.write(`data: ${JSON.stringify({ type: 'complete', fullText: textoCompleto })}\n\n`);
-    res.end();
     
   } catch (error) {
     console.error('Error generating text:', error);

@@ -44,7 +44,6 @@ const GerarTextos = () => {
   // Force update hook
   const [, forceUpdate] = useState<{} | undefined>();
   const { id } = useParams<{ id: string }>();
-  console.log('Current route id:', id); // Debug log
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<ProjetoDocument | null>(null);
@@ -389,24 +388,33 @@ const GerarTextos = () => {
       }
       
       // 6. Envia a requisição
+      console.log('[DEBUG] Preparando para enviar requisição...');
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
+      
+      console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
+      console.log('[DEBUG] Request data keys:', Object.keys(requestData));
       
       // Tenta primeiro a nova função, se falhar usa a antiga
       let response;
       try {
+        console.log('[DEBUG] Tentando fetch para Firebase Function...');
         response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
         });
+        console.log('[DEBUG] Resposta recebida do Firebase Function, status:', response.status);
       } catch (err) {
+        console.error('[ERROR] Erro ao chamar Firebase Function:', err);
         // Fallback para a URL do Cloud Run
+        console.log('[DEBUG] Tentando fallback para Cloud Run...');
         response = await fetch('https://gerartexto-v3odkawqzq-uc.a.run.app', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
         });
+        console.log('[DEBUG] Resposta recebida do Cloud Run, status:', response.status);
       }
       
       const requestTime = Date.now() - startTime;
@@ -417,9 +425,18 @@ const GerarTextos = () => {
       console.log(`[${new Date().toISOString()}] Resposta recebida em ${requestTime}ms`, response);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorData: { error?: string } | null = null;
+        try {
+          const text = await response.text();
+          if (text) {
+            errorData = JSON.parse(text) as { error?: string };
+          }
+        } catch (e) {
+          console.error('Erro ao parsear resposta de erro:', e);
+        }
         console.error(`[${new Date().toISOString()}] Erro na resposta:`, response.status, errorData);
-        throw new Error(errorData.error || 'Erro ao gerar texto');
+        const errorMsg = errorData?.error || `Erro ao gerar texto (status: ${response.status})`;
+        throw new Error(errorMsg);
       }
       
       const contentType = response.headers.get('content-type') || '';
@@ -450,12 +467,11 @@ const GerarTextos = () => {
           return false; // This line is unreachable but satisfies TypeScript's return type
         }
     } else if (contentType.includes('text/event-stream') || contentType.includes('text/plain')) {
-        console.log('[DEBUG] Iniciando leitura do stream de texto');
         const decoder = new TextDecoder('utf-8');
         const reader = response.body?.getReader();
         let generationComplete = false;
         let buffer = '';
-        let fullText = ''; // Moved outside to maintain state across chunks
+        let fullText = '';
         
         try {
           while (true) {
@@ -473,24 +489,16 @@ const GerarTextos = () => {
               
               try {
                 const data = JSON.parse(line.substring(6).trim());
-                console.log('[STREAM] Received data:', data);
                 
                 if (data.type === 'chunk' && data.content) {
-                  console.log('[STREAM] Received chunk:', data.content);
-                  // Append new content to the full text
+                  // Append new content to the full text - preserva espaços
                   fullText += data.content;
                   
-                  console.log('[STREAM] Updating UI with new text length:', fullText.length);
-                  
                   // Update the state with the latest text
-                  setTextos(prev => {
-                    const newTexts = {
-                      ...prev,
-                      [tipo]: fullText
-                    };
-                    console.log('[STREAM] State updated with text length:', fullText.length);
-                    return newTexts;
-                  });
+                  setTextos(prev => ({
+                    ...prev,
+                    [tipo]: fullText
+                  }));
                   
                   // Update the textarea directly for immediate visual feedback
                   if (textareaRef.current) {
@@ -512,10 +520,8 @@ const GerarTextos = () => {
                   }
                 } else if (data.type === 'complete') {
                   const finalText = data.fullText || fullText;
-                  console.log('[DEBUG] Geração completa, texto final:', finalText);
                   
                   if (finalText) {
-                    console.log('[DEBUG] Final text received, updating state and saving to Firestore');
                     // Update state first
                     setTextos(prev => ({
                       ...prev,
@@ -540,19 +546,19 @@ const GerarTextos = () => {
           
           // If we get here, the stream ended
           if (!generationComplete) {
-            console.log('[DEBUG] Stream finalizado sem evento complete');
-            if (fullText) {
-              console.log('[DEBUG] Salvando texto final do stream:', fullText);
+            if (fullText && fullText.trim()) {
               setTextos(prev => ({
                 ...prev,
                 [tipo]: fullText
               }));
               await salvarNoFirestore(tipo, fullText);
             } else {
-              console.error('[ERROR] Nenhum texto foi recebido do servidor');
               throw new Error('Nenhum texto foi recebido do servidor');
             }
           }
+          
+          setGerando(null);
+          return true;
           
         } catch (error) {
           console.error('Erro durante o processamento do stream:', error);
@@ -605,14 +611,16 @@ const GerarTextos = () => {
 
   const handleGerarTexto = async () => {
     if (!textoSelecionado) {
-      console.error('Nenhum texto selecionado');
+      alert('Por favor, selecione um tipo de texto para gerar.');
+      return;
+    }
+    
+    if (gerando) {
       return;
     }
     
     // Show the text box immediately
     setMostrarCaixaTexto(true);
-
-    console.log('[DEBUG] handleGerarTexto started for:', textoSelecionado);
     
     // Set loading state
     setGerando(textoSelecionado);
@@ -1153,26 +1161,14 @@ const GerarTextos = () => {
             </div>
             
             {/* Botões de ação */}
-            <div className="mt-8 flex justify-between items-center">
+            <div className="mt-8 flex justify-end items-center">
               <Button
                 onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
-                className="bg-gradient-to-r from-oraculo-purple to-oraculo-blue hover:opacity-90 text-white px-6 py-3"
-                size="lg"
-              >
-                <DollarSign className="mr-2 h-5 w-5" />
-                Criar Orçamento
-              </Button>
-              
-              <Button
-                onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}
                 className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3"
                 size="lg"
               >
-                Próximo: Preencher Anexos
-                <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-orange-500 text-white rounded-full">
-                  BETA
-                </span>
-                <FileText className="ml-2 h-5 w-5" />
+                Próximo: Criar Orçamento
+                <DollarSign className="ml-2 h-5 w-5" />
               </Button>
             </div>
           </div>
