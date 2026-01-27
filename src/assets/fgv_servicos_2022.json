@@ -1,0 +1,3367 @@
+{
+  "servicos": [
+    {
+      "codigo": "126",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "126SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEM DIÁRIASHOSPEDAGEM COM CAFÉ DA MANHÃ E SEM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO INDIVIDUAL, NO CENTRO.DIÁRIA 193,00 462,69 147,00 352,41 180,78 429,73 130,50 310,21 176,00 414,13 198,55 467,19 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "127",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "127SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEM DIÁRIASHOSPEDAGEM COM CAFÉ DA MANHÃ E SEM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO TRIPLO, NO CENTRO.DIÁRIA 201,91 484,05 208,00 498,65 263,56 626,50 191,60 455,45 239,25 562,96 271,48 638,80 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "128",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "128SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEM DIÁRIASHOSPEDAGEM COM CAFÉ DA MANHÃ E COM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO COMPOSIÇÃO (HOSPEDAGEM + REFEIÇÃO)",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "129",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "129SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEM DIÁRIASHOSPEDAGEM COM CAFÉ DA MANHÃ E COM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO TRIPLO, NO CENTRO.DIÁRIA 234,63 562,49 251,58 603,13 233,21 554,36 194,48 462,30 291,42 685,72 327,19 769,89VALOR DE COMPOSIÇÃO (HOSPEDAGEM + REFEIÇÃO)",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "139",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "139SERVIÇOS; FRETES E LOGÍSTICACOMBUSTÍVEL COMBUSTÍVELGASOLINA AUTOMOTIVA COMUMLITRO 2,84 6,81 2,66 6,38 2,81 6,68 2,90 6,89 2,61 6,14 2,85 6,71 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "140",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "140SERVIÇOS; FRETES E",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "148",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "148SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE ESCRITÓRIOMATERIAL DE ESCRITÓRIOPAPEL A4 LISO BRANCO P/ CÓPIA XEROGRÁFICAPCT 500 FL 14,72 35,29 15,09 36,18 12,70 30,19 14,70 34,94 13,88 32,66 14,34 33,74 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "149",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "149SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE ESCRITÓRIOMATERIAL DE ESCRITÓRIOCARTUCHO DE TINTA PRETA PARA IMPRESSORA JATO DE TINTAUNIDADE 59,91 143,63 59,91 143,63 59,91 142,41 59,91 142,41 60,80 143,06 60,80 143,06 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "150",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "150SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE ESCRITÓRIOMATERIAL DE ESCRITÓRIOCANETA ESFEROGRÁFICA ESCRITA MÉDIAUNIDADE 0,90 2,16 1,12 2,69 0,84 2,00 0,75 1,78 0,77 1,81 0,90 2,12 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "151",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "151SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE ESCRITÓRIOMATERIAL DE ESCRITÓRIOPAPEL CARTA (LETTER) LISO BRANCO P/ CÓPIA XEROGRÁFICAPCT 500 FL 13,61 32,63 13,31 31,91 12,68 30,14 13,02 30,95 13,08 30,78 12,68 29,84 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "152",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "152SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE ESCRITÓRIOMATERIAL DE ESCRITÓRIOPAPEL A3 LISO BRANCO P/ CÓPIA XEROGRÁFICAPCT 500 FL 27,52 65,98 30,64 73,46 24,83 59,02 32,43 77,09 27,15 63,88 27,85 65,53 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "153",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "153SERVIÇOS; FRETES E LOGÍSTICATRANSPORTETRANSPORTE LOCAL / LOCAÇÃO DE AUTOMÓVEL / COMBUSTÍVELLOCAÇÃO DE VEÍCULO UTILITÁRIO SEM MOTORISTA. KM LIVRE, SEM SEGUROS E COBERTURAS DE RISCO.SERVIÇO 308,23 738,94 246,00 589,75 182,33 433,41 198,67 472,26 206,05 484,84 198,90 468,02 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "154",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "154SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE MOBILIÁRIOALUGUEL DE 25 MESAS PLÁSTICASLOTE 105,00 251,72 126,25 302,67 75,00 178,28 50,00 118,85 116,67 274,53 175,00 411,78 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "155,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "155,1SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA IMPRESSAANÚNCIO INDETERMINADO EM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "155,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "155,2SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA IMPRESSAANÚNCIO INDETERMINADO EM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "155,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "155,3SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA IMPRESSAANÚNCIO INDETERMINADO EM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "155,4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "155,4SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA IMPRESSAANÚNCIO INDETERMINADO EM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "156",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "156SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADEBANNER/FAIXA ADESIVA/FAIXA DE LONA/SAIA DE PALCO/TESTEIRA/ PÓRTICOBANNER M² 51,67 123,87 55,00 131,86 66,12 157,17 60,00 142,63 63,00 148,24 78,33 184,31 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "157",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "157SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE BUSDOORBUSDOOR - ADESIVAÇÃO DE ÔNIBUS (2,1 X 1,05 M) - JANELA RIO DE JANEIRO CÓDIGO GRUPO CATEGORIA DESCRIÇÃO DO CLIENTE DESCRIÇÃO DE MERCADOBRASÍLIA PORTO ALEGRE RECIFE BELÉM SÃO PAULO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "158",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "158SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE BUSDOORBACKBUS - ADESIVAÇÃO DE ÔNIBUS (2,9 X 2,2 M)",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "159,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "159,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE VEÍCULOSAMBULÂNCIALOCAÇÃO DE AMBULÂNCIA - BÁSICASERVIÇO 816,67 1957,86 650,00 1558,29 N/A N/A 2.380,00 5657,47 706,75 1663,00 750,00 1764,77 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "159,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "159,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE VEÍCULOSAMBULÂNCIALOCAÇÃO DE AMBULÂNCIA - COM UTISERVIÇO 1.430,00 3428,24 1.300,00 3116,58 N/A N/A 3.880,00 9223,10 1.569,25 3692,48 1.590,50 3742,48 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "160",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "160SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA INTERNETNEWSLETTER (50.000 E-MAILS - SERVIÇO COMPLETO FEITO PELA EMPRESA CONTRATADA, EXCETO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "161",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "161SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA INTERNETE-MAIL MARKETING - 50.000 E- MAILSMENSAL 171,00 409,95 171,00 409,95 171,00 406,48 171,00 406,48 171,00 402,37 171,00 402,37 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "162,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "162,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSEXTINTORESLOCAÇÃO DE EXTINTOR DE INCÊNDIO DE ÁGUA - 10 LITROSDIÁRIA 18,00 43,15 60,00 143,84 52,50 124,80 25,00 59,43 58,42 137,46 50,00 117,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "162,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "162,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSEXTINTORESLOCAÇÃO DE EXTINTOR DE INCÊNDIO DE CO2 - 6 KGSDIÁRIA 23,50 56,34 86,67 207,78 80,00 190,17 40,00 95,08 76,92 180,99 50,00 117,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "162,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "162,3SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSEXTINTORESLOCAÇÃO DE EXTINTOR DE INCÊNDIO DE PÓ QUÍMICO - 6 KGSDIÁRIA 29,00 69,52 63,33 151,83 55,00 130,74 35,00 83,20 65,73 154,66 50,00 117,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "163",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "163SERVIÇOS; FRETES E LOGÍSTICAAQUISIÇÃO DE EQUIPAMENTOSGERADOR - AQUISIÇÃOGRUPO GERADOR MÉDIO COM QUADRO DE COMANDO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "164",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "164SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADEANÚNCIO DE 1 DE PÁGINAANÚNCIO DE JORNAL DE  1",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "165",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "165SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADEANÚNCIO DE 1/3 DE PÁGINAANÚNCIO DE JORNAL DE 1/2 DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "166",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "166SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADEANÚNCIO DE 1/8 DE PÁGINAANÚNCIO DE  JORNAL DE 1/4 DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "168,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "168,1SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAFICHA CATALOGRÁFICA E ISBNNÚMERO ISBN (PARA CADA TÍTULO)TÍTULO 12,00 28,77 12,00 28,77 12,00 28,53 12,00 28,53 12,00 28,24 12,00 28,24 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "168,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "168,2SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAFICHA CATALOGRÁFICA E",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,1SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)FESTAS E EVENTOS EM GERAL (SEM COBRANÇA) - MÚSICA POR APARELHOM2 / DIA 8,21 19,68 8,21 19,68 8,21 19,52 6,98 16,59 8,21 19,32 8,21 19,32 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,2SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)FESTAS E EVENTOS EM GERAL (SEM COBRANÇA) - MÚSICA AO VIVOM2 / DIA 5,49 13,16 5,49 13,16 5,49 13,05 4,67 11,10 5,49 12,92 5,49 12,92 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,3SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)SHOW SIMPLES (COM RECEITA BRUTA) - MÚSICA POR APARELHORECEITA /  DIA 0,15 0,36 0,15 0,36 0,15 0,36 0,15 0,36 0,15 0,35 0,15 0,35 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,4SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)SHOW SIMPLES (COM RECEITA BRUTA) - MÚSICA AO VIVORECEITA /  DIA 0,10 0,24 0,10 0,24 0,10 0,24 0,10 0,24 0,10 0,24 0,10 0,24 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,5SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)SHOW SIMPLES (SEM RECEITA BRUTA) - MÚSICA POR APARELHOM2 / DIA 8,21 19,68 8,21 19,68 8,21 19,52 6,98 16,59 8,21 19,32 8,21 19,32 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "169,6",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "169,6SERVIÇOS; FRETES E LOGÍSTICADIREITOS AUTORAISECAD (CASO DE O EVENTO SER ABERTO E GRATUITO)SHOW SIMPLES (SEM RECEITA BRUTA) - MÚSICA AO VIVOM2 / DIA 5,49 13,16 5,49 13,16 5,49 13,05 4,67 11,10 5,49 12,92 5,49 12,92 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "170",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "170SERVIÇOS; FRETES E LOGÍSTICAVESTUÁRIO CAMISETASCAMISA DE MALHA C/ MANGA CURTAUNIDADE 21,43 51,38 19,37 46,44 22,32 53,06 22,50 53,48 15,95 37,53 14,30 33,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "174,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "174,1SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA TELEVISIVAANÚNCIO EM TV (30 SEGUNDOS) -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "174,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "174,2SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADE MÍDIA TELEVISIVAANÚNCIO EM TV (30 SEGUNDOS) -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "176",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "176SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "177,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "177,1SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "177,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "177,2SERVIÇOS; FRETES E LOGÍSTICAMATERIAIS DE CONSUMOÁGUA COPO COM ÁGUA DE 200 ML. UNIDADE 0,31 0,74 0,20 0,48 0,34 0,81 0,27 0,64 0,29 0,68 0,35 0,82 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "208",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "208SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA RIO DE JANEIRO (CAPITAL). ENVELOPE DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A 21,80 51,30 21,80 51,30DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "209",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "209SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA BRASÍLIA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE 29,20 70,00 N/A N/A N/A N/A N/A N/A 30,80 72,47 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "210",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "210SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA PORTO ALEGRE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A 29,20 70,00 N/A N/A N/A N/A 30,80 72,47 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "211",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "211SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA RECIFE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A 51,40 122,18 N/A N/A 51,40 120,95 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "212",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "212SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA BELÉM. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A 56,30 133,83 56,30 132,48 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "213",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "213SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA BRASÍLIA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE 29,20 70,00 N/A N/A N/A N/A N/A N/A N/A N/A 30,80 72,47DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "214",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "214SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA PORTO ALEGRE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A 36,20 86,78 N/A N/A N/A N/A N/A N/A 38,20 89,89DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "215",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "215SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA RECIFE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A 47,00 111,72 N/A N/A N/A N/A 47,00 110,59DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "216",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "216SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA BELÉM. ENVELOPE DE 1 KG MEDINDO 21 UNIDADE N/A N/A N/A N/A N/A N/A 56,30 133,83 N/A N/A 56,30 132,48DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "217",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "217SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE BRASÍLIA PARA PORTO ALEGRE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE 40,70 97,57 40,70 97,57 N/A N/A N/A N/A N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "218",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "218SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE BRASÍLIA PARA RECIFE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE 44,10 105,72 N/A N/A 46,70 111,01 N/A N/A N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "219",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "219SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE BRASÍLIA PARA BELÉM. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE 40,70 97,57 N/A N/A N/A N/A 43,10 102,45 N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "220",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "220SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA BELO HORIZONTE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A 21,80 51,30 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "221",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "221SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA CURITIBA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A 21,80 51,30 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "222",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "222SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA SALVADOR. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A 43,10 101,42 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "223",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "223SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE SÃO PAULO (CAPITAL) PARA FORTALEZA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A 56,30 132,48 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "224",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "224SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA BELO HORIZONTE. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A N/A N/A 21,80 51,30DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "225",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "225SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA SALVADOR. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A N/A N/A 38,20 89,89DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "226",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "226SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RIO DE JANEIRO (CAPITAL) PARA FORTALEZA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A N/A N/A N/A N/A N/A N/A 51,40 120,95DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "227",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "227SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RECIFE PARA SALVADOR. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A 30,80 73,21 N/A N/A N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "228",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "228SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE RECIFE PARA FORTALEZA. ENVELOPE DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A N/A N/A 21,80 51,82 N/A N/A N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "229",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "229SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE SEDEX DE PORTO ALEGRE PARA CURITIBA. ENVELOPE DE 1 KG MEDINDO 21 X 29 CMUNIDADE N/A N/A 20,70 49,63 N/A N/A N/A N/A N/A N/A N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "1SERVIÇOS; FRETES E LOGÍSTICATRANSPORTETRANSPORTE LOCAL / LOCAÇÃO DE AUTOMÓVEL / COMBUSTÍVEL - LOCAÇÃO DE AUTOMÓVEL POPULAR, S/ MOTORISTAALUGUEL DE AUTOMÓVEL POPULAR (TARIFA BÁSICA/ECONÔMICA), SEM MOTORISTA. KM LIVRE, SEM SEGUROS E COBERTURAS DE RISCO.DIÁRIA 126,34 302,88 122,44 293,53 109,45 260,17 119,10 283,11 119,74 281,75 127,41 299,80DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,1SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE FRETE AÉREO DE SÃO PAULO (CAPITAL) PARA RIO DE JANEIRO (CAPITAL). CARGA DE 50 KGS MEDINDOUN N/A N/A N/A N/A N/A N/A N/A N/A 147,12 346,18 147,12 346,18DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,2SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE FRETE AÉREO DE SÃO PAULO (CAPITAL) PARA BRASÍLIA. CARGA DE 50 KGS MEDINDO 0,5 X",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "0,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "0,5 X 0,5 M.UN 207,70 497,93 N/A N/A N/A N/A N/A N/A 207,70 488,72 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,3SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE FRETE AÉREO DE SÃO PAULO (CAPITAL) PARA PORTO ALEGRE. CARGA DE 50 KGS MEDINDO 0,5 X 0,5 X 0,5 M.UN N/A N/A 207,55 497,57 N/A N/A N/A N/A 207,55 488,37 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,4SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE FRETE AÉREO DE SÃO PAULO (CAPITAL) PARA RECIFE. CARGA DE 50 KGS MEDINDO 0,5 X",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "0,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "0,5 X 0,5 M.UN N/A N/A N/A N/A 377,38 897,07 N/A N/A 391,08 920,22 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,5SERVIÇOS; FRETES E LOGÍSTICAFRETETRANSPORTE DE MATERIAL - FRETESERVIÇO DE FRETE AÉREO DE SÃO PAULO (CAPITAL) PARA BELÉM. CARGA DE 50 KGS MEDINDO 0,5 X",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "0,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "0,5 X 0,5 M.UN N/A N/A N/A N/A N/A N/A 455,62 1083,05 455,62 1072,08 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3,1SERVIÇOS; FRETES E LOGÍSTICAFRETEFRETE RODOVIÁRIO - SP CAPITAL - RJ CAPITAL,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "50",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "50KG, 0,5X0,5X0,5MSERVIÇO DE FRETE RODOVIÁRIO DE SÃO PAULO (CAPITAL) PARA RIO DE JANEIRO (CAPITAL). CARGA DE 50 KGS MEDINDO 0,5 X",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "0,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "0,5 X 0,5 M.UN N/A N/A N/A N/A N/A N/A N/A N/A 125,90 296,25 125,90 296,25DEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3,2SERVIÇOS; FRETES E LOGÍSTICAFRETEFRETE RODOVIÁRIO - SP CAPITAL - RJ CAPITAL,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "50",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "50KG, 0,5X0,5X0,5MSERVIÇO DE FRETE RODOVIÁRIO DE SÃO PAULO (CAPITAL) PARA BRASÍLIA. CARGA DE 50 KGS MEDINDO 0,5 X 0,5 X 0,5 M.UN 159,81 383,12 N/A N/A N/A N/A N/A N/A 159,81 376,04 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3,3SERVIÇOS; FRETES E LOGÍSTICAFRETEFRETE RODOVIÁRIO - SP CAPITAL - RJ CAPITAL,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "50",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "50KG,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "0,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "0,5X0,5X0,5MSERVIÇO DE FRETE RODOVIÁRIO DE SÃO PAULO (CAPITAL) PARA RECIFE. CARGA DE 50 KGS MEDINDO 0,5 X 0,5 X 0,5 M.UN N/A N/A N/A N/A 209,10 497,05 N/A N/A 179,65 422,72 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3,4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3,4SERVIÇOS; FRETES E LOGÍSTICAFRETEFRETE RODOVIÁRIO - SP CAPITAL - RJ CAPITAL,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "50",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "50KG, 0,5X0,5X0,5MSERVIÇO DE FRETE RODOVIÁRIO DE SÃO PAULO (CAPITAL) PARA PORTO ALEGRE. CARGA DE 50 KGS MEDINDO 0,5 X 0,5 X 0,5 M.UN N/A N/A 153,90 368,96 N/A N/A N/A N/A 153,90 362,13 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM E DESTINO.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3,5SERVIÇOS; FRETES E LOGÍSTICAFRETEFRETE RODOVIÁRIO - SP CAPITAL - RJ CAPITAL,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "50",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "50KG, 0,5X0,5X0,5MSERVIÇO DE FRETE RODOVIÁRIO DE SÃO PAULO (CAPITAL) PARA BELÉM. CARGA DE 50 KGS UN N/A N/A N/A N/A N/A N/A 197,80 470,19 197,80 465,43 N/A N/ADEVE TER PREÇO APENAS PARA AS CIDADES DE ORIGEM",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "4SERVIÇOS; FRETES E LOGÍSTICATRANSPORTELOCAÇÃO DE ÔNIBUS - C/ MOTORISTAALUGUEL DE ÔNIBUS DE 46 LUGARES, COM AR CONDICIONADO E MOTORISTA, PARA TRANSPORTE INTRAMUNICIPAL.DIÁRIA 827,50 1983,82 758,00 1817,21 710,00 1687,73 1.366,67 3248,69 1.180,00 2776,57 1.843,33 4337,40 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "5SERVIÇOS; FRETES E LOGÍSTICATRANSPORTELOCAÇÃO DE VANS - C/ MOTORISTAALUGUEL DE VAN. CAPACIDADE PARA 15 PASSAGEIROS, COM AR CONDICIONADO E MOTORISTA, PARA TRANSPORTE INTRAMUNICIPAL.DIÁRIA 310,00 743,18 346,67 831,10 331,93 789,03 516,67 1228,17 424,00 997,68 510,00 1200,04 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "6",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "6SERVIÇOS; FRETES E LOGÍSTICATRANSPORTEALUGUEL DE CAMINHÕES - C/ MOTORISTAALUGUEL DE CAMINHÃO COM CARROCERIA BAÚ, CAPACIDADE 8 TON, C/ MOTORISTA PARA TRANSPORTE INTRAMUNICIPAL.DIÁRIA 966,67 2317,47 650,00 1558,29 N/A N/A 809,00 1923,06 974,00 2291,85 639,25 1504,17 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "7",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "7SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEMHOSPEDAGEM COM ALIMENTAÇÃO - HOTEL",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3 ESTRELASHOSPEDAGEM COM CAFÉ DA MANHÃ E COM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO DUPLO, NO CENTRO.DIÁRIA 191,06 458,04 206,94 496,11 306,54 728,67 245,42 583,38 234,53 551,85 265,71 625,22VALOR DE COMPOSIÇÃO (HOSPEDAGEM + REFEIÇÃO)",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "8",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "8SERVIÇOS; FRETES E LOGÍSTICAHOSPEDAGEMHOSPEDAGEM SEM ALIMENTAÇÃO - HOTEL",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3 ESTRELASHOSPEDAGEM COM CAFÉ DA MANHÃ E SEM ALIMENTAÇÃO EM HOTEL 3 ESTRELAS, QUARTO DUPLO, NO CENTRO.DIÁRIA 169,25 405,75 177,89 426,47 204,56 486,26 158,60 377,01 199,75 470,02 228,57 537,83 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "9",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "9SERVIÇOS; FRETES E LOGÍSTICAALIMENTAÇÃOREFEIÇÃO - REFEIÇÃO FORA DO LARREFEIÇÃO FORA DO LAR - PREÇO DO KILO, NO CENTRO.KG 21,81 52,29 29,05 69,64 28,65 68,10 35,88 85,29 34,78 81,84 37,14 87,39 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS, RACKS, CABOS, 50 REFLETORES, MÁQUINAS DE FUMAÇA,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS, RACKS, CABOS, 50 ALUGUEL DE MESA DE LUZ DE 24 CANAISDIÁRIA 223,00 534,61 266,67 639,31 238,57 567,10 160,00 380,33 200,00 470,60 210,00 494,14 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,3SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS, RACKS, CABOS, 50 REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR)ALUGUEL DE RACK DIÁRIA 88,75 212,77 26,67 63,94 72,50 172,34 40,00 95,08 26,38 62,07 30,00 70,59 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,4",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,4SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,5SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS, RACKS, CABOS, 50 REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR)ALUGUEL DE REFLETOR DIÁRIA 43,25 103,69 45,00 107,88 36,67 87,17 20,00 47,54 38,94 91,63 46,92 110,40 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,6",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,6SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS, RACKS, CABOS, 50 ALUGUEL DE MAQUINA DE FUMAÇADIÁRIA 173,33 415,54 150,00 359,61 120,00 285,25 100,00 237,71 88,57 208,41 90,83 213,73 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10,7",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10,7SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTOS DE LUZ (TORRES, MESAS, RACKS, CABOS, REFLETORES, MÁQUINAS DE FUMAÇA, MONITOR) - (TORRES, MESAS - 24 CANAIS,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "11,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "11,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO EQUIPAMENTO DE SOM - MESA DE 24 CANAIS, 8 MICROFONES S/ FIO, CAIXAS DE SOMALUGUEL DE MESA DE SOM DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "24",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "24 CANAISDIÁRIA 137,50 329,64 250,00 599,34 178,33 423,91 225,00 534,84 228,67 538,07 239,00 562,37 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "11,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "11,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO EQUIPAMENTO DE SOM - MESA DE 24 CANAIS, 8 MICROFONES S/ FIO, CAIXAS DE SOMALUGUEL DE MICROFONE SEM FIODIÁRIA 82,65 198,14 78,50 188,19 99,14 235,66 107,00 254,35 75,46 177,56 111,66 262,74 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "11,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "11,3SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO EQUIPAMENTO DE SOM - MESA DE 24 CANAIS, 8 MICROFONES S/ FIO,",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "12",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "12SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE EQUIPAMENTO DE PROJEÇÃO - 2000 LUMENSALUGUEL DE EQUIPAMENTO DE PROJEÇÃO - 2000 LUMENSDIÁRIA 212,22 508,77 123,33 295,67 140,00 332,79 175,00 415,99 140,00 329,42 204,00 480,02 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "13",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "13SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE AR CONDICIONADO - DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "12000",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "12000 BTUS SPLITALUGUEL DE AR CONDICIONADO DE 12.000 BTUS SPLITMENSAL 303,25 727,00 125,00 299,67 160,00 380,33 N/A N/A 216,00 508,25 103,50 243,54 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "14,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "14,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE CÂMERA COMPLETA - CAMERA DIGITAL PARA AUDIOVISUALALUGUEL DE CÂMERA PARA GRAVAÇÃO EM FORMATO HDVDIÁRIA 240,00 575,37 295,00 707,22 240,00 570,50 240,00 570,50 264,20 621,67 407,00 957,68 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "14,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "14,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE CÂMERA COMPLETA - CAMERA DIGITAL PARA AUDIOVISUALALUGUEL DE CÂMERA PARA GRAVAÇÃO EM 35MM.DIÁRIA N/A N/A N/A N/A N/A N/A N/A N/A 3.500,00 8235,58 3.500,00 8235,58 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "15,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "15,1SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE RÁDIO DE COMUNICAÇÃO - NEXT TEL DIARIAALUGUEL DE RÁDIO PORTÁTIL DIÁRIA 35,00 83,91 30,50 73,12 52,00 123,61 32,50 77,26 31,64 74,45 27,42 64,52 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "15,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "15,2SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE RÁDIO DE COMUNICAÇÃO - NEXT TEL DIARIAALUGUEL DE TELEFONE COM RÁDIO (NEXTEL)DIÁRIA 19,33 46,34 21,50 51,54 21,50 51,11 24,33 57,83 24,17 56,87 21,50 50,59 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "16",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "16SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE CADEIRAS - CADEIRAS DE PLASTICOALUGUEL DE LOTE DE 100 CADEIRAS DE PLÁSTICODIÁRIA 141,67 339,64 183,33 439,51 113,33 269,40 125,00 297,14 142,50 335,31 210,00 494,14 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "17",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "17SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE PIANO - DE CAUDA",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3/4ALUGUEL DE PIANO DE CAUDA",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "3/4, COM 3 PEDAIS E 88 TECLAS.SEMANA N/A N/A N/A N/A N/A N/A N/A N/A 1.466,67 3451,11 1.700,00 4000,14 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "18",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "18SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE GERADOR DE ENERGIA - MÉDIOALUGUEL DE GERADOR DE ENERGIA - MÉDIODIÁRIA 864,29 2072,02 975,00 2337,44 1.000,00 2377,09 1.511,88 3593,87 1.014,64 2387,47 814,29 1916,04 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "19",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "19SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE COMPUTADORESLOCAÇÃO DE 10 COMPUTADORES COM PROCESSADOR DE 2.8 GHZ, MEMÓRIA DE 2GB RAM, DVD- RW, MONITOR DE LCD 17\" E 160 GB DE HD.MENSAL 2.610,00 6257,14 1.816,67 4355,23 2.300,00 5467,30 N/A N/A 1.306,25 3073,64 1.450,00 3411,88 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "20",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "20SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE GRADES DE ISOLAMENTOALUGUEL DE GRADES DE ISOLAMENTO COM 1,2 M DE ALTURA E 2 M DE COMPRIMENTO.DIÁRIA 13,50 32,36 20,00 47,95 N/A N/A 50,00 118,85 20,52 48,28 29,00 68,24 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "22",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "22SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE ARQUIBANCADAS -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "10000",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "10000ALUGUEL  DE ARQUIBANCADAS - FORMATO LINEAR, PISO DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "23",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "23SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE CAÇAMBA PARA REMOÇÃO DE ENTULHO - 5M3ALUGUEL DE CAÇAMBA PARA COLETANDO O VALOR DA CAÇAMBA DE 4M3 PARA PORTO ALEGRE. FOI O PADRÃO DE CAPACIDADE ENCONTRADO NESSA CAPITAL.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "24",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "24SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE EQUIPAMENTOSLOCAÇÃO DE LINÓLEO - M2ALUGUEL DE LINÓLEO DE BORRACHA 20X30MDIÁRIA N/A N/A N/A N/A N/A N/A N/A N/A 227,73 535,85 400,00 941,21 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "28",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "28SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE ESPAÇO PARA EXPOSIÇÃO - M2ALUGUEL DE ESPAÇO PARA EXPOSIÇÃO - M2DIÁRIA 8,84 21,19 N/A N/A 8,23 19,56 7,12 16,92 7,20 16,94 13,44 31,62 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "30",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "30SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE ILHA DE EDIÇÃO - HORAALUGUEL DE ILHA DE EDIÇÃO HORA 73,13 175,32 N/A N/A N/A N/A N/A N/A 204,29 480,70 106,67 251,00 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "31",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "31SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE PALCO C/ COBERTURA - 20X30ALUGUEL DE PALCO COM COBERTURA - M2DIÁRIA 53,13 127,37 N/A N/A 66,67 158,48 70,83 168,37 80,03 188,31 128,28 301,85 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "32",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "32SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE PALCO SEM COBERTURA - 20/30ALUGUEL DE PALCO SEM COBERTURA - M2DIÁRIA 32,50 77,91 75,00 179,80 41,67 99,05 40,83 97,06 46,67 109,82 75,67 178,05 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "33",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "33SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE SALA DE ESPETÁCULO - 2000 - PESSOASALUGUEL DE SALA DE ESPETÁCULOS MUSICAIS. SALA MULTIUSO, EXCETO TEATROS.DIÁRIA N/A N/A N/A N/A 1.090,75 2592,81 2.382,00 5662,22 815,83 1919,67 1.000,00 2353,02 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "34",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "34SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSLOCAÇÃO DE ESTÚDIO DE GRAVAÇÃO - HORAALUGUEL DE ESTÚDIO DE GRAVAÇÃO - ENSAIOHORA 25,67 61,54 20,50 49,15 14,67 34,87 15,00 35,66 28,33 66,66 24,38 57,37 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "36",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "36SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSALUGUEL DE SEDE DE PRODUÇÃO - SALA DE ESCRITORIO DE 40 M2 NO CENTROALUGUEL DE SALA DE ESCRITORIO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "37",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "37SERVIÇOS; FRETES E LOGÍSTICALOCAÇÃO DE ESPAÇOSALUGUEL DE ESPAÇO DA COMPANHIA - ESPACO DE 400 M2 NO CENTROALUGUEL DE CASA (ESPAÇO DA COMPANHIA) - ESPACO DE 400",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "38",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "38SERVIÇOS; FRETES E LOGÍSTICALICENÇAS, MONTAGEM E DESMONTAGEM DE ESTRUTURASANDAIMES: MONTAGEM E DESMONTAGEM - TUBULARALUGUEL DE ANDAIME TUBULAR M/MÊS 10,57 25,34 15,00 35,96 10,50 24,96 8,27 19,66 13,50 31,77 13,21 31,08 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "41",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "41SERVIÇOS; FRETES E LOGÍSTICALICENÇAS, MONTAGEM E DESMONTAGEM DE ESTRUTURASCANTEIRO DE OBRA: MONTAGEM E DESMONTAGEMALUGUEL DE CONTAINER ALMOXARIFADO DIMENSÃO 20 POLEGADAS.MENSAL 483,33 1158,72 396,67 950,96 658,33 1564,91 525,00 1247,97 575,00 1352,99 526,00 1237,69 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "42",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "42SERVIÇOS; FRETES E LOGÍSTICALICENÇAS, MONTAGEM E DESMONTAGEM DE ESTRUTURASPROJETO ESTRUTURALPROJETO ESTRUTURAL PARA ÁREA ACIMA DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "1.000",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "1.000 M2.UN 78,00 186,99 78,00 186,99 78,00 185,41 78,00 185,41 78,00 183,54 78,00 183,54TAXA DE CONSELHO FEDERAL. REPLICÁVEL NACIONALMENTE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "45",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "45SERVIÇOS; FRETES E LOGÍSTICALICENÇAS, MONTAGEM E DESMONTAGEM DE ESTRUTURASINSTALAÇÃO PROVISÓRIA DE ÁGUA E ESGOTO - BANHEIROS QUÍMICOSALUGUEL DE BANHEIROS QUÍMICOS DE POLIETILENO.DIÁRIA 186,25 446,51 202,50 485,47 147,50 350,62 185,00 439,76 146,50 344,72 148,00 348,25 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "47",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "47SERVIÇOS; FRETES E LOGÍSTICALICENÇAS, MONTAGEM E DESMONTAGEM DE ESTRUTURASLICENÇAS - PARA ESPETACULOS DE RUALICENÇAS - PARA ESPETACULOS DE RUADIÁRIA 23,45 56,22 4,75 11,39 246,69 586,40 N/A N/A 19,06 44,85 75,24 177,04TRIBUTO MUNICIPAL. UNIDADE EM UFIR (UNIDADE FISCAL DE REFERÊNCIA) EM SP, RJ E RS.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "49",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "49SERVIÇOS; FRETES E LOGÍSTICADESENVOLVIME NTO DE SITESSÍTIO DE INTERNET - HOSPEDAGEMSERVIÇO HOSPEDAGEM DE SITE DE INTERNETMENSAL 23,93 57,37 23,93 57,37 24,23 57,60 26,40 62,76 25,92 60,99 25,92 60,99 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "52",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "52SERVIÇOS; FRETES E LOGÍSTICAFOTOGRAFIAFOTOGRAFIA ARTÍSTICA (FOTÓGRAFO, TRATAMENTO, REVELAÇÃO, ETC.)SERVIÇO FOTOGRÁFICO PARA EVENTO (INCLUINDO FOTÓGRAFO) COM TRATAMENTO E REVELAÇÃO. 100 FOTOS (20X30CM)SERVIÇO 2.366,67 5673,78 2.243,33 5378,09 3.050,00 7250,11 999,00 2374,71 2.500,00 5882,56 2.800,00 6588,47 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "53",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "53SERVIÇOS; FRETES E LOGÍSTICAAUDIOVISUAL/FI LMAGENSFILMAGEM AÉREAFILMAGEM AÉREA EM HELICOPTEROHORA 3.850,00 9229,87 2.378,00 5700,95 3.023,33 7186,72 3.600,00 8557,51 1.887,50 4441,33 2.400,00 5647,26 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "54",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "54SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITA COPY-DESK COPY-DESK PÁGINA 7,00 16,78 7,00 16,78 7,00 16,64 7,00 16,64 7,00 16,47 7,33 17,25 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "60",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "60SERVIÇOS; FRETES E LOGÍSTICAAUDIOVISUAL/FI LMAGENSAUDIOVISUAL 3' A",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "5",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "5'SERVIÇO DE CRIAÇÃO DE AUDIOVISUAL (DOCUMENTÁRIO) ATÉ 5 MINUTOS.SERVIÇO 4.718,54 11312,09 N/A N/A 2.793,00 6639,20 N/A N/A 19.095,81 44932,90 14.775,00 34765,93 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "67",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "67SERVIÇOS; FRETES E LOGÍSTICAAUDIOVISUAL/FI LMAGENSCÓPIAS DIGITAIS - COLORIDA, LASERCOPIA XEROGRAFICA COLORIDA UN 1,41 3,38 2,07 4,96 1,57 3,73 1,93 4,59 1,23 2,89 1,50 3,53 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "73",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "73SERVIÇOS; FRETES E LOGÍSTICAAUDIOVISUAL/FI LMAGENSCOMERCIAL DE TV (CRIAÇÃO) - 15\"SERVIÇO DE CRIAÇÃO DO ROTEIRO/TEXTO DE FILME/VT DE COMERCIAL DE TV (15\"-30\"-45\"-",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "60",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "60\").SERVIÇO 2.773,62 6649,39 N/A N/A 4.066,50 9666,42 N/A N/A 16.560,75 38967,84 12.848,00 30231,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "76",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "76SERVIÇOS; FRETES E LOGÍSTICAÁUDIOGRAVAÇÃO DE VOZES - POR HORA, DIGITAL, S/ MIXAGEMSERVIÇO DE GRAVAÇÃO EM ESTÚDIO (MÚSICO VOCALISTA), SEM MIXAGEM.HORA 60,00 143,84 47,50 113,88 96,67 229,79 100,00 237,71 70,00 164,71 50,00 117,65 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "81",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "81SERVIÇOS; FRETES E LOGÍSTICAÁUDIOGRAVAÇÃO RADIOFÔNICASERVIÇO DE GRAVAÇÃO DE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "84",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "84SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITA PRODUÇÃO DE TEXTOSERVIÇO DE PRODUÇÃO DE TEXTO (REPORTAGEM PARA QUALQUER MÍDIA)SERVIÇO 173,00 414,74 173,00 414,74 173,00 411,24 173,00 411,24 173,00 407,07 173,00 407,07 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "85",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "85SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITAEDIÇÃO DE TEXTO - HORA OU LAUDASERVIÇO DE EDIÇÃO DE TEXTO PARA REPORTAGEMUN 128,00 306,86 128,00 306,86 128,00 304,27 128,00 304,27 128,00 301,19 128,00 301,19 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "86",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "86SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITAREVISÃO DE TEXTO - POR LAUDA (S/ REVISÃO DE FORMATAÇÃO)SERVIÇO DE REVISÃO DE TEXTO - POR LAUDA (S/ REVISÃO DE FORMATAÇÃO)SERVIÇO 11,00 26,37 11,00 26,37 11,00 26,15 11,00 26,15 11,00 25,88 11,00 25,88 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "87",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "87SERVIÇOS; FRETES E",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "88",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "88SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITAREVISÃO DE TRADUÇÃO - POR LAUDA (S/ REVISÃO DE FORMATAÇÃO)REVISÃO DE TRADUÇÃO - POR LAUDA (S/ REVISÃO DE FORMATAÇÃO)PÁGINA 13,00 31,17 13,00 31,17 13,00 30,90 13,00 30,90 13,00 30,59 13,00 30,59 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "89",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "89SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITAIMPRESSÃO EM BRAILE - POR PÁGINA (TEXTO JÁ FORMATADO EM BRAILE P/ IMPRESSÃO)IMPRESSÃO EM BRAILE (TEXTO JÁ FORMATADO EM BRAILE P/ IMPRESSÃO)UN 1,23 2,95 1,23 2,95 1,23 2,92 1,23 2,92 1,23 2,89 1,23 2,89 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "90,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "90,1SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITADESENVOLVIMENT O DE ROTEIRO - LAUDADESENVOLVIMENTO DE ROTEIRO DE DRAMATURGIA PARA",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "90,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "90,2SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITADESENVOLVIMENT O DE ROTEIRO - LAUDADESENVOLVIMENTO DE ROTEIRO DE FICÇÃO ORIGINAL PARA",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "91",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "91SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITADIGITALIZAÇÃO - PÁGINADIGITALIZAÇÃO - PÁGINA PÁGINA N/A N/A N/A N/A N/A N/A N/A N/A 1,25 2,94 0,36 0,85 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "92",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "92SERVIÇOS; FRETES E LOGÍSTICATEXTO/ESCRITA ILUSTRAÇÃO - LAUDASERVIÇO DE ILUSTRAÇÃO SIMPLES",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "94,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "94,1SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAPROJETO GRÁFICO - EX. PROGRAMA, FOLDER, CARTAZSERVIÇO DE PROJETO GRÁFICO PARA MÍDIA IMPRESSA - PROGRAMASERVIÇO 519,60 1245,67 420,00 1006,90 698,03 1659,28 700,00 1663,96 777,50 1829,48 631,50 1485,93 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "94,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "94,2SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAPROJETO GRÁFICO - EX. PROGRAMA, FOLDER, CARTAZSERVIÇO DE PROJETO GRÁFICO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "94,3",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "94,3SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAPROJETO GRÁFICO - EX. PROGRAMA, FOLDER, CARTAZSERVIÇO DE PROJETO GRÁFICO",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "95",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "95SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAESCANEAMENTO - POR PÁGINAESCANEAMENTO - POR PÁGINA PÁGINA 1,45 3,48 1,93 4,63 3,67 8,72 1,63 3,87 2,83 6,66 1,00 2,35 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "96,1",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "96,1SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAPRENSAGEM - 100 CDS, IMPRESSÃO DIGITALPRENSAGEM DE CD UN 1,81 4,34 1,81 4,34 1,81 4,30 1,81 4,30 1,95 4,59 1,82 4,28 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "96,2",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "96,2SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAPRENSAGEM - 100 CDS, IMPRESSÃO DIGITALPRENSAGEM DE DVD UN 2,32 5,56 2,32 5,56 2,20 5,23 2,20 5,23 2,22 5,22 2,23 5,25 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "98",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "98SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICATRATAMENTO DE IMAGENS - POR IMAGEMSERVICO DE TRATAMENTO/RETOQUE DE IMAGEMHORA 247,54 593,44 N/A N/A 129,00 306,64 N/A N/A 661,61 1556,78 490,00 1152,98 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "100",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "100SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICAAMPLIAÇÕES DAS IMAGENS - M2AMPLIAÇÃO DE IMAGENS M2 66,00 158,23 51,60 123,70 38,67 91,92 45,33 107,75 108,00 254,13 109,33 257,26 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "101",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "101SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICATIRAGEM - 3.000 LIVROS DE 100 PAGTIRAGEM - 3.000 LIVROS DE 100",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "103",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "103SERVIÇOS; FRETES E LOGÍSTICAEDITORAÇÃO/G RÁFICACONFECÇÃO DE INGRESSOS - PRETO E BRANCOCONFECÇÃO DE INGRESSO SIMPLES DE PAPEL",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "1.000",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "1.000 UNIDADESMILHEIRO 225,00 539,41 180,67 433,13 433,10 1029,52 447,33 1063,34 329,00 774,14 300,50 707,08 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "107",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "107SERVIÇOS; FRETES E LOGÍSTICACACHÊS/SERVIÇ OS DE OUTROS PROFISSINAISTRADUÇÃO SIMULTÂNEA - HORATRADUÇÃO SIMULTÂNEA (INTERPRETAÇÃO DE CONFERÊNCIA), 1 INTÉRPRETE. IDIOMAS: INGLÊS, FRANCÊS OU ESPANHDIÁRIA 1.650,00 3955,66 1.500,00 3596,05 N/A N/A N/A N/A 1.650,00 3882,49 1.650,00 3882,49 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "116",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "116SERVIÇOS; FRETES E LOGÍSTICAVESTUÁRIOALUGUEL DE ROUPAS E ADEREÇOSALUGUEL DE ROUPAS E ADEREÇOSDIÁRIA 119,17 285,69 123,75 296,67 135,50 322,10 67,50 160,45 95,20 224,01 200,00 470,60 -",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "120",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "120SERVIÇOS; FRETES E LOGÍSTICAPUBLICIDADEMÍDIA EM METRÔ - PAINEL (2,15X1,07M) NA ESTAÇÃOSERVIÇO DE MÍDIA EM METRÔ TIPO PAINEL. TAMANHO (APROXIMADAMENTE",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    },
+    {
+      "codigo": "2,15",
+      "grupo": null,
+      "categoria": null,
+      "subcategoria": null,
+      "descricao": "2,15X1,07M)SERVIÇO N/A N/A 600,00 1438,42 N/A N/A N/A N/A 5.300,00 12471,03 5.566,00 13096,93MONOPÓLIO NO SERVIÇO DO METRÔ. AINDA NÃO FOI REALIZADA LICITAÇÃO PARA O SERVIÇO DE MÍDIA NO METRÔ DE BRASÍLIA. NÃO EXISTE METRÔ EM BELÉM.",
+      "unidade": null,
+      "valores": {
+        "rio_de_janeiro": null,
+        "sao_paulo": null,
+        "brasilia": null,
+        "porto_alegre": null,
+        "recife": null,
+        "belem": null
+      },
+      "fonte": "FGV",
+      "vigencia": "2022-01",
+      "tipo": "servico"
+    }
+  ]
+}

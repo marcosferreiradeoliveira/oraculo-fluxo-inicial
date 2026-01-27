@@ -4,7 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Download, Star } from 'lucide-react';
+import { BookOpen, Download, Star, Edit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -20,16 +20,25 @@ const Biblioteca = () => {
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
       if (user?.uid) {
         try {
+          // Verificar email do usuário
+          if (user?.email) {
+            setUserEmail(user.email);
+          }
+          
           const userDocRef = doc(db, 'usuarios', user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setIsSuperAdmin(userData.role === 'super_admin');
+            if (!user?.email && userData.email) {
+              setUserEmail(userData.email);
+            }
           }
         } catch (error) {
           console.error('Erro ao verificar role do usuário:', error);
@@ -46,7 +55,13 @@ const Biblioteca = () => {
       try {
         const snapshot = await getDocs(collection(db, 'guias'));
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setGuias(data);
+        
+        // Ordenar: especiais primeiro, depois os normais
+        const guiasEspeciais = data.filter((g: any) => g.especial === true);
+        const guiasNormais = data.filter((g: any) => !g.especial || g.especial === false);
+        const guiasOrdenados = [...guiasEspeciais, ...guiasNormais];
+        
+        setGuias(guiasOrdenados);
       } catch (e) {
         setGuias([]);
       } finally {
@@ -108,7 +123,9 @@ const Biblioteca = () => {
               ) : guias.length === 0 ? (
                 <div className="text-center text-gray-500 py-12 col-span-3">Nenhum guia cadastrado ainda.</div>
               ) : (
-                guias.map((guia, index) => (
+                guias.map((guia, index) => {
+                  const isEspecial = guia.especial === true;
+                  return (
                   <Card key={guia.id || index} className="hover:shadow-lg transition-all hover:-translate-y-1">
                     <div className="aspect-video relative overflow-hidden rounded-t-lg">
                       <img 
@@ -116,11 +133,36 @@ const Biblioteca = () => {
                         alt={guia.titulo}
                         className="w-full h-full object-cover"
                       />
-                      <Badge 
-                        className="absolute top-3 left-3 bg-oraculo-magenta/90 text-white"
-                      >
-                        Guia
-                      </Badge>
+                      {isEspecial ? (
+                        <Badge 
+                          className="absolute top-3 left-3 bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white"
+                        >
+                          ESPECIAL
+                        </Badge>
+                      ) : (
+                        <Badge 
+                          className="absolute top-3 left-3 bg-oraculo-magenta/90 text-white"
+                        >
+                          Guia
+                        </Badge>
+                      )}
+                      {/* Botão Editar - Apenas para marcosferreira@mobcontent.com.br */}
+                      {userEmail === 'marcosferreira@mobcontent.com.br' && (
+                        <div className="absolute top-3 right-3">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="bg-white/90 hover:bg-white shadow-md"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              navigate(`/editar-guia/${guia.id}`);
+                            }}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg leading-tight">
@@ -143,20 +185,31 @@ const Biblioteca = () => {
                           {guia.downloads} downloads
                         </span> */}
                       </div>
-                      <Button className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" asChild>
-                        <a
-                          href={user ? guia.pdfUrl : undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={e => handleDownload(e, guia.pdfUrl, guia.titulo)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Baixar Guia
-                        </a>
+                      <Button 
+                        className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (!user) {
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          
+                          // Se for guia especial, navegar para página de detalhes
+                          if (isEspecial) {
+                            navigate(`/guia-especial/${guia.id}`);
+                          } else if (guia.pdfUrl) {
+                            window.open(guia.pdfUrl, '_blank');
+                            handleDownload(e as any, guia.pdfUrl, guia.titulo);
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        {isEspecial ? 'Ver Detalhes' : 'Baixar Guia'}
                       </Button>
                     </CardContent>
                   </Card>
-                ))
+                );
+                })
               )}
             </div>
           </div>

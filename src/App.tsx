@@ -28,6 +28,8 @@ import EditarEdital from './pages/EditarEdital';
 import CadastrarEpisodio from './pages/CadastrarEpisodio';
 import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
+import EditarGuia from './pages/EditarGuia';
+import DetalhesGuiaEspecial from './pages/DetalhesGuiaEspecial';
 import CadastroPremium from './pages/CadastroPremium';
 import ContatoPremium from './pages/ContatoPremium';
 import GerenciarAssinatura from './pages/GerenciarAssinatura';
@@ -86,7 +88,7 @@ const App = () => (
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/oraculo-ai" element={<ProtectedRoute><OraculoAI /></ProtectedRoute>} />
           <Route path="/biblioteca" element={<ProtectedRoute><Biblioteca /></ProtectedRoute>} />
-          <Route path="/podcast" element={<ProtectedRoute><Podcast /></ProtectedRoute>} />
+          <Route path="/podcast" element={<Podcast />} />
           <Route path="/inteligencia-mercado" element={<InteligenciaMercado />} />
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
@@ -105,8 +107,10 @@ const App = () => (
           <Route path="/editar-edital/:id" element={<ProtectedRoute><EditarEdital /></ProtectedRoute>} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />
           <Route path="/cadastrar-episodio" element={<ProtectedRoute><CadastrarEpisodio /></ProtectedRoute>} />
-          <Route path="/podcast/:id" element={<ProtectedRoute><PodcastDetalhes /></ProtectedRoute>} />
+          <Route path="/podcast/:id" element={<PodcastDetalhes />} />
           <Route path="/cadastrar-guia" element={<ProtectedRoute><CadastrarGuia /></ProtectedRoute>} />
+          <Route path="/editar-guia/:id" element={<ProtectedRoute><EditarGuia /></ProtectedRoute>} />
+          <Route path="/guia-especial/:id" element={<DetalhesGuiaEspecial />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

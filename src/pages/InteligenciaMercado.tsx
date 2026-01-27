@@ -12,7 +12,8 @@ import {
   Calendar,
   Play,
   FileText,
-  Plus
+  Plus,
+  Edit
 } from 'lucide-react';
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
@@ -32,6 +33,8 @@ interface Guia {
   imgUrl: string;
   pdfUrl: string;
   criadoEm?: any;
+  especial?: boolean;
+  landingPageUrl?: string;
 }
 
 interface Podcast {
@@ -53,6 +56,7 @@ const InteligenciaMercado = () => {
   const [loadingPodcasts, setLoadingPodcasts] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [descricoesExpandidas, setDescricoesExpandidas] = useState<Set<string>>(new Set());
 
   console.log('🎯 [InteligenciaMercado] Componente renderizado');
   console.log('🎯 [InteligenciaMercado] User:', user);
@@ -222,7 +226,13 @@ const InteligenciaMercado = () => {
           id: doc.id,
           ...doc.data()
         })) as Guia[];
-        setGuias(guiasData);
+        
+        // Ordenar: especiais primeiro, depois os normais
+        const guiasEspeciais = guiasData.filter(g => Boolean(g.especial) === true);
+        const guiasNormais = guiasData.filter(g => Boolean(g.especial) !== true);
+        const guiasOrdenados = [...guiasEspeciais, ...guiasNormais];
+        
+        setGuias(guiasOrdenados);
       } catch (error) {
         console.error('Erro ao buscar guias:', error);
       } finally {
@@ -454,48 +464,113 @@ const InteligenciaMercado = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {guias.map((guia) => (
-                    <Card key={guia.id} className="hover:shadow-lg transition-all hover:-translate-y-1">
-                      <div className="aspect-video relative overflow-hidden rounded-t-lg">
-                        <img 
-                          src={guia.imgUrl} 
-                          alt={guia.titulo}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg leading-tight line-clamp-2">
-                          {guia.titulo}
-                        </CardTitle>
-                        <CardDescription className="line-clamp-2">
-                          {guia.descricao}
-                        </CardDescription>
-                        {guia.criadoEm && (
-                          <div className="flex items-center text-xs text-gray-500 mt-2">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {formatDate(guia.criadoEm)}
+                  {guias.map((guia) => {
+                    const isExpandido = descricoesExpandidas.has(guia.id);
+                    const descricaoLonga = guia.descricao && guia.descricao.length > 100;
+                    const isEspecial = guia.especial === true;
+                    
+                    return (
+                      <Card 
+                        key={guia.id} 
+                        className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                        onClick={() => {
+                          if (!user) {
+                            navigate('/cadastro');
+                          } else if (isEspecial) {
+                            navigate(`/guia-especial/${guia.id}`);
+                          } else {
+                            window.open(guia.pdfUrl, '_blank');
+                          }
+                        }}
+                      >
+                        <div className="aspect-video relative overflow-hidden rounded-t-lg">
+                          <img 
+                            src={guia.imgUrl} 
+                            alt={guia.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                          {isEspecial && (
+                            <div className="absolute top-2 right-2 bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                              ESPECIAL
+                            </div>
+                          )}
+                          {/* Botão Editar - Apenas para marcosferreira@mobcontent.com.br */}
+                          {userEmail === 'marcosferreira@mobcontent.com.br' && (
+                            <div className="absolute top-2 left-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="bg-white/90 hover:bg-white shadow-md"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/editar-guia/${guia.id}`);
+                                }}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg leading-tight line-clamp-2">
+                            {guia.titulo}
+                          </CardTitle>
+                          <div className="mt-2">
+                            <CardDescription className={isExpandido ? '' : 'line-clamp-2'}>
+                              {guia.descricao}
+                            </CardDescription>
+                            {descricaoLonga && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDescricoesExpandidas(prev => {
+                                    const novo = new Set(prev);
+                                    if (isExpandido) {
+                                      novo.delete(guia.id);
+                                    } else {
+                                      novo.add(guia.id);
+                                    }
+                                    return novo;
+                                  });
+                                }}
+                                className="text-sm text-oraculo-blue hover:text-oraculo-purple mt-1 font-medium"
+                              >
+                                {isExpandido ? 'Ver menos' : 'Ver mais'}
+                              </button>
+                            )}
                           </div>
-                        )}
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <Button 
-                          variant="default" 
-                          className="w-full"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!user) {
-                              navigate('/cadastro');
-                            } else {
-                              window.open(guia.pdfUrl, '_blank');
-                            }
-                          }}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Abrir Guia
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          {guia.criadoEm && (
+                            <div className="flex items-center text-xs text-gray-500 mt-2">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {formatDate(guia.criadoEm)}
+                            </div>
+                          )}
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <Button 
+                            variant="default" 
+                            className="w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!user) {
+                                navigate('/cadastro');
+                              } else {
+                                // Se for guia especial, navegar para página de detalhes
+                                if (isEspecial) {
+                                  navigate(`/guia-especial/${guia.id}`);
+                                } else {
+                                  window.open(guia.pdfUrl, '_blank');
+                                }
+                              }
+                            }}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            {isEspecial ? 'Ver Detalhes' : 'Abrir Guia'}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>

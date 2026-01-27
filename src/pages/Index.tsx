@@ -48,15 +48,21 @@ const Index = () => {
         // Busca apenas 2 guias
         let snapshot;
         try {
-          const qGuias = query(collection(db, 'guias'), orderBy('criadoEm', 'desc'), limit(2));
+          const qGuias = query(collection(db, 'guias'), orderBy('criadoEm', 'desc'), limit(10));
           snapshot = await getDocs(qGuias);
         } catch (orderError) {
           console.log('Erro ao ordenar, buscando sem ordenação:', orderError);
-          const qGuias = query(collection(db, 'guias'), limit(2));
+          const qGuias = query(collection(db, 'guias'), limit(10));
           snapshot = await getDocs(qGuias);
         }
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setGuias(data);
+        
+        // Ordenar: especiais primeiro, depois os normais, e pegar apenas 2
+        const guiasEspeciais = data.filter((g: any) => g.especial === true);
+        const guiasNormais = data.filter((g: any) => !g.especial || g.especial === false);
+        const guiasOrdenados = [...guiasEspeciais, ...guiasNormais].slice(0, 2);
+        
+        setGuias(guiasOrdenados);
       } catch (e) {
         console.error('Erro ao buscar guias:', e);
         setGuias([]);
@@ -457,7 +463,9 @@ const Index = () => {
                 ) : (
                   <>
                     {/* Guias */}
-                    {guias.map((guia, index) => (
+                    {guias.map((guia, index) => {
+                      const isEspecial = guia.especial === true;
+                      return (
                       <Card key={`guia-${guia.id || index}`} className="hover:shadow-lg transition-all hover:-translate-y-1">
                         <div className="aspect-video relative overflow-hidden rounded-t-lg">
                           <img 
@@ -465,10 +473,17 @@ const Index = () => {
                             alt={guia.titulo}
                             className="w-full h-full object-cover"
                           />
-                          <Badge className="absolute top-2 right-2 bg-blue-600 text-white">
-                            <FileText className="h-3 w-3 mr-1" />
-                            Guia
-                          </Badge>
+                          {isEspecial ? (
+                            <Badge className="absolute top-2 right-2 bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
+                              <FileText className="h-3 w-3 mr-1" />
+                              ESPECIAL
+                            </Badge>
+                          ) : (
+                            <Badge className="absolute top-2 right-2 bg-blue-600 text-white">
+                              <FileText className="h-3 w-3 mr-1" />
+                              Guia
+                            </Badge>
+                          )}
                         </div>
                         <CardHeader className="pb-3">
                           <CardTitle className="text-lg leading-tight line-clamp-2">
@@ -480,22 +495,30 @@ const Index = () => {
                         </CardHeader>
                         <CardContent className="pt-0">
                           <Button 
-                            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" 
-                            asChild
+                            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (!user) {
+                                setShowAuthModal(true);
+                                return;
+                              }
+                              
+                              // Se for guia especial, navegar para página de detalhes
+                              if (isEspecial) {
+                                navigate(`/guia-especial/${guia.id}`);
+                              } else if (guia.pdfUrl) {
+                                window.open(guia.pdfUrl, '_blank');
+                                handleDownloadGuia(e as any, guia.id, guia.pdfUrl);
+                              }
+                            }}
                           >
-                            <a
-                              href={guia.pdfUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => handleDownloadGuia(e, guia.id, guia.pdfUrl)}
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Baixar Guia
-                            </a>
+                            <Download className="h-4 w-4 mr-2" />
+                            {isEspecial ? 'Ver Detalhes' : 'Baixar Guia'}
                           </Button>
                         </CardContent>
                       </Card>
-                    ))}
+                    );
+                    })}
 
                     {/* Podcasts */}
                     {podcasts.map((ep, index) => (
