@@ -6,7 +6,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { identifyMixpanelUser } from '@/lib/analytics';
+import { identifyMixpanelUser, trackIntentLogin } from '@/lib/analytics';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
@@ -151,7 +151,7 @@ export function DashboardHeader() {
             ) : (
               <div className="text-right flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-oraculo-blue" />
-                <Link to="/cadastro?mode=login">
+                <Link to="/cadastro?mode=login" onClick={() => trackIntentLogin({ source: 'header' })}>
                   <Button size="sm" className="mt-0.5 bg-oraculo-blue text-white hover:bg-oraculo-purple">
                     Acessar Conta
                   </Button>

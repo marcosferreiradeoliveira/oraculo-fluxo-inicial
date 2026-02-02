@@ -185,7 +185,8 @@ exports.avaliarProjetoIA = onRequest(
       textoEdital,
       portfolio,
       projetosSelecionados,
-      userId
+      userId,
+      stream: useStream = false
     } = req.body;
       
     if (!textoProjeto || !criteriosEdital) {
@@ -267,6 +268,45 @@ ${userPortfolio ? `**PORTFOLIO E EXPERIÊNCIAS DO PROPONENTE (contexto adicional
 Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no TEXTO DO PROJETO e APENAS nos critérios específicos do edital fornecidos na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS" acima.`;
 
     const openai = getOpenAI();
+    
+    // Se streaming está habilitado, usar Server-Sent Events
+    if (useStream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      const stream = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Você é um avaliador oficial de projetos culturais com décadas de experiência em leis de incentivo fiscal. Seu papel é ser rigoroso mas construtivo, sempre buscando melhorar a qualidade dos projetos apresentados.' 
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+        stream: true,
+      });
+      
+      let fullContent = '';
+      
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullContent += content;
+          // Enviar chunk via SSE
+          res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
+        }
+      }
+      
+      // Enviar sinal de conclusão
+      res.write(`data: ${JSON.stringify({ content: '', done: true, fullContent })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Modo não-streaming (comportamento original)
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [

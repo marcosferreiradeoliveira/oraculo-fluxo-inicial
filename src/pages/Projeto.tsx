@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -188,6 +188,8 @@ const formatarTextoParaExibicao = (texto: string): string => {
 
 const Projeto = () => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const isStreaming = searchParams.get('streaming') === 'true';
   const [projeto, setProjeto] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [analisando, setAnalisando] = useState(false);
@@ -276,65 +278,107 @@ const Projeto = () => {
   }, []);
 
   useEffect(() => {
-    const fetchProjeto = async () => {
-      if (!id) return;
-      setLoading(true);
-      setAnaliseIniciada(false); // Reset quando carregar novo projeto
-      const db = getFirestore();
-      const ref = doc(db, 'projetos', id);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const data = { id: snap.id, ...(snap.data() as any) };
-        setProjeto(data);
-        setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
-        setDescricaoEditada(data.descricao || '');
-        
-        // Check if first analysis was already completed
-        // Se já existe análise mas não tem o campo, considerar como primeira análise completa (para projetos antigos)
-        if (data.analise_ia && data.primeira_analise_completa === undefined) {
-          // Projeto antigo com análise mas sem campo - marcar como primeira análise completa
-          const ref = doc(db, 'projetos', id);
-          await updateDoc(ref, { primeira_analise_completa: true });
-          setPrimeiraAnaliseCompleta(true);
-        } else {
-          setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
-        }
-        
-        // If analysis exists, process it
-        if (data.analise_ia) {
-          setAnalise(data.analise_ia);
-          setStatusIA('Análise carregada');
+    if (!id) return;
+    
+    setLoading(true);
+    setAnaliseIniciada(false); // Reset quando carregar novo projeto
+    const db = getFirestore();
+    const ref = doc(db, 'projetos', id);
+    
+    // Se está em modo streaming, usar onSnapshot para atualizações em tempo real
+    if (isStreaming) {
+      setMostrarAnalise(true);
+      setAnalisando(true);
+      setStatusIA('Recebendo análise da IA...');
+      setSubEtapasIA(['Aguardando resposta da IA...']);
+      
+      const unsubscribe = onSnapshot(ref, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setProjeto({ id: snap.id, ...data });
           
-          // Extract suggestions using the new robust function
-          const matches = extrairSugestoes(data.analise_ia);
-          console.log('Sugestões extraídas em Projeto.tsx:', matches);
-          console.log('Total de sugestões:', matches.length);
-          setSugestoes(matches);
-          
-          // Initialize approvals
-          setAprovacoes(Array(matches.length).fill(false));
+          // Se há análise sendo escrita, atualizar em tempo real
+          if (data.analise_ia) {
+            setAnalise(data.analise_ia);
+            
+            // Extrair sugestões conforme a análise vai sendo escrita
+            const matches = extrairSugestoes(data.analise_ia);
+            setSugestoes(matches);
+            setAprovacoes(Array(matches.length).fill(false));
+            
+            // Se a análise parece completa (tem mais de 500 caracteres e termina com pontuação), considerar concluída
+            if (data.analise_ia.length > 500 && /[.!?]$/.test(data.analise_ia.trim().slice(-10))) {
+              setAnalisando(false);
+              setStatusIA('Análise concluída!');
+              setSubEtapasIA([]);
+              if (etapaAtual < 2) setEtapaAtual(2);
+              
+              // Remover parâmetro streaming da URL
+              navigate(`/projeto/${id}`, { replace: true });
+            }
+          }
         }
-        
-        // Track project viewed
-        if (user) {
-          const db = getFirestore();
-          const userRef = doc(db, 'usuarios', user.uid);
-          const userSnap = await getDoc(userRef);
-          const userData = userSnap.exists() ? userSnap.data() : {};
-          const planType = userData?.planType || 'free';
+        setLoading(false);
+      });
+      
+      return () => unsubscribe();
+    } else {
+      // Modo normal: buscar uma vez
+      const fetchProjeto = async () => {
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const data = { id: snap.id, ...(snap.data() as any) };
+          setProjeto(data);
+          setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
+          setDescricaoEditada(data.descricao || '');
           
-          trackProjectViewed({
-            projectId: id,
-            hasAnalysis: !!data.analise_ia,
-            hasTexts: !!data.textos,
-            planType: planType,
-          });
+          // Check if first analysis was already completed
+          // Se já existe análise mas não tem o campo, considerar como primeira análise completa (para projetos antigos)
+          if (data.analise_ia && data.primeira_analise_completa === undefined) {
+            // Projeto antigo com análise mas sem campo - marcar como primeira análise completa
+            const ref = doc(db, 'projetos', id);
+            await updateDoc(ref, { primeira_analise_completa: true });
+            setPrimeiraAnaliseCompleta(true);
+          } else {
+            setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
+          }
+          
+          // If analysis exists, process it
+          if (data.analise_ia) {
+            setAnalise(data.analise_ia);
+            setStatusIA('Análise carregada');
+            
+            // Extract suggestions using the new robust function
+            const matches = extrairSugestoes(data.analise_ia);
+            console.log('Sugestões extraídas em Projeto.tsx:', matches);
+            console.log('Total de sugestões:', matches.length);
+            setSugestoes(matches);
+            
+            // Initialize approvals
+            setAprovacoes(Array(matches.length).fill(false));
+          }
+          
+          // Track project viewed
+          if (user) {
+            const db = getFirestore();
+            const userRef = doc(db, 'usuarios', user.uid);
+            const userSnap = await getDoc(userRef);
+            const userData = userSnap.exists() ? userSnap.data() : {};
+            const planType = userData?.planType || 'free';
+            
+            trackProjectViewed({
+              projectId: id,
+              hasAnalysis: !!data.analise_ia,
+              hasTexts: !!data.textos,
+              planType: planType,
+            });
+          }
         }
-      }
-      setLoading(false);
-    };
-    fetchProjeto();
-  }, [id, user]);
+        setLoading(false);
+      };
+      fetchProjeto();
+    }
+  }, [id, user, isStreaming]);
 
   // Iniciar análise automaticamente quando o projeto é carregado sem análise
   useEffect(() => {

@@ -431,16 +431,68 @@ export const trackExternalLinkClicked = (params: {
   });
 };
 
+// ==========================================
+// EVENTOS DE INTENÇÃO (menu / navegação)
+// Mentalidade: "O que o usuário tentou fazer?" em vez de "O que clicou?"
+// Propriedades ricas: menu_name, menu_item, destination, section, cta_type
+// ==========================================
+
+/** Mapeamento menu_item (canonical) → nome do evento de intenção */
+const MENU_INTENT_MAP: Record<string, string> = {
+  inicio: 'intent_view_home',
+  meus_projetos: 'intent_view_projects',
+  editais: 'intent_view_edital',
+  portfolio: 'intent_view_portfolio',
+  perfil: 'intent_view_perfil',
+  suporte: 'intent_view_support',
+  prestacao_contas: 'intent_external_prestacao',
+  inteligencia_mercado: 'intent_view_inteligencia',
+  login: 'intent_login',
+};
+
 /**
- * Clique no menu de navegação
+ * Intenção a partir do menu (sidebar, etc.).
+ * Emite evento de intenção (ex.: intent_view_edital) com propriedades ricas.
  */
-export const trackMenuClick = (params: {
-  section: string; // "Início" | "Meus Projetos" | "Editais Abertos" | etc
-  url: string;
+export const trackMenuIntent = (params: {
+  menu_item: string;       // canonical: "editais" | "perfil" | "inicio" | etc
+  destination: string;     // URL ou path
+  menu_name?: string;      // ex.: "dashboard_sidebar"
+  section?: string;        // ex.: "navegacao_principal"
+  cta_type?: 'nav_link' | 'external_link';
 }) => {
-  trackEvent('evento_menu_click', {
-    section: params.section,
-    url: params.url,
+  const eventName = MENU_INTENT_MAP[params.menu_item] ?? 'intent_menu_unknown';
+  const ctaType = params.cta_type ?? (params.destination.startsWith('http') ? 'external_link' : 'nav_link');
+
+  trackEvent(eventName, {
+    menu_name: params.menu_name ?? 'dashboard_sidebar',
+    menu_item: params.menu_item,
+    destination: params.destination,
+    section: params.section ?? 'navegacao_principal',
+    cta_type: ctaType,
+  });
+};
+
+/**
+ * Intenção de login (ex.: clique em "Fazer login" no header ou página).
+ */
+export const trackIntentLogin = (params?: { source?: string }) => {
+  trackEvent('intent_login', {
+    menu_name: params?.source ?? 'cta',
+    menu_item: 'login',
+    destination: '/cadastro?mode=login',
+    section: params?.source ?? 'header',
+    cta_type: 'nav_link',
+  });
+};
+
+/**
+ * @deprecated Use trackMenuIntent. Mantido só para compatibilidade.
+ */
+export const trackMenuClick = (params: { section: string; url: string }) => {
+  trackMenuIntent({
+    menu_item: params.section.toLowerCase().replace(/\s+/g, '_').replace(/ç/g, 'c'),
+    destination: params.url,
   });
 };
 
@@ -504,6 +556,109 @@ export const trackGuiaViewed = (params: {
 }) => {
   trackEvent('guia_visualizado', {
     guia: params.guiaNome,
+  });
+};
+
+/**
+ * CTA clicado na landing de guia especial (intermediários + final).
+ * Evento claro para Firebase, GTM e Mixpanel. Usar em todos os CTAs da página.
+ */
+export const trackGuiaEspecialCtaClicked = (params: {
+  cta_slot: 'hero' | 'after_prova_social' | 'after_antes_depois' | 'final_main' | 'final_micro';
+  cta_text: string;
+  guia_id?: string;
+  guia_titulo?: string;
+  action: 'scroll_to_price' | 'navigate_to_premium';
+}) => {
+  // Determinar o nome do evento baseado no tipo de CTA
+  const isFinalCta = params.cta_slot === 'final_main' || params.cta_slot === 'final_micro';
+  const eventName = isFinalCta ? 'guia_especial_cta_final_clicked' : 'guia_especial_cta_intermediario_clicked';
+  
+  trackEvent(eventName, {
+    cta_slot: params.cta_slot,
+    cta_text: params.cta_text,
+    guia_id: params.guia_id,
+    guia_titulo: params.guia_titulo,
+    action: params.action,
+  });
+};
+
+/**
+ * Pagamento de guia especial concluído com sucesso
+ * 🔴 CRÍTICO: Receita direta
+ * Envia também: GA4 evento "purchase" (conversão) e Mixpanel evento "Purchase" (conversão/receita).
+ */
+export const trackGuiaEspecialPaymentSuccess = (params: {
+  guia_id: string;
+  guia_titulo?: string;
+  valor_pago?: number;
+  session_id?: string;
+  user_id?: string;
+  is_guest?: boolean;
+}) => {
+  trackEvent('guia_especial_payment_success', {
+    guia_id: params.guia_id,
+    guia_titulo: params.guia_titulo,
+    valor_pago: params.valor_pago,
+    session_id: params.session_id,
+    user_id: params.user_id,
+    is_guest: params.is_guest,
+    value: params.valor_pago,
+    currency: 'BRL',
+  });
+
+  // Google Analytics 4: evento padrão "purchase" para configurar como conversão
+  const value = params.valor_pago ?? 0;
+  if (analytics && value > 0) {
+    try {
+      logEvent(analytics, 'purchase', {
+        value,
+        currency: 'BRL',
+        transaction_id: params.session_id || params.guia_id,
+        items: [
+          {
+            item_id: params.guia_id,
+            item_name: params.guia_titulo || 'Guia Especial',
+            price: value,
+            quantity: 1,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('[Analytics] Erro ao enviar evento purchase (guia especial):', error);
+    }
+  }
+
+  // Mixpanel: evento "Purchase" para conversão e receita
+  if (typeof window !== 'undefined' && window.mixpanel && value > 0) {
+    try {
+      window.mixpanel.track('Purchase', {
+        value,
+        currency: 'BRL',
+        transaction_id: params.session_id || params.guia_id,
+        guia_id: params.guia_id,
+        guia_titulo: params.guia_titulo || 'Guia Especial',
+        $value: value, // Mixpanel usa $value para Revenue
+      });
+    } catch (error) {
+      console.error('[Mixpanel] Erro ao enviar evento Purchase (guia especial):', error);
+    }
+  }
+};
+
+/**
+ * Download do PDF do guia especial após pagamento
+ * 🟠 ALTA: Entrega de valor
+ */
+export const trackGuiaEspecialPdfDownloaded = (params: {
+  guia_id: string;
+  guia_titulo?: string;
+  session_id?: string;
+}) => {
+  trackEvent('guia_especial_pdf_downloaded', {
+    guia_id: params.guia_id,
+    guia_titulo: params.guia_titulo,
+    session_id: params.session_id,
   });
 };
 

@@ -19,17 +19,26 @@ import {
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
-import { trackMenuClick } from '@/lib/analytics';
+import { trackMenuIntent } from '@/lib/analytics';
 
-const menuItems = [
-  { title: 'Início', url: '/', icon: Home },
-  { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus },
-  { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar },
-  { title: 'Portfolio', url: '/portfolio', icon: Briefcase },
-  { title: 'Conta', url: '/conta', icon: User },
-  { title: 'Suporte', url: '/suporte', icon: HelpCircle },
-  { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, external: true, outline: true },
-  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp, outline: true },
+type MenuItem = {
+  title: string;
+  url: string;
+  icon: React.ElementType;
+  menuItem: string; // canonical: "inicio" | "editais" | "perfil" | etc
+  external?: boolean;
+  outline?: boolean;
+};
+
+const menuItems: MenuItem[] = [
+  { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
+  { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
+  { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
+  { title: 'Portfolio', url: '/portfolio', icon: Briefcase, menuItem: 'portfolio' },
+  { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
+  { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
+  { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
+  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp, menuItem: 'inteligencia_mercado', outline: true },
 ];
 
 export function DashboardSidebar() {
@@ -138,7 +147,7 @@ export function DashboardSidebar() {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => trackMenuClick({ section: item.title, url: item.url })}
+                    onClick={() => trackMenuIntent({ menu_item: item.menuItem, destination: item.url, cta_type: 'external_link' })}
                     className={`flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
                       item.outline 
                         ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20' 
@@ -154,7 +163,7 @@ export function DashboardSidebar() {
                 ) : (
                   <NavLink
                     to={item.url}
-                    onClick={() => trackMenuClick({ section: item.title, url: item.url })}
+                    onClick={() => trackMenuIntent({ menu_item: item.menuItem, destination: item.url, cta_type: 'nav_link' })}
                     className={({ isActive }) =>
                       `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
                         isActive

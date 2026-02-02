@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Brain, Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones } from 'lucide-react';
+import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,6 @@ import { auth } from '../lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import emailImage from '@/assets/email.png';
-import logo from '@/assets/logo.png';
 import { trackNewsletterSubscribed } from '@/lib/analytics';
 
 // Função para capitalizar apenas a primeira letra do título
@@ -212,38 +211,6 @@ const Index = () => {
         {/* Main Content */}
         <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
-            {/* Welcome Message */}
-            <div className="mb-8 flex flex-col md:flex-row items-center md:items-start gap-4">
-              <div className="flex-shrink-0">
-                <img 
-                  src={logo} 
-                  alt="Oráculo Cultural Logo" 
-                  className="w-24 h-24 md:w-32 md:h-32 object-contain"
-                />
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                  Bem-vinda ao seu Oráculo Cultural! ✨
-                </h1>
-                <p className="text-gray-600 text-sm md:text-base mb-4">
-                  Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.
-                </p>
-                <Button 
-                  onClick={() => {
-                    if (user) {
-                      navigate('/criar-projeto');
-                    } else {
-                      navigate('/cadastro');
-                    }
-                  }}
-                  className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white font-semibold px-6 py-3 text-base md:text-lg"
-                >
-                  <Brain className="h-5 w-5 mr-2" />
-                  Avalie seu projeto agora!
-                </Button>
-              </div>
-            </div>
-
             {/* Quick Access Section */}
             <QuickAccessCards />
 
@@ -305,16 +272,27 @@ const Index = () => {
                               {edital.valor_maximo_premiacao}
                             </div>
                           )}
-                          <Button 
-                            variant="outline" 
-                            className="w-full mt-2"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/edital/${edital.id}`);
-                            }}
-                          >
-                            Ver Detalhes
-                          </Button>
+                          <div className="flex flex-col gap-2 mt-2">
+                            <Button 
+                              variant="outline" 
+                              className="w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/edital/${edital.id}`);
+                              }}
+                            >
+                              Ver Detalhes
+                            </Button>
+                            <Button 
+                              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white hover:opacity-90"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/criar-projeto?edital=${edital.id}`);
+                              }}
+                            >
+                              Avalie seu projeto neste edital
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     );
@@ -464,7 +442,8 @@ const Index = () => {
                   <>
                     {/* Guias */}
                     {guias.map((guia, index) => {
-                      const isEspecial = guia.especial === true;
+                      // Verificação mais robusta para isEspecial (pode vir como true, "true", 1, etc)
+                    const isEspecial = Boolean(guia.especial) && (guia.especial === true || String(guia.especial).toLowerCase() === 'true' || Number(guia.especial) === 1);
                       return (
                       <Card key={`guia-${guia.id || index}`} className="hover:shadow-lg transition-all hover:-translate-y-1">
                         <div className="aspect-video relative overflow-hidden rounded-t-lg">
@@ -489,24 +468,29 @@ const Index = () => {
                           <CardTitle className="text-lg leading-tight line-clamp-2">
                             {guia.titulo}
                           </CardTitle>
-                          <CardDescription className="line-clamp-2">
-                            {guia.descricao}
-                          </CardDescription>
+                          <div
+                            className="text-sm text-muted-foreground line-clamp-2 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold"
+                            dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
+                          />
                         </CardHeader>
                         <CardContent className="pt-0">
                           <Button 
                             className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
                             onClick={(e) => {
                               e.preventDefault();
+                              // Guias especiais podem ser acessados sem login
+                              if (isEspecial) {
+                                navigate(`/guia-especial/${guia.id}`);
+                                return;
+                              }
+                              
+                              // Guias normais precisam de login
                               if (!user) {
                                 setShowAuthModal(true);
                                 return;
                               }
                               
-                              // Se for guia especial, navegar para página de detalhes
-                              if (isEspecial) {
-                                navigate(`/guia-especial/${guia.id}`);
-                              } else if (guia.pdfUrl) {
+                              if (guia.pdfUrl) {
                                 window.open(guia.pdfUrl, '_blank');
                                 handleDownloadGuia(e as any, guia.id, guia.pdfUrl);
                               }

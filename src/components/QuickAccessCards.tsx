@@ -61,9 +61,17 @@ export function QuickAccessCards() {
                   <Sparkles className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-gray-900">
-                  Transforme seu projeto com Inteligência Artificial
+                  Ganhe mais editais com inteligência artificial
                 </h3>
               </div>
+              
+              <Button
+                onClick={() => navigate('/oraculo-ai')}
+                className="mb-6 w-full md:w-auto px-8 py-5 text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <Sparkles className="h-5 w-5 mr-2" />
+                Começar Agora
+              </Button>
               
               <p className="text-gray-600 text-lg mb-6">
                 O Oráculo Cultural utiliza IA de última geração para analisar, otimizar e aumentar as chances de aprovação do seu projeto cultural. Veja como podemos ajudar:
@@ -78,15 +86,6 @@ export function QuickAccessCards() {
                   </div>
                 ))}
               </div>
-              
-              {/* Botão CTA Grande */}
-              <Button
-                onClick={() => navigate('/oraculo-ai')}
-                className="w-full md:w-auto px-12 py-6 text-xl font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <Sparkles className="h-6 w-6 mr-3" />
-                Começar Agora
-              </Button>
               
               <p className="text-sm text-gray-500 mt-4">
                 ✨ Experimente gratuitamente ou faça upgrade para desbloquear recursos premium

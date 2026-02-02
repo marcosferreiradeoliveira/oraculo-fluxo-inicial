@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Crown, CreditCard, Calendar, AlertCircle, ArrowUp, X, CheckCircle, Clock, Sparkles, User, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -48,6 +48,8 @@ const GerenciarAssinatura = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [hasPendingSession, setHasPendingSession] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -56,20 +58,42 @@ const GerenciarAssinatura = () => {
         try {
           const db = getFirestore();
           const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-          const userDoc = await getDocFromServer(userDocRef);
+          let userDoc;
+          
+          // Tentar getDocFromServer primeiro, se falhar usar getDoc como fallback
+          try {
+            userDoc = await getDocFromServer(userDocRef);
+          } catch (serverError) {
+            console.warn('[GerenciarAssinatura] getDocFromServer falhou, usando getDoc:', serverError);
+            userDoc = await getDoc(userDocRef);
+          }
           
           if (userDoc.exists()) {
             const data = userDoc.data();
+            console.log('[GerenciarAssinatura] Dados do usuário carregados:', {
+              isPremium: data.isPremium,
+              stripeSubscriptionId: data.stripeSubscriptionId,
+              planType: data.planType,
+              premiumStatus: data.premiumStatus,
+              stripeCustomerId: data.stripeCustomerId
+            });
             setUserData(data);
             
             // Buscar dados da assinatura se tiver subscriptionId
             if (data.stripeSubscriptionId) {
+              console.log('[GerenciarAssinatura] Carregando dados da assinatura:', data.stripeSubscriptionId);
               await carregarDadosAssinatura(data.stripeSubscriptionId);
               await carregarPagamentos(data.stripeSubscriptionId);
+            } else {
+              console.log('[GerenciarAssinatura] Nenhuma subscriptionId encontrada, verificando sessões pendentes');
+              // Verificar se há sessões pendentes
+              await verificarSessoesPendentes(firebaseUser.uid);
             }
+          } else {
+            console.log('[GerenciarAssinatura] Documento do usuário não encontrado');
           }
         } catch (error) {
-          console.error('Erro ao carregar dados:', error);
+          console.error('[GerenciarAssinatura] Erro ao carregar dados:', error);
           toast.error('Erro ao carregar dados da assinatura');
         }
       }
@@ -78,6 +102,68 @@ const GerenciarAssinatura = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const verificarSessoesPendentes = async (userId: string) => {
+    try {
+      const db = getFirestore();
+      const sessionsRef = collection(db, 'stripe_sessions');
+      const q = query(
+        sessionsRef,
+        where('userId', '==', userId),
+        where('status', '==', 'pending'),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const querySnapshot = await getDocs(q);
+      setHasPendingSession(!querySnapshot.empty);
+    } catch (error) {
+      console.error('Erro ao verificar sessões pendentes:', error);
+    }
+  };
+
+  const sincronizarAssinatura = async () => {
+    if (!user) return;
+    
+    setSyncing(true);
+    try {
+      // Buscar assinaturas do Stripe para este usuário
+      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/sincronizarAssinaturaUsuario', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Assinatura sincronizada com sucesso!');
+        // Recarregar dados do usuário
+        const db = getFirestore();
+        const userDocRef = doc(db, 'usuarios', user.uid);
+        const userDoc = await getDocFromServer(userDocRef);
+        
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserData(data);
+          
+          if (data.stripeSubscriptionId) {
+            await carregarDadosAssinatura(data.stripeSubscriptionId);
+            await carregarPagamentos(data.stripeSubscriptionId);
+          }
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.error || 'Erro ao sincronizar assinatura');
+      }
+    } catch (error) {
+      console.error('Erro ao sincronizar assinatura:', error);
+      toast.error('Erro ao sincronizar assinatura');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const carregarDadosAssinatura = async (subscriptionId: string) => {
     try {
@@ -258,7 +344,21 @@ const GerenciarAssinatura = () => {
     );
   }
 
-  if (!userData?.isPremium || !userData?.stripeSubscriptionId) {
+  // Debug: log dos dados antes da verificação
+  console.log('[GerenciarAssinatura] Verificando condições:', {
+    hasUserData: !!userData,
+    isPremium: userData?.isPremium,
+    stripeSubscriptionId: userData?.stripeSubscriptionId,
+    planType: userData?.planType,
+    premiumStatus: userData?.premiumStatus,
+    shouldShowNoSubscription: !userData?.isPremium || !userData?.stripeSubscriptionId
+  });
+
+  // Verificar se tem assinatura ativa: precisa ter subscriptionId E (isPremium OU premiumStatus active)
+  const hasActiveSubscription = userData?.stripeSubscriptionId && 
+    (userData?.isPremium || userData?.premiumStatus === 'active');
+
+  if (!hasActiveSubscription) {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <DashboardSidebar />
@@ -271,10 +371,26 @@ const GerenciarAssinatura = () => {
                   <div className="text-center py-8">
                     <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Nenhuma assinatura ativa</h2>
-                    <p className="text-gray-600 mb-6">Você não possui uma assinatura ativa no momento.</p>
-                    <Button onClick={() => navigate('/cadastro-premium')} className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple">
-                      Assinar Agora
-                    </Button>
+                    <p className="text-gray-600 mb-6">
+                      {hasPendingSession 
+                        ? 'Sua assinatura está sendo processada. Isso pode levar alguns minutos. Clique em "Sincronizar" para atualizar.'
+                        : 'Você não possui uma assinatura ativa no momento.'}
+                    </p>
+                    <div className="flex gap-4 justify-center">
+                      {hasPendingSession && (
+                        <Button 
+                          onClick={sincronizarAssinatura} 
+                          disabled={syncing}
+                          variant="outline"
+                          className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                        >
+                          {syncing ? 'Sincronizando...' : 'Sincronizar Assinatura'}
+                        </Button>
+                      )}
+                      <Button onClick={() => navigate('/cadastro-premium')} className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple">
+                        Assinar Agora
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, deleteDoc, addDoc, Timestamp, getDoc, getFirestore } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Calendar, DollarSign, Trash2 } from 'lucide-react';
+import { Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -315,7 +315,7 @@ const EditaisAbertos = () => {
                             )}
                           </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="space-y-2">
                           <Button 
                             variant="outline" 
                             className="w-full"
@@ -325,6 +325,16 @@ const EditaisAbertos = () => {
                             }}
                           >
                             Ver Detalhes
+                          </Button>
+                          <Button 
+                            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/criar-projeto?edital=${edital.id}`);
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Inscrever-se
                           </Button>
                         </CardContent>
                       </Card>

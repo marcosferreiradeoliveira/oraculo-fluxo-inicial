@@ -467,17 +467,38 @@ const InteligenciaMercado = () => {
                   {guias.map((guia) => {
                     const isExpandido = descricoesExpandidas.has(guia.id);
                     const descricaoLonga = guia.descricao && guia.descricao.length > 100;
-                    const isEspecial = guia.especial === true;
+                    // Verificação mais robusta para isEspecial (pode vir como true, "true", 1, etc)
+                    const isEspecial = Boolean(guia.especial) && (guia.especial === true || String(guia.especial).toLowerCase() === 'true' || Number(guia.especial) === 1);
+                    
+                    // Debug: verificar se isEspecial está sendo detectado corretamente
+                    if (isEspecial) {
+                      console.log('[InteligenciaMercado] Guia especial detectado:', {
+                        guiaId: guia.id,
+                        guiaTitulo: guia.titulo,
+                        especial: guia.especial,
+                        isEspecial,
+                        user: !!user,
+                      });
+                    }
                     
                     return (
                       <Card 
                         key={guia.id} 
                         className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
                         onClick={() => {
-                          if (!user) {
-                            navigate('/cadastro');
-                          } else if (isEspecial) {
+                          console.log('[InteligenciaMercado] Card clicado:', {
+                            guiaId: guia.id,
+                            isEspecial,
+                            user: !!user,
+                          });
+                          // Guias especiais podem ser acessados sem login
+                          if (isEspecial) {
+                            console.log('[InteligenciaMercado] Navegando para guia especial sem login');
                             navigate(`/guia-especial/${guia.id}`);
+                          } else if (!user) {
+                            // Guias normais precisam de login
+                            console.log('[InteligenciaMercado] Usuário não logado, redirecionando para cadastro');
+                            navigate('/cadastro');
                           } else {
                             window.open(guia.pdfUrl, '_blank');
                           }
@@ -516,9 +537,10 @@ const InteligenciaMercado = () => {
                             {guia.titulo}
                           </CardTitle>
                           <div className="mt-2">
-                            <CardDescription className={isExpandido ? '' : 'line-clamp-2'}>
-                              {guia.descricao}
-                            </CardDescription>
+                            <div
+                              className={`text-sm text-muted-foreground ${isExpandido ? '' : 'line-clamp-2'} [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold`}
+                              dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
+                            />
                             {descricaoLonga && (
                               <button
                                 onClick={(e) => {
@@ -552,15 +574,21 @@ const InteligenciaMercado = () => {
                             className="w-full"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (!user) {
+                              console.log('[InteligenciaMercado] Botão clicado:', {
+                                guiaId: guia.id,
+                                isEspecial,
+                                user: !!user,
+                              });
+                              // Guias especiais podem ser acessados sem login
+                              if (isEspecial) {
+                                console.log('[InteligenciaMercado] Navegando para guia especial sem login (botão)');
+                                navigate(`/guia-especial/${guia.id}`);
+                              } else if (!user) {
+                                // Guias normais precisam de login
+                                console.log('[InteligenciaMercado] Usuário não logado, redirecionando para cadastro (botão)');
                                 navigate('/cadastro');
                               } else {
-                                // Se for guia especial, navegar para página de detalhes
-                                if (isEspecial) {
-                                  navigate(`/guia-especial/${guia.id}`);
-                                } else {
-                                  window.open(guia.pdfUrl, '_blank');
-                                }
+                                window.open(guia.pdfUrl, '_blank');
                               }
                             }}
                           >

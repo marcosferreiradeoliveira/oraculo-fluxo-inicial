@@ -308,14 +308,19 @@ const CriarProjeto = () => {
         textoEdital: dadosConsolidados.texto_edital,
         portfolio: portfolioTexto,
         projetosSelecionados: dadosConsolidados.texto_selecionados ? dadosConsolidados.texto_selecionados.slice(0, 2000) : '',
-        userId: user.uid
+        userId: user.uid,
+        stream: true // Habilitar streaming
       };
       
+      // Navegar para a página do projeto imediatamente
+      navigate(`/projeto/${projetoIdParam}?streaming=true`);
+      
+      // Fazer requisição com streaming
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'text/event-stream'
         },
         body: JSON.stringify(payload)
       });
@@ -325,50 +330,84 @@ const CriarProjeto = () => {
         throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
       }
       
-      const text = await response.text();
-      let data;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        throw new Error('Resposta inválida do servidor');
+      // Processar stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullContent = '';
+      let hasNavigated = false;
+      
+      if (!reader) {
+        throw new Error('Stream não disponível');
       }
       
-      await updateStatusWithDelay('', ['Recebendo análise da IA...'], 1000);
-      await updateStatusWithDelay('', ['Processando resultado...'], 1200);
-      const analiseIA = data.analise;
-      
-      // Salvar análise no Firestore
-      if (projetoIdParam) {
-        const db = getFirestore();
-        const ref = doc(db, 'projetos', projetoIdParam);
-        await updateDoc(ref, {
-          analise_ia: analiseIA,
-          data_atualizacao: serverTimestamp()
-        });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        // Track analysis completed
-        try {
-          const userRef = doc(db, 'usuarios', user.uid);
-          const userSnap = await getDoc(userRef);
-          const userData = userSnap.exists() ? userSnap.data() : {};
-          const planType = userData?.planType || 'free';
-          
-          trackAnalysisCompleted({
-            projectId: projetoIdParam,
-            planType: planType,
-          });
-        } catch (err) {
-          console.error('Erro ao trackear conclusão da análise:', err);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.content) {
+                fullContent += data.content;
+                
+                // Atualizar análise no Firestore em tempo real (debounced)
+                if (projetoIdParam && fullContent.length > 0) {
+                  const db = getFirestore();
+                  const ref = doc(db, 'projetos', projetoIdParam);
+                  // Usar debounce para não fazer muitas escritas
+                  clearTimeout((window as any).__analiseUpdateTimeout);
+                  (window as any).__analiseUpdateTimeout = setTimeout(async () => {
+                    await updateDoc(ref, {
+                      analise_ia: fullContent,
+                      data_atualizacao: serverTimestamp()
+                    });
+                  }, 1000);
+                }
+              }
+              
+              if (data.done) {
+                // Salvar análise final no Firestore
+                if (projetoIdParam) {
+                  const db = getFirestore();
+                  const ref = doc(db, 'projetos', projetoIdParam);
+                  await updateDoc(ref, {
+                    analise_ia: data.fullContent || fullContent,
+                    data_atualizacao: serverTimestamp()
+                  });
+                  
+                  // Track analysis completed
+                  try {
+                    const userRef = doc(db, 'usuarios', user.uid);
+                    const userSnap = await getDoc(userRef);
+                    const userData = userSnap.exists() ? userSnap.data() : {};
+                    const planType = userData?.planType || 'free';
+                    
+                    trackAnalysisCompleted({
+                      projectId: projetoIdParam,
+                      planType: planType,
+                    });
+                  } catch (err) {
+                    console.error('Erro ao trackear conclusão da análise:', err);
+                  }
+                }
+                
+                setMostrarAnalise(false);
+                setAnalisando(false);
+                setLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.error('Erro ao processar chunk:', e);
+            }
+          }
         }
-        
-        await updateStatusWithDelay('Finalizando...', [], 800);
-        await updateStatusWithDelay('Análise concluída!', ['Análise concluída!'], 500);
-        
-        // Redirecionar para a página do projeto após análise concluída
-        setMostrarAnalise(false);
-        setAnalisando(false);
-        setLoading(false);
-        navigate(`/projeto/${projetoIdParam}`);
       }
     } catch (e: any) {
       console.error('Erro ao analisar projeto:', e);
