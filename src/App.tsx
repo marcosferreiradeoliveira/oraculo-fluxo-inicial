@@ -36,6 +36,7 @@ import GerenciarAssinatura from './pages/GerenciarAssinatura';
 import GerarTextos from './pages/GerarTextos';
 import PreencherAnexos from './pages/PreencherAnexos';
 import CriarOrcamento from './pages/CriarOrcamento';
+import CriarCronograma from './pages/CriarCronograma';
 import Termos from './pages/Termos';
 import Privacidade from './pages/Privacidade';
 import DetalhesEdital from './pages/DetalhesEdital';
@@ -95,7 +96,7 @@ const App = () => (
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />
           <Route path="/suporte" element={<Suporte />} />
-          <Route path="/cadastro-premium" element={<ProtectedRoute><CadastroPremium /></ProtectedRoute>} />
+          <Route path="/cadastro-premium" element={<CadastroPremium />} />
           <Route path="/contato-premium" element={<ProtectedRoute><ContatoPremium /></ProtectedRoute>} />
           <Route path="/gerenciar-assinatura" element={<ProtectedRoute><GerenciarAssinatura /></ProtectedRoute>} />
           <Route path="/criar-projeto" element={<ProtectedRoute><CriarProjeto /></ProtectedRoute>} />
@@ -103,6 +104,7 @@ const App = () => (
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><GerarTextos /></ProtectedRoute>} />
           <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><CriarOrcamento /></ProtectedRoute>} />
+          <Route path="/projeto/:id/criar-cronograma" element={<ProtectedRoute><CriarCronograma /></ProtectedRoute>} />
           <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><PreencherAnexos /></ProtectedRoute>} />
           <Route path="/editar-edital/:id" element={<ProtectedRoute><EditarEdital /></ProtectedRoute>} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />

@@ -36,8 +36,8 @@ const PreencherAnexos = () => {
   const [progress, setProgress] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Preencher Anexos'];
-  const currentStep = 4;
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Preencher Anexos'];
+  const currentStep = 6;
 
   useEffect(() => {
     const fetchData = async () => {

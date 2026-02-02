@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc, increment } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
 import { Link } from 'react-router-dom';
 import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trackAnalysisFailed } from '@/lib/analytics';
-import { Brain } from 'lucide-react';
+import { Brain, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 
@@ -17,16 +17,18 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
+  'Criar Orçamento',
+  'Criar Cronograma',
   'Preencher Anexos'
 ];
 const currentStep: number = 0; // Criar Projeto
 
 // Função para verificar limites de projetos por plano
-const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boolean; mensagem: string; projetosAtivos: number; limite: number }> => {
+// Limite é global (não por ano). Apagar projetos não libera novas vagas; o contador nunca diminui.
+const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boolean; mensagem: string; projetosAtivos: number; limite: number; planType: string }> => {
   const db = getFirestore();
   
   try {
-    // Buscar dados do usuário para obter o plano
     const userDocRef = doc(db, 'usuarios', userId);
     const userDoc = await getDoc(userDocRef);
     
@@ -35,30 +37,29 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
         podeCriar: false,
         mensagem: 'Usuário não encontrado. Por favor, faça login novamente.',
         projetosAtivos: 0,
-        limite: 0
+        limite: 0,
+        planType: 'basico'
       };
     }
     
     const userData = userDoc.data();
     const isPremium = userData?.isPremium === true;
+    const planType = userData?.planType || 'basico';
     
-    // Se for premium, não há limite - retornar imediatamente
     if (isPremium) {
       return {
         podeCriar: true,
         mensagem: '',
         projetosAtivos: 0,
-        limite: Infinity
+        limite: Infinity,
+        planType
       };
     }
     
-    const planType = userData?.planType || 'basico'; // Default para básico se não tiver plano
-    
-    // Definir limites por plano
     let limiteProjetos: number;
     switch (planType.toLowerCase()) {
       case 'premium':
-        limiteProjetos = Infinity; // Ilimitado
+        limiteProjetos = Infinity;
         break;
       case 'essencial':
         limiteProjetos = 10;
@@ -69,52 +70,21 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
         break;
     }
     
-    // Calcular início do ano atual
-    const agora = new Date();
-    const inicioAno = new Date(agora.getFullYear(), 0, 1); // 1º de janeiro do ano atual
-    
-    // Buscar projetos criados no ano atual
-    const projetosRef = collection(db, 'projetos');
-    const q = query(
-      projetosRef,
-      where('user_id', '==', userId)
-    );
-    
-    const projetosSnapshot = await getDocs(q);
-    const projetosAnoAtual = projetosSnapshot.docs.filter(doc => {
-      const projetoData = doc.data();
-      const dataCriacao = projetoData.data_criacao;
-      
-      if (!dataCriacao) return false;
-      
-      // Converter Firestore Timestamp para Date
-      let dataCriacaoDate: Date;
-      if (dataCriacao.toDate) {
-        dataCriacaoDate = dataCriacao.toDate();
-      } else if (dataCriacao.seconds) {
-        dataCriacaoDate = new Date(dataCriacao.seconds * 1000);
-      } else {
-        return false;
-      }
-      
-      // Verificar se foi criado no ano atual
-      return dataCriacaoDate >= inicioAno;
-    });
-    
-    const projetosAtivos = projetosAnoAtual.length;
-    const podeCriar = projetosAtivos < limiteProjetos;
+    const projetosCriados = Math.max(0, Number(userData?.projetos_criados_count ?? 0));
+    const podeCriar = projetosCriados < limiteProjetos;
     
     let mensagem = '';
     if (!podeCriar) {
       const nomePlano = planType === 'essencial' ? 'Essencial' : 'Básico';
-      mensagem = `Você atingiu o limite de ${limiteProjetos} projetos ativos/ano do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
+      mensagem = `Você atingiu o limite de ${limiteProjetos} projetos do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
     }
     
     return {
       podeCriar,
       mensagem,
-      projetosAtivos,
-      limite: limiteProjetos
+      projetosAtivos: projetosCriados,
+      limite: limiteProjetos,
+      planType
     };
   } catch (error) {
     console.error('Erro ao verificar limite de projetos:', error);
@@ -122,7 +92,8 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
       podeCriar: false,
       mensagem: 'Erro ao verificar limite de projetos. Tente novamente.',
       projetosAtivos: 0,
-      limite: 0
+      limite: 0,
+      planType: 'basico'
     };
   }
 };
@@ -139,6 +110,23 @@ const dicasProjetos = [
   "🎨 Dica: Seja criativo, mas mantenha a coerência. Projetos inovadores que são bem fundamentados têm maior chance de sucesso.",
   "✅ Dica: Certifique-se de que todos os documentos exigidos pelo edital estão completos e corretos antes do envio."
 ];
+
+/** Critérios gerais de avaliação de projetos culturais (usados quando nenhum edital é selecionado) */
+const CRITERIOS_GERAIS = `Critérios gerais de avaliação de projetos culturais:
+
+1. RELEVÂNCIA CULTURAL E ARTÍSTICA – Pertinência do projeto para a área cultural; contribuição para a diversidade e para o fortalecimento das expressões culturais.
+
+2. VIABILIDADE TÉCNICA E FINANCEIRA – Coerência entre objetivos, metodologia, cronograma e orçamento; capacidade de execução da proposta.
+
+3. QUALIFICAÇÃO DA EQUIPE – Experiência e competências dos responsáveis; adequação do perfil à natureza do projeto.
+
+4. IMPACTO SOCIAL E DEMOCRATIZAÇÃO – Efeitos esperados na comunidade; ampliação do acesso à cultura e à participação cultural.
+
+5. INOVAÇÃO E DIVERSIDADE – Contribuição para a inovação no campo cultural; valorização da diversidade cultural e das expressões regionais.
+
+6. SUSTENTABILIDADE – Potencial de continuidade e legado do projeto após o período de apoio.
+
+7. COMUNICAÇÃO E DIVULGAÇÃO – Estratégias de divulgação e de registro do projeto; alcance e visibilidade.`;
 
 const CriarProjeto = () => {
   const [nome, setNome] = useState('');
@@ -163,6 +151,9 @@ const CriarProjeto = () => {
   ]);
   const [etapaAtualIA, setEtapaAtualIA] = useState<number>(0);
   const [limiteProjetos, setLimiteProjetos] = useState<{ projetosAtivos: number; limite: number; planType: string } | null>(null);
+  const [checkingLimit, setCheckingLimit] = useState(true);
+  const [searchParams] = useSearchParams();
+  const editalIdParam = searchParams.get('edital');
   
   // Estados para análise IA
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
@@ -275,12 +266,15 @@ const CriarProjeto = () => {
         dadosConsolidados.texto_edital = res.texto_edital;
         dadosConsolidados.criterios = res.criterios;
         dadosConsolidados.texto_selecionados = res.texto_selecionados;
+      } else {
+        dadosConsolidados.criterios = CRITERIOS_GERAIS;
+        dadosConsolidados.nome_edital = 'Critérios gerais de avaliação de projetos culturais';
       }
       
       await updateStatusWithDelay('Processando informações...', 
-        ['Cruzando projeto com critérios do edital...'], 1200);
+        [editalNome ? 'Cruzando projeto com critérios do edital...' : 'Cruzando projeto com critérios gerais...'], 1200);
       await updateStatusWithDelay('', 
-        ['Comparando com projetos selecionados anteriores...'], 1200);
+        [editalNome ? 'Comparando com projetos selecionados anteriores...' : 'Aplicando critérios gerais de projetos culturais...'], 1200);
       await updateStatusWithDelay('Construindo prompt para análise...', 
         ['Preparando dados para IA...'], 1500);
       
@@ -455,86 +449,42 @@ const CriarProjeto = () => {
     };
     fetchEditais();
     
-    // Buscar informações de limite de projetos
-    const fetchLimiteProjetos = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      
+    const user = auth.currentUser;
+    if (!user) {
+      setCheckingLimit(false);
+      return;
+    }
+    
+    (async () => {
       try {
-        const db = getFirestore();
-        const userDocRef = doc(db, 'usuarios', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (!userDoc.exists()) return;
-        
-        const userData = userDoc.data();
-        const isPremium = userData?.isPremium === true;
-        
-        // Se for premium, não exibir limite de projetos
-        if (isPremium) {
-          setLimiteProjetos(null);
+        const res = await verificarLimiteProjetos(user.uid);
+        if (!res.podeCriar) {
+          navigate('/cadastro-premium?motivo=limite_projetos');
           return;
         }
-        
-        const planType = userData?.planType || 'basico';
-        
-        // Definir limites por plano
-        let limiteProjetos: number;
-        switch (planType.toLowerCase()) {
-          case 'premium':
-            limiteProjetos = Infinity;
-            break;
-          case 'essencial':
-            limiteProjetos = 10;
-            break;
-          case 'basico':
-          default:
-            limiteProjetos = 3;
-            break;
+        if (res.limite === Infinity) {
+          setLimiteProjetos(null);
+        } else {
+          setLimiteProjetos({
+            projetosAtivos: res.projetosAtivos,
+            limite: res.limite,
+            planType: res.planType
+          });
         }
-        
-        // Calcular início do ano atual
-        const agora = new Date();
-        const inicioAno = new Date(agora.getFullYear(), 0, 1);
-        
-        // Buscar projetos criados no ano atual
-        const projetosRef = collection(db, 'projetos');
-        const q = query(
-          projetosRef,
-          where('user_id', '==', user.uid)
-        );
-        
-        const projetosSnapshot = await getDocs(q);
-        const projetosAnoAtual = projetosSnapshot.docs.filter(doc => {
-          const projetoData = doc.data();
-          const dataCriacao = projetoData.data_criacao;
-          
-          if (!dataCriacao) return false;
-          
-          let dataCriacaoDate: Date;
-          if (dataCriacao.toDate) {
-            dataCriacaoDate = dataCriacao.toDate();
-          } else if (dataCriacao.seconds) {
-            dataCriacaoDate = new Date(dataCriacao.seconds * 1000);
-          } else {
-            return false;
-          }
-          
-          return dataCriacaoDate >= inicioAno;
-        });
-        
-        setLimiteProjetos({
-          projetosAtivos: projetosAnoAtual.length,
-          limite: limiteProjetos,
-          planType: planType
-        });
-      } catch (error) {
-        console.error('Erro ao buscar limite de projetos:', error);
+        setCheckingLimit(false);
+      } catch (e) {
+        console.error('Erro ao verificar limite de projetos:', e);
+        setCheckingLimit(false);
       }
-    };
-    
-    fetchLimiteProjetos();
-  }, []);
+    })();
+  }, [navigate]);
+
+  // Pré-selecionar edital quando ?edital=id (ex.: vindo da home "Avalie seu projeto neste edital")
+  useEffect(() => {
+    if (!editalIdParam || editais.length === 0) return;
+    const edital = editais.find(e => e.id === editalIdParam);
+    if (edital?.nome) setEditalAssociado(edital.nome);
+  }, [editalIdParam, editais]);
 
   const handleFileUpload = async (file: File): Promise<string> => {
     const storage = getStorage();
@@ -671,7 +621,7 @@ const CriarProjeto = () => {
         return;
       }
       
-      console.log(`Limite verificado: ${verificacaoLimite.projetosAtivos}/${verificacaoLimite.limite} projetos criados no ano atual`);
+      console.log(`Limite verificado: ${verificacaoLimite.projetosAtivos}/${verificacaoLimite.limite} projetos criados`);
       setEtapaAtualIA(0); // Salvando projeto
       console.log('Salvando projeto no Firestore...');
       // Salva no Firestore
@@ -696,6 +646,9 @@ const CriarProjeto = () => {
       console.log('Salvando projeto no Firestore...');
       const docRef = await addDoc(collection(db, 'projetos'), projetoData);
       console.log('Projeto criado com ID:', docRef.id);
+      
+      const userRef = doc(db, 'usuarios', user.uid);
+      await updateDoc(userRef, { projetos_criados_count: increment(1) });
       
       // Track project created
       trackProjectCreated({
@@ -847,6 +800,12 @@ const CriarProjeto = () => {
         <DashboardHeader />
         
         <main className="flex-1 p-2 md:p-4">
+          {checkingLimit ? (
+            <div className="w-full flex flex-col items-center justify-center min-h-[40vh] gap-4">
+              <Loader2 className="h-10 w-10 text-oraculo-blue animate-spin" />
+              <p className="text-gray-600 font-medium">Verificando...</p>
+            </div>
+          ) : (
           <div className="w-full">
             <div className="mb-8">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
@@ -874,7 +833,7 @@ const CriarProjeto = () => {
               <div className="w-full bg-gray-200 rounded-full h-3 mt-4">
                 <div 
                   className="bg-oraculo-blue h-3 rounded-full transition-all duration-300" 
-                  style={{ width: `${(currentStep + 1) * 25}%` }}
+                  style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -893,10 +852,10 @@ const CriarProjeto = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-700">
-                          Projetos criados este ano: <span className="font-bold">{limiteProjetos.projetosAtivos}/{limiteProjetos.limite}</span>
+                          Projetos criados: <span className="font-bold">{limiteProjetos.projetosAtivos}/{limiteProjetos.limite}</span>
                         </p>
                         <p className="text-xs text-gray-600 mt-1">
-                          Plano {limiteProjetos.planType === 'essencial' ? 'Essencial' : 'Básico'} - Limite de {limiteProjetos.limite} projetos ativos/ano
+                          Plano {limiteProjetos.planType === 'essencial' ? 'Essencial' : 'Básico'} – Limite de {limiteProjetos.limite} projetos. Apagar não libera novas vagas.
                         </p>
                       </div>
                       {limiteProjetos.projetosAtivos >= limiteProjetos.limite && (
@@ -988,6 +947,7 @@ const CriarProjeto = () => {
               </p>
             </div>
           </div>
+          )}
         </main>
       </div>
     </div>

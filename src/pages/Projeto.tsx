@@ -25,6 +25,8 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
+  'Criar Orçamento',
+  'Criar Cronograma',
   'Preencher Anexos'
 ];
 const currentStep: number = 1; // Avaliar com IA
@@ -1053,7 +1055,10 @@ const Projeto = () => {
       '/criar-projeto',
       `/projeto/${id}`,
       `/projeto/${id}/alterar-com-ia`,
-      `/projeto/${id}/gerar-textos`
+      `/projeto/${id}/gerar-textos`,
+      `/projeto/${id}/criar-orcamento`,
+      `/projeto/${id}/criar-cronograma`,
+      `/projeto/${id}/preencher-anexos`
     ];
     
     if (routes[stepIndex]) {
@@ -1367,7 +1372,7 @@ const Projeto = () => {
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${(etapaAtual + 1) * 25}%` }}
+                  style={{ width: `${((etapaAtual + 1) / steps.length) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -1602,41 +1607,7 @@ const Projeto = () => {
                           );
                         })()}
 
-                        {/* Container relativo para posicionar o box de upgrade sobre o blur */}
-                        <div className="relative">
-                          {/* Box de upgrade sobre o blur - FORA do div com blur */}
-                          {/* Mostrar blur apenas se não for premium E não for a primeira análise */}
-                          {!isPremium && primeiraAnaliseCompleta && (
-                            <div className="absolute top-0 left-0 right-0 z-20 flex justify-center p-8 pointer-events-auto">
-                              <div className="bg-white rounded-2xl shadow-2xl border-4 border-oraculo-blue max-w-2xl w-full p-8">
-                                <div className="flex flex-col md:flex-row items-center gap-6">
-                                  <div className="flex-shrink-0">
-                                    <img 
-                                      src={CriarImg} 
-                                      alt="Produtora Cultural" 
-                                      className="w-48 h-48 object-cover rounded-xl shadow-lg"
-                                    />
-                                  </div>
-                                  <div className="flex-1 text-center md:text-left">
-                                    <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                                      Assine agora mesmo o Oráculo Cultural
-                                    </h3>
-                                    <p className="text-gray-700 mb-6 leading-relaxed">
-                                      Tenha acesso à avaliação completa do seu projeto, com notas por critérios, sugestões de alteração e geração automática de textos e anexos.
-                                    </p>
-                                    <Button 
-                                      onClick={() => navigate('/cadastro-premium')}
-                                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-8 py-3 text-lg font-semibold"
-                                    >
-                                      Ver Planos e Preços
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Renderizar conteúdo da análise */}
+                        {/* Renderizar conteúdo da análise */}
                           {(() => {
                             // Primeiro remover sugestões do texto completo
                             const textoSemSugestoes = removerSugestoesDoTexto(projeto.analise_ia);
@@ -1930,8 +1901,9 @@ const Projeto = () => {
                                   return renderizarSecao(section, index);
                                 })}
                                 
-                                {/* Resto do conteúdo com blur se não for premium E não for a primeira análise */}
-                                <div className={`${!isPremium && primeiraAnaliseCompleta ? 'blur-lg select-none pointer-events-none' : ''}`} style={!isPremium && primeiraAnaliseCompleta ? { filter: 'blur(12px)' } : {}}>
+                                {/* Resto do conteúdo com blur; card de upgrade por cima do blur */}
+                                <div className="relative min-h-[280px]">
+                                  <div className={`${!isPremium && primeiraAnaliseCompleta ? 'blur-lg select-none pointer-events-none' : ''}`} style={!isPremium && primeiraAnaliseCompleta ? { filter: 'blur(12px)' } : {}}>
                                   {restoSecoes.map((section, index) => {
                                     const idxGlobal = primeirasSecoes.length + index;
                                     // Se este é o primeiro critério após PONTOS FRACOS, adicionar título antes
@@ -1998,11 +1970,41 @@ const Projeto = () => {
                             ))}
                           </>
                         )}
+                                  </div>
+                                  {/* Card Assine agora – por cima do blur */}
+                                  {!isPremium && primeiraAnaliseCompleta && (
+                                    <div className="absolute inset-0 z-20 flex justify-center items-center px-3 py-4 sm:px-4 sm:py-6 md:p-8 pointer-events-auto">
+                                      <div className="bg-white rounded-2xl shadow-2xl border-2 sm:border-4 border-oraculo-blue max-w-2xl w-full p-4 sm:p-6 md:p-8">
+                                        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+                                          <div className="flex-shrink-0">
+                                            <img 
+                                              src={CriarImg} 
+                                              alt="Produtora Cultural" 
+                                              className="w-28 h-28 sm:w-36 sm:h-36 md:w-48 md:h-48 object-cover rounded-xl shadow-lg"
+                                            />
+                                          </div>
+                                          <div className="flex-1 text-center md:text-left min-w-0">
+                                            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2 sm:mb-4">
+                                              Assine agora mesmo o Oráculo Cultural
+                                            </h3>
+                                            <p className="text-sm sm:text-base text-gray-700 mb-4 sm:mb-6 leading-relaxed">
+                                              Tenha acesso à avaliação completa do seu projeto, com notas por critérios, sugestões de alteração e geração automática de textos e anexos.
+                                            </p>
+                                            <Button 
+                                              onClick={() => navigate('/cadastro-premium')}
+                                              className="w-full sm:w-auto bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg font-semibold"
+                                            >
+                                              Ver Planos e Preços
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </>
                             );
                           })()}
-                        </div>
                       </div>
                       
                       {/* Campo para sugestão personalizada */}
@@ -2152,7 +2154,13 @@ const Projeto = () => {
                             </Button>
                             
                             <Button
-                              onClick={analisarComIA}
+                              onClick={() => {
+                                if (!isPremium) {
+                                  navigate('/cadastro-premium');
+                                  return;
+                                }
+                                analisarComIA();
+                              }}
                               disabled={analisando}
                               className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white px-6 py-2"
                             >

@@ -192,7 +192,7 @@ const CriarOrcamento = () => {
   const [sugestoesAlteracoes, setSugestoesAlteracoes] = useState<string>('');
   const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
 
-  const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Preencher Anexos'];
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Preencher Anexos'];
   const currentStep = 4;
 
   useEffect(() => {
@@ -1748,10 +1748,10 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                     </Button>
                   </div>
                   <Button
-                    onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}
+                    onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                     className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
                   >
-                    Próximo: Preencher Anexos
+                    Próximo: Criar Cronograma
                   </Button>
                 </div>
               </div>

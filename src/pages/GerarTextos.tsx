@@ -66,8 +66,8 @@ const GerarTextos = () => {
   const isMounted = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const steps = ['Criação do Projeto', 'Detalhamento', 'Alterar com IA', 'Gerar Textos', 'Preencher Anexos'];
-  const currentStep = 3; // This page is the 4th step
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Preencher Anexos'];
+  const currentStep = 3; // Gerar Textos
 
   // Initialize and cleanup
   useEffect(() => {
