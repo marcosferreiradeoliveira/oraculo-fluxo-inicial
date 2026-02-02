@@ -4,12 +4,14 @@
 
 ### Publishable Key (Frontend)
 ```
-pk_test_51SlEieP5WduByfpYo32cal211D58WbniApZ1g7JeDvH7YBVWlntt9gua01xnsT2nfB45TUOipb3wmwU4H6yWP9Ng00xPAwqkyd
+Configurado via variável de ambiente: VITE_STRIPE_PUBLISHABLE_KEY
+Ou definir diretamente no código frontend (pode ser pública)
 ```
 
 ### Secret Key (Backend)
 ```
-sk_test_51SlEieP5WduByfpYrqS8ZqxcrY6MR4bjIY48DNFIts8nwLxMOI1AHJ6M2sT0hWDVPsHbRE6lteTZITiLOkYqB3rS001YmP1esK
+Configurado via variável de ambiente: STRIPE_SECRET_KEY
+NUNCA commitar chaves secretas no repositório!
 ```
 
 ## ✅ O que foi implementado:
