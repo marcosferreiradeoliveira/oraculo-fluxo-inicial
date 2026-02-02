@@ -1374,11 +1374,28 @@ exports.criarAssinaturaPremiumStripe = onRequest(
             },
           ];
       
+      // Configurar período de teste de 7 dias para plano básico mensal
+      const subscriptionDataConfig = {
+        metadata: {
+          userId: userId,
+          userEmail: email,
+          planType: normalizedPlanType, // Salvar também nos metadados da assinatura
+          isAnnual: isAnnualPlan ? 'true' : 'false', // Salvar se é anual
+        },
+      };
+      
+      // Adicionar trial period de 7 dias apenas para plano básico mensal
+      if (normalizedPlanType === 'basico' && !isAnnualPlan) {
+        subscriptionDataConfig.trial_period_days = 7;
+        console.log('[criarAssinaturaPremiumStripe] ✅ Período de teste de 7 dias aplicado ao plano básico');
+      }
+      
       const session = await stripeInstance.checkout.sessions.create({
         payment_method_types: ['card'],
         mode: 'subscription',
         customer_email: email,
         line_items: lineItems,
+        allow_promotion_codes: true, // Habilita campo de cupom de desconto no checkout
         success_url: process.env.STRIPE_SUCCESS_URL || 'https://oraculocultural.com.br/cadastro-premium?status=success&session_id={CHECKOUT_SESSION_ID}',
         cancel_url: process.env.STRIPE_CANCEL_URL || 'https://oraculocultural.com.br/conta?status=cancelled',
         metadata: {
@@ -1388,14 +1405,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
           planType: normalizedPlanType, // Salvar o tipo de plano normalizado nos metadados
           isAnnual: isAnnualPlan ? 'true' : 'false', // Salvar se é anual
         },
-        subscription_data: {
-          metadata: {
-            userId: userId,
-            userEmail: email,
-            planType: normalizedPlanType, // Salvar também nos metadados da assinatura
-            isAnnual: isAnnualPlan ? 'true' : 'false', // Salvar se é anual
-          },
-        },
+        subscription_data: subscriptionDataConfig,
       });
 
       console.log('[criarAssinaturaPremiumStripe] Stripe Checkout Session criada:', session.id);
@@ -1425,6 +1435,133 @@ exports.criarAssinaturaPremiumStripe = onRequest(
         error: 'Erro ao criar assinatura', 
         details: error.message 
       });
+    }
+  }
+);
+
+const BASE_URL = process.env.BASE_URL || 'https://oraculocultural.com.br';
+
+/**
+ * Checkout Stripe one-time para guia especial (ex.: guia prestação de contas).
+ * Cria sessão de pagamento único e redireciona para o Stripe.
+ */
+exports.criarCheckoutGuiaStripe = onRequest(
+  {
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+
+    try {
+      const { guiaId, userId, email } = req.body || {};
+
+      if (!guiaId) {
+        return res.status(400).json({ error: 'guiaId é obrigatório' });
+      }
+
+      const isGuest = !userId || !email;
+      const effectiveUserId = userId || 'guest';
+      const effectiveEmail = email || null;
+
+      const guiaRef = db.collection('guias').doc(guiaId);
+      const guiaSnap = await guiaRef.get();
+      if (!guiaSnap.exists) {
+        return res.status(404).json({ error: 'Guia não encontrado' });
+      }
+
+      const guia = guiaSnap.data();
+      const titulo = guia.titulo || 'Guia para prestação de contas';
+      const valorPromocional = guia.valorPromocional != null ? Number(guia.valorPromocional) : null;
+
+      if (valorPromocional == null || valorPromocional <= 0) {
+        return res.status(400).json({ error: 'Guia sem valor promocional configurado' });
+      }
+
+      const unitAmount = Math.round(valorPromocional * 100);
+
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+
+      let customerName = '';
+      if (!isGuest) {
+        try {
+          const userDoc = await db.collection('usuarios').doc(userId).get();
+          if (userDoc.exists() && userDoc.data().nome_completo) {
+            customerName = userDoc.data().nome_completo;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      const sessionParams = {
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'brl',
+            product_data: {
+              name: titulo,
+              description: 'Guia para prestação de contas - Oráculo Cultural',
+            },
+            unit_amount: unitAmount,
+          },
+          quantity: 1,
+        }],
+        allow_promotion_codes: true, // Habilita campo de cupom de desconto no checkout
+        success_url: `${BASE_URL}/guia-especial/${guiaId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${BASE_URL}/guia-especial/${guiaId}`,
+        metadata: {
+          userId: effectiveUserId,
+          userEmail: effectiveEmail || '',
+          userName: customerName,
+          guiaId,
+          tipo: 'guia',
+        },
+      };
+      if (effectiveEmail) {
+        sessionParams.customer_email = effectiveEmail;
+      }
+
+      const session = await stripeInstance.checkout.sessions.create(sessionParams);
+
+      await db.collection('stripe_sessions').doc(session.id).set({
+        userId: effectiveUserId,
+        email: effectiveEmail,
+        guiaId,
+        tipo: 'guia',
+        planType: null,
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      res.status(200).json({ checkout_url: session.url, session_id: session.id });
+    } catch (error) {
+      console.error('[criarCheckoutGuiaStripe] Error:', error.message);
+      res.status(500).json({ error: 'Erro ao criar checkout do guia', details: error.message });
     }
   }
 );
@@ -3031,7 +3168,21 @@ exports.webhookStripe = onRequest(
             console.log('[webhookStripe] ⚠️ PlanType não encontrado, usando padrão: basico');
           }
           
-          // Só atualizar para active se o pagamento foi bem-sucedido
+          // Verificar status da assinatura para detectar trial period
+          let subscriptionStatus = 'pending';
+          let isInTrial = false;
+          if (session.subscription) {
+            try {
+              const subscription = await stripeInstance.subscriptions.retrieve(session.subscription);
+              subscriptionStatus = subscription.status;
+              isInTrial = subscription.status === 'trialing';
+              console.log('[webhookStripe] Status da assinatura:', subscriptionStatus, 'Em trial:', isInTrial);
+            } catch (error) {
+              console.error('[webhookStripe] Erro ao buscar status da assinatura:', error);
+            }
+          }
+          
+          // Só atualizar para active se o pagamento foi bem-sucedido OU se está em trial
           const updateData = {
             stripeCustomerId: session.customer,
             stripeSubscriptionId: session.subscription,
@@ -3039,10 +3190,14 @@ exports.webhookStripe = onRequest(
             lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
           };
           
-          if (session.payment_status === 'paid') {
+          // Ativar premium se pagamento foi pago OU se está em período de teste
+          if (session.payment_status === 'paid' || isInTrial) {
             updateData.isPremium = true;
-            updateData.premiumStatus = 'active';
+            updateData.premiumStatus = isInTrial ? 'trialing' : 'active';
             updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
+            if (isInTrial) {
+              console.log('[webhookStripe] ✅ Usuário ativado em período de teste de 7 dias');
+            }
           } else {
             // Pagamento ainda não processado
             updateData.premiumStatus = session.payment_status || 'pending';
@@ -3395,6 +3550,143 @@ exports.listarPagamentosAssinatura = onRequest(
 );
 
 // Função para cancelar uma assinatura
+// Função para sincronizar assinatura do usuário com o Stripe
+exports.sincronizarAssinaturaUsuario = onRequest(
+  { 
+    cors: true,
+    maxInstances: 10,
+    invoker: 'public',
+    secrets: [stripeSecretKey]
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+    
+    try {
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: 'userId é obrigatório' });
+      }
+      
+      // Obter secret key do Stripe
+      let stripeKey;
+      try {
+        stripeKey = stripeSecretKey.value();
+      } catch (e) {
+        stripeKey = process.env.STRIPE_SECRET_KEY;
+      }
+      
+      if (!stripeKey) {
+        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      }
+      
+      stripeKey = stripeKey.toString().trim();
+      const stripeInstance = stripe(stripeKey);
+      
+      // Buscar dados do usuário no Firestore
+      const userRef = db.collection('usuarios').doc(userId);
+      const userDoc = await userRef.get();
+      
+      if (!userDoc.exists()) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      
+      const userData = userDoc.data();
+      let customerId = userData.stripeCustomerId;
+      
+      if (!customerId) {
+        // Tentar buscar customer pelo email
+        const email = userData.email;
+        if (email) {
+          const customers = await stripeInstance.customers.list({
+            email: email,
+            limit: 1
+          });
+          
+          if (customers.data.length > 0) {
+            const customer = customers.data[0];
+            await userRef.update({ stripeCustomerId: customer.id });
+            customerId = customer.id;
+          }
+        }
+        
+        if (!customerId) {
+          return res.status(404).json({ error: 'Customer ID não encontrado. Faça uma assinatura primeiro.' });
+        }
+      }
+      
+      // Buscar assinaturas ativas do Stripe para este customer
+      const subscriptions = await stripeInstance.subscriptions.list({
+        customer: customerId,
+        status: 'all', // Buscar todas para encontrar a mais recente
+        limit: 10
+      });
+      
+      // Encontrar a assinatura mais recente que está ativa ou em trial
+      const activeSubscription = subscriptions.data.find(
+        sub => sub.status === 'active' || sub.status === 'trialing'
+      ) || subscriptions.data[0]; // Se não encontrar ativa, pegar a mais recente
+      
+      if (!activeSubscription) {
+        return res.status(404).json({ error: 'Nenhuma assinatura encontrada no Stripe' });
+      }
+      
+      // Obter planType dos metadados da assinatura
+      let planType = activeSubscription.metadata?.planType || userData.planType || 'basico';
+      
+      // Atualizar Firestore com os dados da assinatura
+      const updateData = {
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: activeSubscription.id,
+        planType: planType,
+        isPremium: activeSubscription.status === 'active' || activeSubscription.status === 'trialing',
+        premiumStatus: activeSubscription.status === 'active' || activeSubscription.status === 'trialing' ? 'active' : activeSubscription.status,
+        cancelAtPeriodEnd: activeSubscription.cancel_at_period_end || false,
+        lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      
+      if (activeSubscription.status === 'active' || activeSubscription.status === 'trialing') {
+        updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
+      }
+      
+      await userRef.update(updateData);
+      
+      console.log('[sincronizarAssinaturaUsuario] ✅ Assinatura sincronizada:', {
+        userId,
+        subscriptionId: activeSubscription.id,
+        planType,
+        status: activeSubscription.status
+      });
+      
+      res.status(200).json({ 
+        success: true,
+        subscriptionId: activeSubscription.id,
+        planType: planType,
+        status: activeSubscription.status
+      });
+    } catch (error) {
+      console.error('[sincronizarAssinaturaUsuario] Erro:', error);
+      res.status(500).json({ 
+        error: 'Erro ao sincronizar assinatura',
+        details: error.message
+      });
+    }
+  }
+);
+
 exports.cancelarAssinatura = onRequest(
   { 
     cors: true,

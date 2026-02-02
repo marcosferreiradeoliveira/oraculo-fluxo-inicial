@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
-import { Check, Star, Users, Building2, Crown } from 'lucide-react';
+import { Check, Star, Users, Building2, Crown, Calendar } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Declarar tipo do Facebook Pixel
 declare global {
@@ -22,6 +23,17 @@ const CadastroPremium = () => {
   const [userData, setUserData] = useState({ email: '', userId: '', planType: null, isPremium: false });
   const [isAnnual, setIsAnnual] = useState(true); // Padrão: anual
   const [paymentProcessed, setPaymentProcessed] = useState(false); // Evitar processar múltiplas vezes
+  const [showLimiteProjetosPopup, setShowLimiteProjetosPopup] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get('motivo') === 'limite_projetos') {
+      setShowLimiteProjetosPopup(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -29,17 +41,27 @@ const CadastroPremium = () => {
       const user = auth.currentUser;
       
       if (user) {
+        // Sempre definir email e userId do auth, mesmo se o documento do Firestore não existir
+        const baseUserData = {
+          email: user.email || '',
+          userId: user.uid,
+          planType: null as string | null,
+          isPremium: false
+        };
+
         try {
           const db = getFirestore();
           const userDoc = await getDocFromServer(doc(db, 'usuarios', user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUserData({
-              email: user.email || '',
-              userId: user.uid,
+              ...baseUserData,
               planType: data.planType || null,
               isPremium: data.isPremium || false
             });
+          } else {
+            // Se o documento não existe, ainda definir os dados básicos do auth
+            setUserData(baseUserData);
           }
         } catch (error) {
           console.error('Error fetching user data:', error);
@@ -50,14 +72,18 @@ const CadastroPremium = () => {
             if (userDoc.exists()) {
               const data = userDoc.data();
               setUserData({
-                email: user.email || '',
-                userId: user.uid,
+                ...baseUserData,
                 planType: data.planType || null,
                 isPremium: data.isPremium || false
               });
+            } else {
+              // Se o documento não existe, ainda definir os dados básicos do auth
+              setUserData(baseUserData);
             }
           } catch (fallbackError) {
             console.error('Error fetching user data (fallback):', fallbackError);
+            // Mesmo em caso de erro, definir os dados básicos do auth
+            setUserData(baseUserData);
           }
         }
       }
@@ -130,14 +156,27 @@ const CadastroPremium = () => {
       return;
     }
 
-    if (!userData.email || !userData.userId) {
+    // Verificar autenticação diretamente do Firebase Auth
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    if (!user || !user.email || !user.uid) {
+      alert('Por favor, faça login para assinar um plano.');
+      return;
+    }
+
+    // Usar dados do auth.currentUser como fallback se userData ainda não carregou
+    const userId = userData.userId || user.uid;
+    const userEmail = userData.email || user.email || '';
+
+    if (!userId || !userEmail) {
       alert('Por favor, faça login para assinar um plano.');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('[CadastroPremium] Iniciando criação de checkout Stripe:', { planType, userEmail: userData.email, userId: userData.userId });
+      console.log('[CadastroPremium] Iniciando criação de checkout Stripe:', { planType, userEmail, userId });
       
       // Criar assinatura recorrente mensal no Stripe com o tipo de plano selecionado
       const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarAssinaturaPremiumStripe', {
@@ -146,8 +185,8 @@ const CadastroPremium = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: userData.userId,
-          email: userData.email,
+          userId: userId,
+          email: userEmail,
           planType: planType, // Passar o tipo de plano selecionado
           isAnnual: isAnnual, // Passar se é anual ou mensal
         }),
@@ -244,6 +283,32 @@ const CadastroPremium = () => {
         
         <main className="flex-1 p-2 md:p-4">
           <div className="max-w-7xl mx-auto">
+            {/* Ganhe 7 dias grátis - Tour guiado */}
+            <div className="mb-10 p-5 md:p-6 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-base md:text-lg text-gray-800 leading-relaxed">
+                    <span className="font-bold text-oraculo-purple">Ganhe 7 dias grátis!</span>
+                    {' '}
+                    Agende um tour guiado para demonstração de todos os features com nosso especialista e ganhe 7 dias de acesso premium na plataforma.
+                  </p>
+                </div>
+                <a
+                  href="https://calendly.com/oraculocultural/30min"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0"
+                >
+                  <Button
+                    className="w-full sm:w-auto bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-5 text-base font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Calendar className="h-5 w-5" />
+                    Agende Agora
+                  </Button>
+                </a>
+              </div>
+            </div>
+
             {/* Header */}
             <div className="text-center mb-12">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
@@ -381,14 +446,26 @@ const CadastroPremium = () => {
                                 })()}
                               </>
                             ) : (
-                              <div className="flex items-baseline justify-center mb-2">
-                                <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                                <span className="text-gray-600 ml-1">{plan.period}</span>
-                              </div>
+                              <>
+                                <div className="flex items-baseline justify-center mb-2">
+                                  <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
+                                  <span className="text-gray-600 ml-1">{plan.period}</span>
+                                </div>
+                                {plan.name === 'Básico' && !isAnnual && (
+                                  <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 mb-2">
+                                    7 dias grátis para testar
+                                  </div>
+                                )}
+                              </>
                             )}
                           </>
                         )}
-                        {plan.discount && plan.name !== 'Premium' && !isAnnual && (
+                        {plan.discount && plan.name !== 'Premium' && !isAnnual && plan.name !== 'Básico' && (
+                          <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+                            Economize 17% com plano anual
+                          </div>
+                        )}
+                        {plan.discount && plan.name === 'Básico' && !isAnnual && (
                           <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
                             Economize 17% com plano anual
                           </div>
@@ -516,6 +593,31 @@ const CadastroPremium = () => {
           </div>
         </main>
       </div>
+
+      <Dialog open={showLimiteProjetosPopup} onOpenChange={(open) => {
+        if (!open) {
+          setShowLimiteProjetosPopup(false);
+          window.history.replaceState({}, '', '/cadastro-premium');
+        }
+      }}>
+        <DialogContent className="max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">Limite de projetos atingido</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              O máximo de 3 projetos foi atingido. Faça upgrade do seu plano para criar mais projetos.
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            onClick={() => {
+              setShowLimiteProjetosPopup(false);
+              window.history.replaceState({}, '', '/cadastro-premium');
+            }}
+            className="w-full mt-4 bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
+          >
+            Entendi
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
