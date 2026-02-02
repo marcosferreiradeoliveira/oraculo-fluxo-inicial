@@ -16,7 +16,6 @@ const { fromPath } = require("pdf2pic");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const nodemailer = require("nodemailer");
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -2190,6 +2189,7 @@ exports.enviarEmailBoasVindas = onRequest(
   {
     cors: true,
     invoker: 'public',
+    secrets: [brevoApiKey],
   },
   async (req, res) => {
     // Set CORS headers
@@ -2214,25 +2214,6 @@ exports.enviarEmailBoasVindas = onRequest(
         res.status(400).json({ error: 'Nome e email são obrigatórios' });
         return;
       }
-
-      // Configurar SMTP do Gmail
-      const gmailUser = process.env.GMAIL_USER;
-      const gmailPassword = process.env.GMAIL_PASSWORD;
-      
-      if (!gmailUser || !gmailPassword) {
-        console.error('[enviarEmailBoasVindas] Credenciais do Gmail não configuradas');
-        res.status(500).json({ error: 'Configuração de email não disponível. Credenciais do Gmail não encontradas.' });
-        return;
-      }
-
-      // Criar transporter do nodemailer
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPassword,
-        },
-      });
 
       const emailText = `
 Olá ${nome},
@@ -2322,15 +2303,13 @@ A Equipe mobCONTENT e Oráculo Cultural
 </html>
       `;
 
-      const mailOptions = {
-        from: `"Oráculo Cultural" <${gmailUser}>`,
-        to: email,
-        subject: '🎉 Bem-vindo(a) à Plataforma Oráculo Cultural! Seu Guia Inteligente para Projetos Culturais.',
-        text: emailText,
-        html: emailHtml,
-      };
-
-      await transporter.sendMail(mailOptions);
+      // Enviar email via Brevo
+      await enviarEmailBrevo(
+        email,
+        '🎉 Bem-vindo(a) à Plataforma Oráculo Cultural! Seu Guia Inteligente para Projetos Culturais.',
+        emailHtml,
+        emailText
+      );
       
       console.log('[enviarEmailBoasVindas] Email enviado com sucesso para:', email);
       
@@ -2355,6 +2334,7 @@ exports.solicitarContaPremium = onRequest(
       'https://www.oraculocultural.com.br'
     ],
     invoker: 'public',
+    secrets: [brevoApiKey],
   },
   async (req, res) => {
     // Handle preflight OPTIONS request
@@ -2379,25 +2359,6 @@ exports.solicitarContaPremium = onRequest(
         res.status(400).json({ error: 'Nome, email e userId são obrigatórios' });
         return;
       }
-
-      // Configurar SMTP do Gmail
-      const gmailUser = process.env.GMAIL_USER;
-      const gmailPassword = process.env.GMAIL_PASSWORD;
-      
-      if (!gmailUser || !gmailPassword) {
-        console.error('[solicitarContaPremium] Credenciais do Gmail não configuradas');
-        res.status(500).json({ error: 'Configuração de email não disponível. Credenciais do Gmail não encontradas.' });
-        return;
-      }
-
-      // Criar transporter do nodemailer
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPassword,
-        },
-      });
 
       const emailText = `
 Nova solicitação de conta Premium - Oráculo Cultural
@@ -2444,15 +2405,13 @@ Por favor, entre em contato com o usuário para ativar a conta premium.
 </html>
       `;
 
-      const mailOptions = {
-        from: `"Oráculo Cultural" <${gmailUser}>`,
-        to: 'marcosferreira@mobcontent.com.br',
-        subject: `🔔 Nova Solicitação de Conta Premium - ${nome}`,
-        text: emailText,
-        html: emailHtml,
-      };
-
-      await transporter.sendMail(mailOptions);
+      // Enviar email via Brevo
+      await enviarEmailBrevo(
+        'marcosferreira@mobcontent.com.br',
+        `🔔 Nova Solicitação de Conta Premium - ${nome}`,
+        emailHtml,
+        emailText
+      );
       
       console.log('[solicitarContaPremium] Email enviado com sucesso para marcosferreira@mobcontent.com.br');
       
@@ -2481,6 +2440,7 @@ exports.enviarContatoPremium = onRequest(
       'https://www.oraculocultural.com.br'
     ],
     invoker: 'public',
+    secrets: [brevoApiKey],
   },
   async (req, res) => {
     // Set CORS headers BEFORE any checks
@@ -2505,27 +2465,6 @@ exports.enviarContatoPremium = onRequest(
         res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         return;
       }
-      
-      // Configurar SMTP do Gmail (mesma configuração de solicitarContaPremium)
-      const gmailUser = process.env.GMAIL_USER;
-      const gmailPassword = process.env.GMAIL_PASSWORD;
-      
-      if (!gmailUser || !gmailPassword) {
-        console.error('[enviarContatoPremium] Credenciais do Gmail não configuradas');
-        // Garantir que os headers CORS estão definidos mesmo em caso de erro
-        res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
-        res.status(500).json({ error: 'Configuração de email não disponível. Credenciais do Gmail não encontradas.' });
-        return;
-      }
-      
-      // Criar transporter do nodemailer
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPassword,
-        },
-      });
       
       const emailText = `
 Nova solicitação de contato - Plano Premium Enterprise - Oráculo Cultural
@@ -2572,15 +2511,13 @@ Por favor, entre em contato com o solicitante para apresentar o plano Premium En
 </html>
       `;
       
-      const mailOptions = {
-        from: `"Oráculo Cultural" <${gmailUser}>`,
-        to: 'marcosferreira@mobcontent.com.br',
-        subject: `🔔 Nova Solicitação Premium Enterprise - ${nome} (${empresa})`,
-        text: emailText,
-        html: emailHtml,
-      };
-      
-      await transporter.sendMail(mailOptions);
+      // Enviar email via Brevo
+      await enviarEmailBrevo(
+        'marcosferreira@mobcontent.com.br',
+        `🔔 Nova Solicitação Premium Enterprise - ${nome} (${empresa})`,
+        emailHtml,
+        emailText
+      );
       
       console.log('[enviarContatoPremium] Email enviado com sucesso para marcosferreira@mobcontent.com.br');
       
@@ -3776,8 +3713,46 @@ exports.cancelarAssinatura = onRequest(
 );
 
 // ==========================================
-// AUTOMAÇÃO BREVO - Sincronização de Usuários
+// AUTOMAÇÃO BREVO - Sincronização de Usuários e Envio de Emails
 // ==========================================
+
+/**
+ * Função auxiliar para enviar email transacional via Brevo
+ */
+async function enviarEmailBrevo(to, subject, htmlContent, textContent, senderEmail = 'contato@oraculocultural.com.br', senderName = 'Oráculo Cultural') {
+  const BREVO_API_KEY = brevoApiKey.value();
+  const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+  
+  const emailData = {
+    sender: {
+      name: senderName,
+      email: senderEmail,
+    },
+    to: [
+      {
+        email: to,
+      },
+    ],
+    subject: subject,
+    htmlContent: htmlContent,
+    textContent: textContent,
+  };
+  
+  try {
+    const response = await axios.post(BREVO_API_URL, emailData, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log(`[Brevo Email] Email enviado com sucesso para ${to}. Message ID: ${response.data.messageId}`);
+    return { success: true, messageId: response.data.messageId };
+  } catch (error) {
+    console.error(`[Brevo Email] Erro ao enviar email para ${to}:`, error.response?.data || error.message);
+    throw error;
+  }
+}
 
 /**
  * Função auxiliar para adicionar/atualizar contato no Brevo
