@@ -1284,13 +1284,13 @@ exports.criarAssinaturaPremiumStripe = onRequest(
             unitAmount = 8250; // R$ 82,50 em centavos
             planName = 'Plano Básico Anual - Oráculo Cultural (12x)';
             planDescription = 'Assinatura anual do Plano Básico parcelada em 12x de R$ 82,50 - Oráculo Cultural';
+            // Price ID do Básico Anual
+            stripePriceId = process.env.STRIPE_PRICE_ID_BASICO_ANUAL || 'price_1SwRMW0mRGa1jLim0TtxsCXE';
           } else {
             unitAmount = 9900; // R$ 99,00 em centavos
             planName = 'Plano Básico Mensal - Oráculo Cultural';
             planDescription = 'Assinatura mensal recorrente do Plano Básico - Oráculo Cultural';
-          }
-          // Price ID do Básico (configurado diretamente ou via env) - só usar se for mensal
-          if (!isAnnualPlan) {
+            // Price ID do Básico Mensal
             stripePriceId = process.env.STRIPE_PRICE_ID_BASICO || 'price_1SlFPv0mRGa1jLimP7s0ry11';
           }
           // Product ID do Básico (para referência)
