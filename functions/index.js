@@ -1509,6 +1509,7 @@ exports.criarCheckoutGuiaStripe = onRequest(
       const guia = guiaSnap.data();
       const titulo = guia.titulo || 'Guia para prestação de contas';
       const valorPromocional = guia.valorPromocional != null ? Number(guia.valorPromocional) : null;
+      const stripeProductId = guia.stripeProductId || null;
 
       if (valorPromocional == null || valorPromocional <= 0) {
         return res.status(400).json({ error: 'Guia sem valor promocional configurado' });
@@ -1538,10 +1539,53 @@ exports.criarCheckoutGuiaStripe = onRequest(
         } catch (e) { /* ignore */ }
       }
 
-      const sessionParams = {
-        payment_method_types: ['card'],
-        mode: 'payment',
-        line_items: [{
+      // Se tiver Product ID, buscar o Price ID associado ou criar um novo
+      let lineItems;
+      if (stripeProductId) {
+        try {
+          // Buscar preços existentes do produto
+          const prices = await stripeInstance.prices.list({
+            product: stripeProductId,
+            active: true,
+            limit: 1,
+          });
+          
+          if (prices.data.length > 0) {
+            // Usar o primeiro preço ativo encontrado
+            const priceId = prices.data[0].id;
+            console.log(`[criarCheckoutGuiaStripe] Usando Price ID existente: ${priceId} para Product ID: ${stripeProductId}`);
+            lineItems = [{
+              price: priceId,
+              quantity: 1,
+            }];
+          } else {
+            // Criar um novo preço para o produto
+            const newPrice = await stripeInstance.prices.create({
+              product: stripeProductId,
+              unit_amount: unitAmount,
+              currency: 'brl',
+            });
+            console.log(`[criarCheckoutGuiaStripe] Criado novo Price ID: ${newPrice.id} para Product ID: ${stripeProductId}`);
+            lineItems = [{
+              price: newPrice.id,
+              quantity: 1,
+            }];
+          }
+        } catch (error) {
+          console.error(`[criarCheckoutGuiaStripe] Erro ao usar Product ID ${stripeProductId}:`, error);
+          // Fallback para criação dinâmica
+          lineItems = [{
+            price_data: {
+              currency: 'brl',
+              product: stripeProductId, // Usar o Product ID mesmo assim
+              unit_amount: unitAmount,
+            },
+            quantity: 1,
+          }];
+        }
+      } else {
+        // Criar dinamicamente sem Product ID
+        lineItems = [{
           price_data: {
             currency: 'brl',
             product_data: {
@@ -1551,7 +1595,13 @@ exports.criarCheckoutGuiaStripe = onRequest(
             unit_amount: unitAmount,
           },
           quantity: 1,
-        }],
+        }];
+      }
+
+      const sessionParams = {
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: lineItems,
         allow_promotion_codes: true, // Habilita campo de cupom de desconto no checkout
         success_url: `${BASE_URL}/guia-especial/${guiaId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${BASE_URL}/guia-especial/${guiaId}`,

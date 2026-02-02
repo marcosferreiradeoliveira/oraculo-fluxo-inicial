@@ -12,6 +12,8 @@ import { Sparkles, ArrowLeft } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import RichTextEditor from '@/components/RichTextEditor';
+import { GuiaEspecialBlocosForm } from '@/components/GuiaEspecialBlocosForm';
+import type { GuiaEspecialCampos } from '@/types/guia-especial';
 
 const EditarGuia = () => {
   const { id } = useParams();
@@ -24,7 +26,10 @@ const EditarGuia = () => {
   const [especial, setEspecial] = useState(false);
   const [landingPageUrl, setLandingPageUrl] = useState('');
   const [valorPromocional, setValorPromocional] = useState('');
+  const [valorOriginalOverride, setValorOriginalOverride] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [stripeProductId, setStripeProductId] = useState('');
+  const [blocos, setBlocos] = useState<Partial<GuiaEspecialCampos>>({});
   const [imgUrlAtual, setImgUrlAtual] = useState('');
   const [pdfUrlAtual, setPdfUrlAtual] = useState('');
   const [loading, setLoading] = useState(true);
@@ -54,10 +59,24 @@ const EditarGuia = () => {
           setDescricao(data.descricao || '');
           setEspecial(data.especial || false);
           setLandingPageUrl(data.landingPageUrl || '');
-          setValorPromocional(data.valorPromocional ? data.valorPromocional.toString().replace('.', ',') : '');
+          setValorPromocional(data.valorPromocional != null ? String(data.valorPromocional).replace('.', ',') : '');
+          setValorOriginalOverride(data.valorOriginal != null ? String(data.valorOriginal).replace('.', ',') : '');
           setYoutubeUrl(data.youtubeUrl || '');
+          setStripeProductId(data.stripeProductId || '');
           setImgUrlAtual(data.imgUrl || '');
           setPdfUrlAtual(data.pdfUrl || '');
+          const blocoKeys: (keyof GuiaEspecialCampos)[] = [
+            'subtituloImpacto', 'promessaPrincipal', 'beneficiosChave', 'etiquetaPosicionamento',
+            'blocoVoceJaPassou', 'listaDores', 'consequenciaNaoResolver', 'blocoUrgenciaContextual',
+            'autorNome', 'autorBio', 'provaSocial1', 'provaSocial2Nome', 'provaSocial2Perfil', 'provaSocial2Texto', 'provaSocial3',
+            'oQueSeraCapaz', 'antesDepoisAntes', 'antesDepoisDepois',
+            'textoAncoragemValor', 'beneficioEconomico', 'badgeRiscoBaixo',
+            'paraQuemEh', 'paraQuemNaoEh', 'faq1Pergunta', 'faq1Resposta', 'faq2Pergunta', 'faq2Resposta', 'faq3Pergunta', 'faq3Resposta',
+            'ctaTextoPrincipal', 'ctaTextoSecundario', 'microcopySeguranca',
+          ];
+          const b: Partial<GuiaEspecialCampos> = {};
+          blocoKeys.forEach((k) => { if (data[k] !== undefined && data[k] !== null) (b as any)[k] = data[k]; });
+          setBlocos(b);
         } else {
           navigate('/inteligencia-mercado');
         }
@@ -151,20 +170,27 @@ const EditarGuia = () => {
         dadosGuia.pdfUrl = pdfUrl;
       }
       
-      // Adicionar landing page URL, valores e YouTube se for especial
+      // Adicionar landing page URL, valores, YouTube e blocos CMS se for especial
       if (especial && landingPageUrl.trim()) {
         dadosGuia.landingPageUrl = landingPageUrl.trim();
         const valorPromo = parseFloat(valorPromocional.replace(/[^\d,.-]/g, '').replace(',', '.'));
         dadosGuia.valorPromocional = valorPromo;
-        // Calcular valor original como 50% a mais (150% do valor promocional)
-        dadosGuia.valorOriginal = valorPromo * 1.5;
-        if (youtubeUrl.trim()) {
-          dadosGuia.youtubeUrl = youtubeUrl.trim();
-        } else {
-          dadosGuia.youtubeUrl = null;
-        }
+        const ancora = valorOriginalOverride.trim()
+          ? parseFloat(valorOriginalOverride.replace(/[^\d,.-]/g, '').replace(',', '.'))
+          : NaN;
+        dadosGuia.valorOriginal = !isNaN(ancora) && ancora > 0 ? ancora : valorPromo * 1.5;
+        if (youtubeUrl.trim()) dadosGuia.youtubeUrl = youtubeUrl.trim();
+        else dadosGuia.youtubeUrl = null;
+        if (stripeProductId.trim()) dadosGuia.stripeProductId = stripeProductId.trim();
+        else dadosGuia.stripeProductId = null;
+        Object.entries(blocos).forEach(([k, v]) => {
+          if (k === 'valorOriginal' || k === 'valorPromocional') return;
+          if (v === undefined || v === null) return;
+          if (typeof v === 'string' && !v.trim()) return;
+          if (Array.isArray(v) && v.length === 0) return;
+          (dadosGuia as any)[k] = v;
+        });
       } else if (!especial) {
-        // Remover landing page URL, valores e YouTube se não for mais especial
         dadosGuia.landingPageUrl = null;
         dadosGuia.valorOriginal = null;
         dadosGuia.valorPromocional = null;
@@ -307,15 +333,28 @@ const EditarGuia = () => {
                           required={especial}
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Valor real que será cobrado. O valor original será calculado automaticamente como 50% a mais.
+                          Valor real que será cobrado.
                         </p>
-                        {valorPromocional && !isNaN(parseFloat(valorPromocional.replace(/[^\d,.-]/g, '').replace(',', '.'))) && (
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Valor Original / Âncora (R$) <span className="text-gray-400 text-xs">(opcional)</span>
+                        </label>
+                        <Input 
+                          type="text" 
+                          value={valorOriginalOverride} 
+                          onChange={e => setValorOriginalOverride(e.target.value)} 
+                          placeholder="149,90"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Se vazio, será 50% a mais que o promocional.
+                        </p>
+                        {valorPromocional && !valorOriginalOverride && !isNaN(parseFloat(valorPromocional.replace(/[^\d,.-]/g, '').replace(',', '.'))) && (
                           <p className="text-xs text-oraculo-purple mt-1 font-medium">
-                            Valor original será: R$ {(parseFloat(valorPromocional.replace(/[^\d,.-]/g, '').replace(',', '.')) * 1.5).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            Valor original calculado: R$ {(parseFloat(valorPromocional.replace(/[^\d,.-]/g, '').replace(',', '.')) * 1.5).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         )}
                       </div>
-                      
                       <div>
                         <label className="block text-sm font-medium mb-1">
                           URL do Vídeo do YouTube <span className="text-gray-400 text-xs">(opcional)</span>
@@ -330,6 +369,21 @@ const EditarGuia = () => {
                           URL completa do vídeo do YouTube (será exibido na página de detalhes)
                         </p>
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Stripe Product ID <span className="text-gray-400 text-xs">(opcional)</span>
+                        </label>
+                        <Input 
+                          type="text" 
+                          value={stripeProductId} 
+                          onChange={e => setStripeProductId(e.target.value)} 
+                          placeholder="prod_xxxxxxxxxxxxx"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Se informado, será usado o Product ID do Stripe para criar o checkout. Caso contrário, será criado dinamicamente.
+                        </p>
+                      </div>
+                      <GuiaEspecialBlocosForm value={blocos} onChange={setBlocos} />
                     </>
                   )}
                   
