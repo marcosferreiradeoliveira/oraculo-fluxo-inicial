@@ -34,6 +34,9 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 // Definir secret para Brevo
 const brevoApiKey = defineSecret("BREVO_API_KEY");
 
+// Definir secret para OpenAI
+const openaiApiKey = defineSecret("OPENAI_API_KEY");
+
 // Lazy initialization helpers
 let openaiInstance = null;
 let mpInstance = null;
@@ -44,7 +47,7 @@ let preapprovalPlanInstance = null;
 function getOpenAI() {
   if (!openaiInstance) {
     openaiInstance = new OpenAI({ 
-      apiKey: process.env.OPENAI_API_KEY || "" 
+      apiKey: openaiApiKey.value() || "" 
     });
   }
   return openaiInstance;
@@ -151,7 +154,11 @@ function getMercadoPago() {
   };
 }
 
-exports.avaliarProjetoIA = onRequest(async (req, res) => {
+exports.avaliarProjetoIA = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
   // Set CORS headers BEFORE any checks
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -284,7 +291,11 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
   }
 });
 
-exports.gerarTexto = onRequest(async (req, res) => {
+exports.gerarTexto = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
   // Set CORS headers BEFORE any checks
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -404,7 +415,11 @@ exports.gerarTexto = onRequest(async (req, res) => {
   }
 });
 
-exports.alterarTextoComIA = onRequest(async (req, res) => {
+exports.alterarTextoComIA = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
   // Set CORS headers BEFORE any checks
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -519,7 +534,11 @@ TEXTO REESCRITO:`;
   }
 });
 
-exports.gerarTextosProjeto = onRequest(async (req, res) => {
+exports.gerarTextosProjeto = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
   // Set CORS headers BEFORE any checks
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -1572,6 +1591,7 @@ exports.preencherAnexoPDF = onRequest(
   {
     cors: true,
     invoker: 'public',
+    secrets: [openaiApiKey],
   },
   async (req, res) => {
     // Set CORS headers
