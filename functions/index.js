@@ -2630,7 +2630,10 @@ exports.adicionarContatoBrevo = onRequest(
       }
 
       // Chave API do Brevo
-      const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
+      const BREVO_API_KEY = process.env.BREVO_API_KEY;
+      if (!BREVO_API_KEY) {
+        throw new Error('BREVO_API_KEY não configurada');
+      }
       const BREVO_LIST_ID = 12; // ID da lista no Brevo
       const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
       
@@ -2698,7 +2701,10 @@ exports.adicionarContatoBrevo = onRequest(
           
           // Tentar atualizar o contato existente
           try {
-            const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
+            const BREVO_API_KEY = process.env.BREVO_API_KEY;
+            if (!BREVO_API_KEY) {
+              throw new Error('BREVO_API_KEY não configurada');
+            }
             const BREVO_LIST_ID = 12;
             const BREVO_API_URL = `https://api.brevo.com/v3/contacts/${encodeURIComponent(req.body.email)}`;
             
@@ -3779,7 +3785,10 @@ exports.cancelarAssinatura = onRequest(
  * Função auxiliar para adicionar/atualizar contato no Brevo
  */
 async function adicionarContatoBrevo(email, nome, empresa = null) {
-  const BREVO_API_KEY = process.env.BREVO_API_KEY || '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';
+  const BREVO_API_KEY = process.env.BREVO_API_KEY;
+  if (!BREVO_API_KEY) {
+    throw new Error('BREVO_API_KEY não configurada');
+  }
   const BREVO_LIST_ID = 12;
   const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
   
