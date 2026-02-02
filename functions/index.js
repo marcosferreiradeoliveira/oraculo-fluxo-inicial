@@ -1258,13 +1258,13 @@ exports.criarAssinaturaPremiumStripe = onRequest(
             unitAmount = 28967; // R$ 289,67 em centavos
             planName = 'Plano Essencial Anual - Oráculo Cultural (12x)';
             planDescription = 'Assinatura anual do Plano Essencial parcelada em 12x de R$ 289,67 - Oráculo Cultural';
+            // Price ID do Essencial Anual
+            stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL_ANUAL || 'price_1SwRNW0mRGa1jLimGbkMTvn8';
           } else {
             unitAmount = 34900; // R$ 349,00 em centavos
             planName = 'Plano Essencial Mensal - Oráculo Cultural';
             planDescription = 'Assinatura mensal recorrente do Plano Essencial - Oráculo Cultural';
-          }
-          // Price ID do Essencial (configurado diretamente ou via env) - só usar se for mensal
-          if (!isAnnualPlan) {
+            // Price ID do Essencial Mensal
             stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL || 'price_1SlFRL0mRGa1jLimzgQ0hNmU';
           }
           // Product ID do Essencial (para referência)
