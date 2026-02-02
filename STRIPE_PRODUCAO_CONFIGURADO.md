@@ -4,12 +4,14 @@
 
 ### Publishable Key (Frontend - se necessário)
 ```
-pk_live_51SlEiN0mRGa1jLimcc4eXPlO84lDsbMeub4xaWsn1qnRzcIGqoHX3AtpemtPqhgFKvzfbnko62SM5njIEwXIvwje00JqE0vwzl
+Configurado via variável de ambiente: VITE_STRIPE_PUBLISHABLE_KEY
+Ou definir diretamente no código frontend (pode ser pública)
 ```
 
 ### Secret Key (Backend) ✅ CONFIGURADO
 ```
-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
+Configurado via variável de ambiente: STRIPE_SECRET_KEY
+NUNCA commitar chaves secretas no repositório!
 ```
 **Status**: ✅ Configurado como secret no Firebase
 
