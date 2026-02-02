@@ -14,6 +14,8 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
+  'Criar Orçamento',
+  'Criar Cronograma',
   'Preencher Anexos'
 ];
 const currentStep: number = 2; // Alterar com IA
@@ -520,7 +522,7 @@ const AlterarComIA = () => {
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${(currentStep + 1) * 25}%` }}
+                  style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                 ></div>
               </div>
             </div>
