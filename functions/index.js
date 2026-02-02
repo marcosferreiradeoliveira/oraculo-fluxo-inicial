@@ -32,6 +32,9 @@ const mercadoPagoAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
+// Definir secret para Brevo
+const brevoApiKey = defineSecret("BREVO_API_KEY");
+
 // Lazy initialization helpers
 let openaiInstance = null;
 let mpInstance = null;
@@ -2601,6 +2604,7 @@ exports.adicionarContatoBrevo = onRequest(
   {
     cors: true,
     invoker: 'public',
+    secrets: [brevoApiKey],
   },
   async (req, res) => {
     // Set CORS headers
@@ -2630,10 +2634,7 @@ exports.adicionarContatoBrevo = onRequest(
       }
 
       // Chave API do Brevo
-      const BREVO_API_KEY = process.env.BREVO_API_KEY;
-      if (!BREVO_API_KEY) {
-        throw new Error('BREVO_API_KEY não configurada');
-      }
+      const BREVO_API_KEY = brevoApiKey.value();
       const BREVO_LIST_ID = 12; // ID da lista no Brevo
       const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
       
@@ -2701,10 +2702,7 @@ exports.adicionarContatoBrevo = onRequest(
           
           // Tentar atualizar o contato existente
           try {
-            const BREVO_API_KEY = process.env.BREVO_API_KEY;
-            if (!BREVO_API_KEY) {
-              throw new Error('BREVO_API_KEY não configurada');
-            }
+            const BREVO_API_KEY = brevoApiKey.value();
             const BREVO_LIST_ID = 12;
             const BREVO_API_URL = `https://api.brevo.com/v3/contacts/${encodeURIComponent(req.body.email)}`;
             
@@ -3785,10 +3783,7 @@ exports.cancelarAssinatura = onRequest(
  * Função auxiliar para adicionar/atualizar contato no Brevo
  */
 async function adicionarContatoBrevo(email, nome, empresa = null) {
-  const BREVO_API_KEY = process.env.BREVO_API_KEY;
-  if (!BREVO_API_KEY) {
-    throw new Error('BREVO_API_KEY não configurada');
-  }
+  const BREVO_API_KEY = brevoApiKey.value();
   const BREVO_LIST_ID = 12;
   const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
   
@@ -3891,6 +3886,7 @@ async function adicionarContatoBrevo(email, nome, empresa = null) {
 exports.sincronizarUsuarioBrevo = onDocumentCreated(
   {
     document: "usuarios/{userId}",
+    secrets: [brevoApiKey],
   },
   async (event) => {
     try {
@@ -3939,6 +3935,7 @@ exports.sincronizarUsuarioBrevo = onDocumentCreated(
 exports.sincronizarTodosUsuariosBrevo = onRequest(
   {
     cors: true,
+    secrets: [brevoApiKey],
   },
   async (req, res) => {
     // Set CORS headers
