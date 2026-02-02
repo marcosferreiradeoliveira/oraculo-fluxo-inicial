@@ -22,6 +22,22 @@ const Biblioteca = () => {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // Função para remover tags HTML e retornar texto puro
+  const stripHtmlTags = (html: string): string => {
+    if (!html) return '';
+    // Remove tags HTML usando regex
+    const text = html.replace(/<[^>]*>/g, '');
+    // Decodifica entidades HTML comuns
+    return text
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+  };
+
   useEffect(() => {
     const checkSuperAdmin = async () => {
       if (user?.uid) {
@@ -124,7 +140,8 @@ const Biblioteca = () => {
                 <div className="text-center text-gray-500 py-12 col-span-3">Nenhum guia cadastrado ainda.</div>
               ) : (
                 guias.map((guia, index) => {
-                  const isEspecial = guia.especial === true;
+                  // Verificação mais robusta para isEspecial (pode vir como true, "true", 1, etc)
+                  const isEspecial = Boolean(guia.especial) && (guia.especial === true || String(guia.especial).toLowerCase() === 'true' || Number(guia.especial) === 1);
                   return (
                   <Card key={guia.id || index} className="hover:shadow-lg transition-all hover:-translate-y-1">
                     <div className="aspect-video relative overflow-hidden rounded-t-lg">
@@ -169,9 +186,12 @@ const Biblioteca = () => {
                         {guia.titulo}
                       </CardTitle>
                       <CardDescription>
-                        {guia.descricao && guia.descricao.length > 120
-                          ? guia.descricao.slice(0, 120) + '...'
-                          : guia.descricao}
+                        {(() => {
+                          const descricaoLimpa = stripHtmlTags(guia.descricao || '');
+                          return descricaoLimpa.length > 120
+                            ? descricaoLimpa.slice(0, 120) + '...'
+                            : descricaoLimpa;
+                        })()}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -189,15 +209,19 @@ const Biblioteca = () => {
                         className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" 
                         onClick={(e) => {
                           e.preventDefault();
+                          // Guias especiais podem ser acessados sem login
+                          if (isEspecial) {
+                            navigate(`/guia-especial/${guia.id}`);
+                            return;
+                          }
+                          
+                          // Guias normais precisam de login
                           if (!user) {
                             setShowAuthModal(true);
                             return;
                           }
                           
-                          // Se for guia especial, navegar para página de detalhes
-                          if (isEspecial) {
-                            navigate(`/guia-especial/${guia.id}`);
-                          } else if (guia.pdfUrl) {
+                          if (guia.pdfUrl) {
                             window.open(guia.pdfUrl, '_blank');
                             handleDownload(e as any, guia.pdfUrl, guia.titulo);
                           }
