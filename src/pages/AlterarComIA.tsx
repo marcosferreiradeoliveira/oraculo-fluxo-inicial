@@ -16,6 +16,7 @@ const steps = [
   'Gerar Textos',
   'Criar Orçamento',
   'Criar Cronograma',
+  'Documentos de Inscrição',
   'Preencher Anexos'
 ];
 const currentStep: number = 2; // Alterar com IA

@@ -907,6 +907,157 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
   }
 });
 
+// Gera cronograma (etapas com início e fim) com base no orçamento, textos do projeto e edital
+exports.gerarCronogramaIA = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+
+    try {
+      const { projetoId } = req.body;
+      if (!projetoId) {
+        return res.status(400).json({ error: 'projetoId é obrigatório' });
+      }
+
+      const projetoRef = db.collection('projetos').doc(projetoId);
+      const projetoSnap = await projetoRef.get();
+      if (!projetoSnap.exists) {
+        return res.status(404).json({ error: 'Projeto não encontrado' });
+      }
+
+      const projeto = projetoSnap.data();
+      const nomeProjeto = projeto.nome || 'Projeto';
+      const descricaoProjeto = projeto.descricao || projeto.resumo || '';
+      const orcamento = projeto.orcamento || {};
+      const rubricas = orcamento.rubricas || [];
+      const tetoOrcamento = orcamento.teto || 0;
+      const textosGerados = projeto.textos_gerados || {};
+
+      let dataEncerramentoEdital = null;
+      let nomeEdital = '';
+      if (projeto.edital_id) {
+        try {
+          const editalSnap = await db.collection('editais').doc(projeto.edital_id).get();
+          if (editalSnap.exists) {
+            const edital = editalSnap.data();
+            nomeEdital = edital.nome || '';
+            const raw = edital.data_encerramento || edital.dataEncerramento || edital.deadline;
+            if (raw) {
+              if (raw.toDate) dataEncerramentoEdital = raw.toDate();
+              else if (raw.seconds) dataEncerramentoEdital = new Date(raw.seconds * 1000);
+              else if (typeof raw === 'string') dataEncerramentoEdital = new Date(raw);
+            }
+          }
+        } catch (e) {
+          console.warn('[gerarCronogramaIA] Erro ao buscar edital:', e.message);
+        }
+      }
+
+      const hoje = new Date();
+      const fimMaximo = dataEncerramentoEdital && !isNaN(dataEncerramentoEdital.getTime())
+        ? dataEncerramentoEdital
+        : new Date(hoje.getFullYear() + 1, hoje.getMonth(), hoje.getDate());
+      const dataInicioMin = hoje.toISOString().slice(0, 10);
+      const dataFimMax = fimMaximo.toISOString().slice(0, 10);
+
+      const rubricasTexto = rubricas.length > 0
+        ? rubricas.map((r) => `- ${r.nome || r.rubrica || 'Rubrica'}: R$ ${Number(r.total || r.valor || 0).toLocaleString('pt-BR')}`).join('\n')
+        : 'Orçamento não informado ou vazio.';
+
+      const textosResumo = Object.keys(textosGerados).length > 0
+        ? Object.entries(textosGerados)
+          .filter(([, v]) => v && typeof v === 'string')
+          .map(([k, v]) => `[${k}]:\n${String(v).slice(0, 1500)}`)
+          .join('\n\n')
+        : 'Textos do projeto não informados.';
+
+      const prompt = `Você é um especialista em planejamento de projetos culturais para editais.
+
+Com base EXCLUSIVAMENTE nos dados abaixo do projeto, orçamento e textos já elaborados, gere um CRONOGRAMA de etapas em JSON.
+
+REGRAS OBRIGATÓRIAS:
+- Retorne APENAS um array JSON válido, sem texto antes ou depois. Nenhuma explicação, apenas o JSON.
+- Cada item do array deve ter exatamente: "etapa" (nome curto da etapa), "inicio" (data YYYY-MM-DD), "fim" (data YYYY-MM-DD).
+- As datas devem estar entre ${dataInicioMin} (hoje) e ${dataFimMax} (prazo máximo do edital/projeto).
+- As etapas devem refletir as fases naturais do projeto: planejamento, pré-produção, produção, divulgação, execução, prestação de contas, etc., conforme o orçamento e os textos.
+- Use as rubricas do orçamento e os textos (metodologia, objetivos, justificativa) para definir etapas coerentes e realistas.
+- Cada etapa deve ter duração razoável (semanas ou meses). Não crie etapas de um único dia, exceto marcos específicos se fizer sentido.
+- As etapas devem ser sequenciais ou parcialmente sobrepostas quando fizer sentido (ex.: divulgação durante produção).
+
+DADOS DO PROJETO:
+Nome: ${nomeProjeto}
+${descricaoProjeto ? `Descrição/Resumo:\n${descricaoProjeto.slice(0, 2000)}\n` : ''}
+
+ORÇAMENTO (rubricas):
+${rubricasTexto}
+${tetoOrcamento ? `Teto total: R$ ${tetoOrcamento.toLocaleString('pt-BR')}` : ''}
+
+TEXTOS DO PROJETO (trechos):
+${textosResumo}
+
+${nomeEdital ? `Edital: ${nomeEdital}. Data limite de encerramento: ${dataFimMax}.` : ''}
+
+Retorne somente o array JSON, por exemplo:
+[{"etapa":"Planejamento e pré-produção","inicio":"2025-02-01","fim":"2025-03-15"},{"etapa":"Produção","inicio":"2025-03-16","fim":"2025-06-30"}]`;
+
+      const openai = getOpenAI();
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'Você gera apenas um array JSON de etapas de cronograma. Cada objeto tem "etapa" (string), "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD). Nenhum texto extra, apenas o JSON.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1500,
+        temperature: 0.3,
+      });
+
+      const content = completion.choices?.[0]?.message?.content?.trim() || '';
+      let etapas = [];
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          etapas = JSON.parse(jsonMatch[0]);
+          if (!Array.isArray(etapas)) etapas = [];
+          etapas = etapas
+            .filter((e) => e && typeof e.etapa === 'string' && e.inicio && e.fim)
+            .map((e) => ({
+              etapa: String(e.etapa).trim(),
+              inicio: String(e.inicio).slice(0, 10),
+              fim: String(e.fim).slice(0, 10),
+            }));
+        } catch (parseErr) {
+          console.error('[gerarCronogramaIA] Erro ao parsear JSON:', parseErr);
+        }
+      }
+
+      return res.status(200).json({ etapas });
+    } catch (error) {
+      console.error('[gerarCronogramaIA]', error);
+      return res.status(500).json({
+        error: error.message || 'Erro ao gerar cronograma com IA',
+      });
+    }
+  }
+);
+
 exports.criarCheckoutPremium = onRequest(
   { 
     cors: true,
@@ -2670,9 +2821,9 @@ exports.adicionarContatoBrevo = onRequest(
     }
 
     try {
-      const { email, nome } = req.body;
+      const { email, nome, listId: listIdParam } = req.body;
       
-      console.log('[adicionarContatoBrevo] Recebida requisição:', { email, nome });
+      console.log('[adicionarContatoBrevo] Recebida requisição:', { email, nome, listId: listIdParam });
 
       if (!email) {
         console.error('[adicionarContatoBrevo] Email não fornecido');
@@ -2680,9 +2831,9 @@ exports.adicionarContatoBrevo = onRequest(
         return;
       }
 
-      // Chave API do Brevo
+      // Chave API do Brevo | listId 12 = padrão (ex.: sync usuários), listId 15 = newsletter "Receba em seu email os últimos editais"
       const BREVO_API_KEY = brevoApiKey.value();
-      const BREVO_LIST_ID = 12; // ID da lista no Brevo
+      const BREVO_LIST_ID = listIdParam != null ? Number(listIdParam) : 12;
       const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
       
       console.log('[adicionarContatoBrevo] API Key configurada:', BREVO_API_KEY ? 'SIM' : 'NÃO');
@@ -2747,14 +2898,13 @@ exports.adicionarContatoBrevo = onRequest(
         if (errorData.code === 'duplicate_parameter') {
           console.log(`[adicionarContatoBrevo] Contato ${req.body.email} já existe no Brevo, tentando atualizar...`);
           
-          // Tentar atualizar o contato existente
+          const listIdUpdate = req.body.listId != null ? Number(req.body.listId) : 12;
           try {
             const BREVO_API_KEY = brevoApiKey.value();
-            const BREVO_LIST_ID = 12;
             const BREVO_API_URL = `https://api.brevo.com/v3/contacts/${encodeURIComponent(req.body.email)}`;
             
             const updateData = {
-              listIds: [BREVO_LIST_ID],
+              listIds: [listIdUpdate],
               attributes: {
                 NOME: req.body.nome || 'Novo Usuário',
                 PRIMEIRO_NOME: req.body.nome ? req.body.nome.split(' ')[0] : 'Usuário',

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { trackGuiaEspecialCtaClicked, trackGuiaEspecialPaymentSuccess, trackGuiaEspecialPdfDownloaded } from '@/lib/analytics';
+import { trackGuiaEspecialCtaClicked, trackGuiaEspecialPaymentSuccess, trackGuiaEspecialPdfDownloaded, trackGuiaEspecialViewed } from '@/lib/analytics';
 import type { GuiaEspecialCampos } from '@/types/guia-especial';
 
 declare global {
@@ -96,6 +96,16 @@ const DetalhesGuiaEspecial = () => {
       }
     }
   }, [paymentSuccess, guia?.id, guia?.titulo, guia?.valorPromocional, guia?.valorOriginal, sessionId, user]);
+
+  // Evento Mixpanel (e Firebase/GTM): chegada na página do guia especial
+  useEffect(() => {
+    if (guia?.id) {
+      trackGuiaEspecialViewed({
+        guia_id: guia.id,
+        guia_titulo: guia.titulo,
+      });
+    }
+  }, [guia?.id, guia?.titulo]);
 
   useEffect(() => {
     // Verificar email do usuário

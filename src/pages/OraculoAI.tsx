@@ -433,7 +433,8 @@ const OraculoAI = () => {
                               },
                               body: JSON.stringify({
                                 email: emailNewsletter.trim(),
-                                nome: user?.displayName || null
+                                nome: user?.displayName || null,
+                                listId: 15
                               })
                             });
                             

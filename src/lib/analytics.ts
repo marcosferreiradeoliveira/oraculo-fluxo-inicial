@@ -560,6 +560,22 @@ export const trackGuiaViewed = (params: {
 };
 
 /**
+ * Página do guia especial visualizada (chegada na landing do guia).
+ * Dispara no Mixpanel (e Firebase/GTM) quando o usuário carrega a página /guia-especial/:id.
+ * Propriedades para segmentar no Mixpanel: guia_id, guia_titulo, guia (nome para filtros).
+ */
+export const trackGuiaEspecialViewed = (params: {
+  guia_id: string;
+  guia_titulo?: string;
+}) => {
+  trackEvent('guia_especial_viewed', {
+    guia_id: params.guia_id,
+    guia_titulo: params.guia_titulo,
+    guia: params.guia_titulo || params.guia_id, // Nome do guia para filtros/agrupamento no Mixpanel
+  });
+};
+
+/**
  * CTA clicado na landing de guia especial (intermediários + final).
  * Evento claro para Firebase, GTM e Mixpanel. Usar em todos os CTAs da página.
  */

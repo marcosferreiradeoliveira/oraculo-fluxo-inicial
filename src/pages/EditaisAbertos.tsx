@@ -26,6 +26,8 @@ interface Edital {
   data_encerramento?: any;
   valor_maximo_premiacao?: string;
   criado_em?: any;
+  destaque?: boolean;
+  thumbnail?: string;
 }
 
 // Função para capitalizar apenas a primeira letra do título
@@ -98,6 +100,9 @@ const EditaisAbertos = () => {
             editais.push(edital);
           }
         });
+
+        // destaque true no topo
+        editais.sort((a, b) => (a.destaque ? 0 : 1) - (b.destaque ? 0 : 1));
         
         setEditaisAbertos(editais);
       } catch (error) {
@@ -253,9 +258,18 @@ const EditaisAbertos = () => {
                     return (
                       <Card 
                         key={edital.id || index} 
-                        className="relative hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                        className="relative hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer overflow-hidden"
                         onClick={() => navigate(`/edital/${edital.id}`)}
                       >
+                        {edital.thumbnail && (
+                          <div className="w-full aspect-video bg-gray-100">
+                            <img
+                              src={edital.thumbnail}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
                         {/* Action Buttons - Only visible to admin */}
                         {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
                           <div className="absolute top-2 right-2 flex gap-1 z-10">
@@ -389,7 +403,8 @@ const EditaisAbertos = () => {
                             },
                             body: JSON.stringify({
                               email: emailNewsletter.trim(),
-                              nome: user?.displayName || null
+                              nome: user?.displayName || null,
+                              listId: 15
                             })
                           });
                           

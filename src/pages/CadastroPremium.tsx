@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 // Declarar tipo do Facebook Pixel
 declare global {
   interface Window {
-    fbq: (command: string, eventName: string, params?: any) => void;
+    fbq: (command: string, eventName: string, params?: Record<string, unknown>) => void;
   }
 }
 

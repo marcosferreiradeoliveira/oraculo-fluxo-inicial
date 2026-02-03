@@ -5,8 +5,9 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Crown, CheckCircle } from 'lucide-react';
-import emailjs from '@emailjs/browser';
 import { toast } from 'sonner';
+
+const ENVIAR_CONTATO_PREMIUM_URL = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/enviarContatoPremium';
 
 const ContatoPremium = () => {
   const navigate = useNavigate();
@@ -61,38 +62,30 @@ const ContatoPremium = () => {
     setLoading(true);
     
     try {
-      // Usar EmailJS (mesma configuração do formulário de Suporte)
-      const serviceId = 'service_7c0g6tp';
-      const templateId = 'template_gnb12x7';
-      const publicKey = '5kHIvMHjw-9HBbLeW';
+      const response = await fetch(ENVIAR_CONTATO_PREMIUM_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: formData.nome.trim(),
+          email: formData.email.trim(),
+          empresa: formData.empresa.trim(),
+          telefone: formData.telefone.trim(),
+        }),
+      });
       
-      // Dados do template - adaptado para Premium Enterprise
-      const templateParams = {
-        from_name: formData.nome,
-        from_email: formData.email,
-        subject: `Solicitação Premium Enterprise - ${formData.empresa}`,
-        message: `Nova solicitação de contato para o Plano Premium Enterprise:
-
-Nome: ${formData.nome}
-Email: ${formData.email}
-Empresa: ${formData.empresa}
-Telefone: ${formData.telefone}
-
-Por favor, entre em contato para apresentar o plano Premium Enterprise.`,
-        to_name: 'Marcos Ferreira',
-        empresa: formData.empresa,
-        telefone: formData.telefone
-      };
+      const data = await response.json().catch(() => ({}));
       
-      // Enviar email via EmailJS
-      await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `Erro ${response.status}`);
+      }
       
       toast.success('Solicitação enviada com sucesso! Entraremos em contato em breve.');
       setEnviado(true);
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
-      toast.error('Erro ao enviar solicitação. Tente novamente.');
-      setErro('Erro ao enviar solicitação. Tente novamente.');
+      const msg = error instanceof Error ? error.message : 'Erro ao enviar solicitação. Tente novamente.';
+      toast.error(msg);
+      setErro(msg);
     } finally {
       setLoading(false);
     }

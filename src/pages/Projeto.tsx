@@ -27,6 +27,7 @@ const steps = [
   'Gerar Textos',
   'Criar Orçamento',
   'Criar Cronograma',
+  'Documentos de Inscrição',
   'Preencher Anexos'
 ];
 const currentStep: number = 1; // Avaliar com IA
@@ -1102,6 +1103,7 @@ const Projeto = () => {
       `/projeto/${id}/gerar-textos`,
       `/projeto/${id}/criar-orcamento`,
       `/projeto/${id}/criar-cronograma`,
+      `/projeto/${id}/documentos-inscricao`,
       `/projeto/${id}/preencher-anexos`
     ];
     

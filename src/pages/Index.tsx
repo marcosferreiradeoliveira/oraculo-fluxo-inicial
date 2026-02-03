@@ -4,7 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { QuickAccessCards } from '@/components/QuickAccessCards';
 import { FeaturedGuides } from '@/components/FeaturedGuides';
 import { RecentContent } from '@/components/RecentContent';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,7 +16,6 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import emailImage from '@/assets/email.png';
 import { trackNewsletterSubscribed } from '@/lib/analytics';
 
 // Função para capitalizar apenas a primeira letra do título
@@ -28,6 +27,7 @@ const capitalizarTitulo = (titulo: string): string => {
 
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [guias, setGuias] = useState<any[]>([]);
   const [loadingGuias, setLoadingGuias] = useState(true);
   const [podcasts, setPodcasts] = useState<any[]>([]);
@@ -39,6 +39,14 @@ const Index = () => {
   const [redirectPremium, setRedirectPremium] = useState(false);
   const [emailNewsletter, setEmailNewsletter] = useState('');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+
+  // Scroll para a seção de editais quando a URL tiver #editais-abertos
+  useEffect(() => {
+    if (location.hash === '#editais-abertos') {
+      const el = document.getElementById('editais-abertos');
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [location.hash]);
 
   useEffect(() => {
     const fetchGuias = async () => {
@@ -148,6 +156,7 @@ const Index = () => {
             
             return dataEncerramento > now;
           })
+          .sort((a: any, b: any) => (a.destaque ? 0 : 1) - (b.destaque ? 0 : 1)) // destaque true no topo
           .slice(0, 4); // Limita a 4 após filtrar
         
         setEditais(data);
@@ -215,7 +224,7 @@ const Index = () => {
             <QuickAccessCards />
 
             {/* Editais Abertos */}
-            <div className="mb-12">
+            <div id="editais-abertos" className="mb-12 scroll-mt-24">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                   Editais Abertos
@@ -246,9 +255,18 @@ const Index = () => {
                     return (
                       <Card 
                         key={edital.id || index} 
-                        className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                        className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer overflow-hidden"
                         onClick={() => navigate(`/edital/${edital.id}`)}
                       >
+                        {(edital as any).thumbnail && (
+                          <div className="w-full aspect-video bg-gray-100">
+                            <img
+                              src={(edital as any).thumbnail}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
                         <CardHeader className="pb-3">
                           <CardTitle className="text-lg leading-tight line-clamp-2">
                             {edital.nome ? capitalizarTitulo(edital.nome) : 'Edital sem nome'}
@@ -352,7 +370,8 @@ const Index = () => {
                               },
                               body: JSON.stringify({
                                 email: emailNewsletter.trim(),
-                                nome: user?.displayName || null
+                                nome: user?.displayName || null,
+                                listId: 15
                               })
                             });
                             
@@ -406,13 +425,6 @@ const Index = () => {
                         {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
                       </Button>
                     </form>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <img 
-                      src={emailImage} 
-                      alt="Editais culturais" 
-                      className="w-32 h-32 md:w-48 md:h-48 object-contain rounded-lg"
-                    />
                   </div>
                 </div>
               </div>

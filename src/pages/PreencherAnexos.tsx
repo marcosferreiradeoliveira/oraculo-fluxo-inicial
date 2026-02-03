@@ -5,7 +5,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Loader2, Upload, FileText, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, FileText, Download, CheckCircle, AlertCircle, ClipboardList } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -36,8 +36,8 @@ const PreencherAnexos = () => {
   const [progress, setProgress] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Preencher Anexos'];
-  const currentStep = 6;
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const currentStep = 7;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -300,21 +300,66 @@ const PreencherAnexos = () => {
         <DashboardHeader />
         <main className="flex-1 p-4 md:p-8 animate-fade-in">
           <div className="max-w-4xl mx-auto">
-            {/* Breadcrumb */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                {steps.map((step, index) => (
-                  <React.Fragment key={step}>
-                    <span className={index === currentStep ? 'font-semibold text-oraculo-blue' : ''}>
-                      {step}
-                    </span>
-                    {index < steps.length - 1 && <span>/</span>}
-                  </React.Fragment>
-                ))}
+            {/* Barra de progresso (bolinhas) - mesma estética das outras páginas */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-2">
+                {steps.map((step, index) => {
+                  const isClickable = index <= currentStep;
+                  const routes = [
+                    '/criar-projeto',
+                    `/projeto/${id}`,
+                    `/projeto/${id}/alterar-com-ia`,
+                    `/projeto/${id}/gerar-textos`,
+                    `/projeto/${id}/criar-orcamento`,
+                    `/projeto/${id}/criar-cronograma`,
+                    `/projeto/${id}/documentos-inscricao`,
+                    `/projeto/${id}/preencher-anexos`,
+                  ];
+                  return (
+                    <div
+                      key={index}
+                      className={`flex flex-col items-center flex-1 min-w-0 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      onClick={() => {
+                        if (isClickable && routes[index]) navigate(routes[index]);
+                      }}
+                    >
+                      <div
+                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${
+                          index <= currentStep
+                            ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90'
+                            : 'bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <span
+                        className={`text-xs mt-1 text-center transition-colors truncate w-full ${
+                          index === currentStep
+                            ? 'font-medium text-oraculo-blue'
+                            : index < currentStep
+                              ? 'text-oraculo-blue'
+                              : 'text-gray-500'
+                        }`}
+                      >
+                        {step}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                <FileText className="h-8 w-8 text-oraculo-blue" />
-                Preencher Anexos
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-oraculo-blue h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                  <FileText className="h-8 w-8 text-oraculo-blue" />
+                  Preencher Anexos
                 <span className="ml-2 px-2 py-1 text-xs font-semibold bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-full">
                   BETA
                 </span>
@@ -322,6 +367,15 @@ const PreencherAnexos = () => {
               <p className="text-gray-600">
                 Faça upload de documentos em PDF e deixe a IA preencher automaticamente com os dados cadastrais e nome do projeto
               </p>
+              </div>
+              <Button
+                variant="outline"
+                className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10 shrink-0"
+                onClick={() => navigate(`/projeto/${id}/resumo`)}
+              >
+                <ClipboardList className="h-4 w-4 mr-2" />
+                Resumo do Projeto
+              </Button>
             </div>
 
             {/* Card principal */}
