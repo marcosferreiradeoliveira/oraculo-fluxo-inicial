@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
-import { Check, Star, Users, Building2, Crown, Calendar } from 'lucide-react';
+import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -34,6 +34,8 @@ const CadastroPremium = () => {
       setShowLimiteProjetosPopup(true);
     }
   }, [searchParams]);
+
+  const motivoCreditosInsuficientes = searchParams.get('motivo') === 'creditos_insuficientes';
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -283,32 +285,14 @@ const CadastroPremium = () => {
         
         <main className="flex-1 p-2 md:p-4">
           <div className="max-w-7xl mx-auto">
-            {/* Ganhe 7 dias grátis - Tour guiado */}
-            <div className="mb-10 p-5 md:p-6 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-base md:text-lg text-gray-800 leading-relaxed">
-                    <span className="font-bold text-oraculo-purple">Ganhe 7 dias grátis!</span>
-                    {' '}
-                    Agende um tour guiado para demonstração de todos os features com nosso especialista e ganhe 7 dias de acesso premium na plataforma.
-                  </p>
-                </div>
-                <a
-                  href="https://calendly.com/oraculocultural/30min"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0"
-                >
-                  <Button
-                    className="w-full sm:w-auto bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-5 text-base font-semibold flex items-center justify-center gap-2"
-                  >
-                    <Calendar className="h-5 w-5" />
-                    Agende Agora
-                  </Button>
-                </a>
+            {/* Aviso: veio por créditos insuficientes em alguma seção — só quando motivo na URL */}
+            {motivoCreditosInsuficientes && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-900">
+                <p className="text-sm md:text-base font-medium">
+                  Você não tem créditos suficientes para esta ação. Assine um plano para uso ilimitado.
+                </p>
               </div>
-            </div>
-
+            )}
             {/* Header */}
             <div className="text-center mb-12">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">

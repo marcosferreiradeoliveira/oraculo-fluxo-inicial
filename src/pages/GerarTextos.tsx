@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
+import { toast } from 'sonner';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -63,11 +64,26 @@ const GerarTextos = () => {
   const [mostrarModalRubricas, setMostrarModalRubricas] = useState(false);
   const [sugestaoTexto, setSugestaoTexto] = useState<string>('');
   const [aplicandoSugestao, setAplicandoSugestao] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [creditos, setCreditos] = useState<number>(0);
   const isMounted = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 3; // Gerar Textos
+  const totalVisible = 5;
+  const startIndex = Math.max(0, Math.min(currentStep - 2, steps.length - totalVisible));
+  const visibleSteps = steps.slice(startIndex, startIndex + totalVisible);
+  const getStepRoute = (index: number) => {
+    if (index === 0) return '/criar-projeto';
+    if (index === 1) return id ? `/projeto/${id}` : '#';
+    if (index === 2) return id ? `/projeto/${id}/alterar-com-ia` : '#';
+    if (index === 3) return '#';
+    if (index === 4) return id ? `/projeto/${id}/criar-orcamento` : '#';
+    if (index === 5) return id ? `/projeto/${id}/criar-cronograma` : '#';
+    if (index === 6) return id ? `/projeto/${id}/documentos-inscricao` : '#';
+    return id ? `/projeto/${id}/preencher-anexos` : '#';
+  };
 
   // Initialize and cleanup
   useEffect(() => {
@@ -96,40 +112,28 @@ const GerarTextos = () => {
       setMostrarCaixaTexto(true);
     }
   }, [textoSelecionado, gerando]);
-  // Verificar status premium e redirecionar se necessário
+  // Carregar premium e créditos do usuário (sem plano: 1 crédito por geração de texto)
   useEffect(() => {
-    const checkPremiumAndRedirect = async () => {
+    const checkAccess = async () => {
       if (!user) {
         navigate('/');
         return;
       }
-      
       try {
         const db = getFirestore();
         const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
-        
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          const isPremium = userData.isPremium === true;
-          
-          if (!isPremium) {
-            console.log('Usuário não premium tentando acessar Gerar Textos, redirecionando para assinatura...');
-            navigate('/cadastro-premium');
-            return;
-          }
-        } else {
-          // Se o usuário não tem documento, não é premium
-          navigate('/cadastro-premium');
-          return;
+          setIsPremium(userData.isPremium === true);
+          setCreditos(typeof userData.creditos === 'number' ? userData.creditos : 0);
         }
       } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
-        navigate('/cadastro-premium');
+        console.error('Erro ao verificar acesso:', error);
+        navigate('/');
       }
     };
-    
-    checkPremiumAndRedirect();
+    checkAccess();
   }, [user, navigate]);
 
   // Buscar projeto ao carregar o componente
@@ -425,16 +429,22 @@ const GerarTextos = () => {
       console.log(`[${new Date().toISOString()}] Resposta recebida em ${requestTime}ms`, response);
       
       if (!response.ok) {
-        let errorData: { error?: string } | null = null;
+        let errorData: { error?: string; message?: string } | null = null;
         try {
           const text = await response.text();
           if (text) {
-            errorData = JSON.parse(text) as { error?: string };
+            errorData = JSON.parse(text) as { error?: string; message?: string };
           }
         } catch (e) {
           console.error('Erro ao parsear resposta de erro:', e);
         }
         console.error(`[${new Date().toISOString()}] Erro na resposta:`, response.status, errorData);
+        if (response.status === 429) {
+          const msg = errorData?.message || errorData?.error || 'Aguarde alguns segundos antes de gerar este texto novamente.';
+          toast.error('Aguarde', { description: msg, duration: 6000 });
+          setGerando(null);
+          return false;
+        }
         const errorMsg = errorData?.error || `Erro ao gerar texto (status: ${response.status})`;
         throw new Error(errorMsg);
       }
@@ -460,6 +470,7 @@ const GerarTextos = () => {
             });
             await salvarNoFirestore(tipo, fullTextData);
             setGerando(null); // Clear loading state after successful update
+            await deduzirCreditoGerarTexto();
             return true; // Indica sucesso
           }
         } else {
@@ -558,6 +569,7 @@ const GerarTextos = () => {
           }
           
           setGerando(null);
+          await deduzirCreditoGerarTexto();
           return true;
           
         } catch (error) {
@@ -609,70 +621,52 @@ const GerarTextos = () => {
     }
   };
 
-  const handleGerarTexto = async () => {
-    if (!textoSelecionado) {
-      alert('Por favor, selecione um tipo de texto para gerar.');
-      return;
-    }
-    
-    if (gerando) {
-      return;
-    }
-    
-    // Show the text box immediately
-    setMostrarCaixaTexto(true);
-    
-    // Set loading state
-    setGerando(textoSelecionado);
-    
+  const deduzirCreditoGerarTexto = async () => {
+    if (!user) return;
     try {
-      console.log('[DEBUG] Current state before generation:', {
-        gerando,
-        currentText: textos[textoSelecionado],
-        hasText: !!textos[textoSelecionado]
-      });
-      
-      // Clear any existing text for the selected type
-      setTextos(prev => ({
-        ...prev,
-        [textoSelecionado]: ''
-      }));
-      
-      // Small delay to ensure state updates
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Generate the text
-      const success = await gerarTexto(textoSelecionado);
-      
-      if (success) {
-        console.log('[DEBUG] Text generation successful');
-        // Force a re-render to ensure the text is displayed
-        forceUpdate({});
+      const db = getFirestore();
+      const userRef = doc(db, 'usuarios', user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
+        await updateDoc(userRef, { creditos: increment(-1) });
+        setCreditos((c) => Math.max(0, c - 1));
       }
-      
-    } catch (error) {
-      console.error('Error in handleGerarTexto:', error);
-      alert(`Erro ao gerar texto: ${error.message}`);
-    } finally {
-      console.log('[DEBUG] handleGerarTexto completed for:', textoSelecionado);
-      
-      // Always clear loading state
-      if (isMounted.current) {
-        setGerando(null);
-      }
-      
-      // Log final state
-      console.log('[DEBUG] Final state after handleGerarTexto:', {
-        gerando,
-        currentText: textos[textoSelecionado],
-        hasText: !!textos[textoSelecionado]
-      });
+    } catch (e) {
+      console.error('Erro ao descontar crédito:', e);
     }
   };
 
-  const handleCopiarTexto = async () => {
+  const handleGerarTexto = async (tipo: string) => {
+    if (!tipo) return;
+    if (gerando) return;
+
+    if (!isPremium && (creditos ?? 0) < 1) {
+      navigate('/cadastro-premium?motivo=creditos_insuficientes');
+      return;
+    }
+
+    setMostrarCaixaTexto(true);
+    setGerando(tipo);
+    setTextoSelecionado(tipo);
+
     try {
-      await navigator.clipboard.writeText(textos[textoSelecionado]);
+      setTextos(prev => ({ ...prev, [tipo]: '' }));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const success = await gerarTexto(tipo);
+      if (success) forceUpdate({});
+    } catch (error) {
+      console.error('Error in handleGerarTexto:', error);
+      alert(`Erro ao gerar texto: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      if (isMounted.current) setGerando(null);
+    }
+  };
+
+  const handleCopiarTexto = async (tipo?: string) => {
+    const key = tipo ?? textoSelecionado;
+    if (!key || !textos[key]) return;
+    try {
+      await navigator.clipboard.writeText(textos[key]);
       alert('Texto copiado para a área de transferência!');
     } catch (error) {
       console.error('Erro ao copiar texto:', error);
@@ -680,11 +674,13 @@ const GerarTextos = () => {
     }
   };
 
-  const handleDownloadTexto = () => {
+  const handleDownloadTexto = (tipo?: string) => {
+    const key = tipo ?? textoSelecionado;
+    if (!key || !textos[key]) return;
     const element = document.createElement('a');
-    const file = new Blob([textos[textoSelecionado]], { type: 'text/plain' });
+    const file = new Blob([textos[key]], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `${projeto?.nome || 'projeto'}_${textoSelecionado}.txt`;
+    element.download = `${projeto?.nome || 'projeto'}_${key}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -793,42 +789,48 @@ const GerarTextos = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
         <DashboardHeader />
         
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-5xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                Gerar Textos
-              </h1>
-              <p className="text-gray-600 text-sm md:text-base">
-                Gere textos para as diferentes seções do seu projeto cultural
-              </p>
+        <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
+          <div className="max-w-5xl mx-auto w-full min-w-0">
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                  Gerar Textos
+                </h1>
+                <p className="text-gray-600 text-sm md:text-base">
+                  Gere textos para as diferentes seções do seu projeto cultural
+                </p>
+              </div>
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+                <Button
+                  size="lg"
+                  onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                  className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
+                >
+                  Próximo: Criar Orçamento <span className="ml-2 opacity-90">→</span>
+                </Button>
+              </div>
             </div>
 
-            {/* Barra de progresso */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
-                {steps.map((step, index) => {
+            {/* Barra de progresso — 5 etapas com a atual no meio */}
+            <div className="mb-8 min-w-0">
+              <div className="flex items-center justify-between gap-0.5 sm:gap-2 mb-2 min-w-0">
+                {visibleSteps.map((step, i) => {
+                  const index = startIndex + i;
                   const isClickable = index <= currentStep;
-                  const route = index === 0 
-                    ? '/criar-projeto' 
-                    : index === 1 
-                      ? `/projeto/${id}` 
-                      : index === 2 
-                        ? `/projeto/${id}/alterar-com-ia` 
-                        : `#`;
-                  
+                  const route = getStepRoute(index);
                   return (
                     <button
                       key={index}
-                      onClick={() => isClickable && navigate(route)}
-                      className={`flex flex-col items-center ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      onClick={() => isClickable && route !== '#' && navigate(route)}
+                      className={`flex flex-col items-center min-w-0 flex-1 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                       disabled={!isClickable}
                     >
                       <div 
-                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
+                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${
                           index <= currentStep 
                             ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90' 
                             : 'bg-gray-200 text-gray-600'
@@ -837,13 +839,14 @@ const GerarTextos = () => {
                         {index + 1}
                       </div>
                       <span 
-                        className={`text-xs mt-1 text-center transition-colors ${
+                        className={`text-[10px] sm:text-xs mt-1 text-center transition-colors truncate w-full block px-0.5 ${
                           index === currentStep 
                             ? 'font-medium text-oraculo-blue' 
                             : index < currentStep 
                               ? 'text-oraculo-blue hover:underline' 
                               : 'text-gray-500'
                         }`}
+                        title={step}
                       >
                         {step}
                       </span>
@@ -859,316 +862,231 @@ const GerarTextos = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md overflow-hidden">
-              <div className="p-4 border-b">
-                <h2 className="text-lg font-semibold text-gray-800">Selecione o tipo de texto</h2>
+            <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
+              <div className="p-4 border-b min-w-0">
+                <h2 className="text-lg font-semibold text-gray-800">Gerar Textos</h2>
+                <p className="text-sm text-gray-500 mt-1 break-words">Para cada tipo, use o botão para gerar com IA (1 crédito por texto) ou escreva na caixa.</p>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-                {/* Tipos de texto do edital */}
-                {tiposTextoDisponiveis.map((tipo) => {
-                  // Capitalizar primeira letra e substituir underscores por espaços
+
+              <div className="p-4 space-y-8">
+                {[...tiposTextoDisponiveis, ...categoriasCustom].map((tipo) => {
                   const titulo = tipo
                     .split('_')
-                    .map(palavra => palavra.charAt(0).toUpperCase() + palavra.slice(1))
+                    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
                     .join(' ');
-                  
+                  const isCustom = categoriasCustom.includes(tipo);
+                  const isOrcamento = tipo.toLowerCase().includes('orcamento') || tipo.toLowerCase().includes('orçamento');
+
                   return (
-                    <button
+                    <div
                       key={tipo}
-                      onClick={() => setTextoSelecionado(tipo)}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        textoSelecionado === tipo
-                          ? 'border-oraculo-blue bg-oraculo-blue/5'
-                          : 'border-gray-200 hover:border-oraculo-blue/50'
-                      }`}
+                      className={`border-2 rounded-xl p-4 ${isCustom ? 'border-oraculo-purple/50 bg-oraculo-purple/5' : 'border-gray-200 bg-gray-50/50'}`}
                     >
-                      <div className="flex items-center gap-3">
-                        {tipo.toLowerCase().includes('orcamento') || tipo.toLowerCase().includes('orçamento') ? (
-                          <DollarSign className="h-5 w-5 text-oraculo-blue" />
-                        ) : (
-                          <FileText className="h-5 w-5 text-oraculo-blue" />
+                      <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                        {isOrcamento ? <DollarSign className="h-5 w-5 text-oraculo-blue" /> : <FileText className={`h-5 w-5 ${isCustom ? 'text-oraculo-purple' : 'text-oraculo-blue'}`} />}
+                        {titulo}
+                        {textos[tipo] && <CheckCircle className="h-5 w-5 text-green-500" />}
+                      </h3>
+
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <Button
+                          onClick={() => handleGerarTexto(tipo)}
+                          disabled={!!gerando}
+                          className={isCustom ? 'bg-oraculo-purple hover:bg-oraculo-purple/90 text-white' : 'bg-oraculo-blue hover:bg-oraculo-blue/90 text-white'}
+                        >
+                          {gerando === tipo ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Gerando...
+                            </>
+                          ) : (
+                            <>Criar Texto <span className="opacity-90 font-normal text-sm">(1 crédito)</span></>
+                          )}
+                        </Button>
+                        {isOrcamento && textos[tipo] && rubricas.length > 0 && (
+                          <Button
+                            variant="outline"
+                            onClick={() => { setTextoSelecionado(tipo); setMostrarModalRubricas(true); }}
+                            className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10"
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Editar Rubricas
+                          </Button>
                         )}
-                        <span className="font-medium text-gray-800">{titulo}</span>
                         {textos[tipo] && (
-                          <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCopiarTexto(tipo)}
+                              className="border-gray-300 text-gray-700"
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copiar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadTexto(tipo)}
+                              className="border-gray-300 text-gray-700"
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              Baixar
+                            </Button>
+                          </>
                         )}
                       </div>
-                    </button>
-                  );
-                })}
-                
-                {/* Categorias personalizadas */}
-                {categoriasCustom.map((categoria) => {
-                  return (
-                    <button
-                      key={categoria}
-                      onClick={() => setTextoSelecionado(categoria)}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        textoSelecionado === categoria
-                          ? 'border-oraculo-purple bg-oraculo-purple/5'
-                          : 'border-oraculo-purple/50 hover:border-oraculo-purple'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-oraculo-purple" />
-                        <span className="font-medium text-gray-800">{categoria}</span>
-                        {textos[categoria] && (
-                          <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+
+                      <div className="relative">
+                        <textarea
+                          ref={gerando === tipo ? textareaRef : undefined}
+                          className="w-full min-h-[200px] max-h-[400px] p-4 border border-gray-200 rounded-lg text-gray-800 bg-white resize-y overflow-y-auto focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue"
+                          readOnly={gerando === tipo}
+                          value={textos[tipo] || ''}
+                          placeholder={gerando === tipo ? 'Gerando texto, aguarde...' : `Digite ou gere o texto para ${titulo.toLowerCase()}...`}
+                          onChange={(e) => {
+                            setTextos(prev => ({ ...prev, [tipo]: e.target.value }));
+                            setTextoSelecionado(tipo);
+                          }}
+                          onFocus={() => setTextoSelecionado(tipo)}
+                        />
+                        {gerando === tipo && (
+                          <div className="absolute bottom-3 right-3 flex items-center bg-white/95 px-3 py-1.5 rounded-full shadow border text-sm">
+                            <Loader2 className="h-4 w-4 animate-spin text-oraculo-blue mr-2" />
+                            <span className="text-gray-700">Gerando...</span>
+                          </div>
                         )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
-                
-                {/* Botão para adicionar categoria personalizada */}
+
                 <button
+                  type="button"
                   onClick={() => setMostrarInputCategoria(true)}
-                  className="p-4 rounded-lg border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5"
+                  className="w-full p-4 rounded-xl border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5 text-oraculo-purple font-medium flex items-center justify-center gap-2"
                 >
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-oraculo-purple" />
-                    <span className="font-medium text-oraculo-purple">+ Categoria Personalizada</span>
-                  </div>
+                  <FileText className="h-5 w-5" />
+                  + Categoria Personalizada
                 </button>
               </div>
 
-              <div className="p-4 border-t">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <Button
-                    onClick={handleGerarTexto}
-                    disabled={!!gerando}
-                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
-                  >
-                    {gerando === textoSelecionado ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Gerando...
-                      </>
-                    ) : (
-                      'Gerar Texto'
-                    )}
-                  </Button>
-                  
-                  {/* Botão Editar Rubricas - só aparece para orçamento */}
-                  {(textoSelecionado.toLowerCase().includes('orcamento') || textoSelecionado.toLowerCase().includes('orçamento')) && 
-                   textos[textoSelecionado] && rubricas.length > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setMostrarModalRubricas(true)}
-                      className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10"
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Editar Rubricas
-                    </Button>
-                  )}
-                  
-                  <Button
-                    variant="outline"
-                    onClick={handleCopiarTexto}
-                    className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar Texto
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={handleDownloadTexto}
-                    className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10 ml-auto"
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Baixar .TXT
-                  </Button>
-                </div>
-              </div>
-              
-              {mostrarCaixaTexto && (
+              {/* Sugestão para alterar texto (aplica ao tipo focado / selecionado) */}
+              {textoSelecionado && textos[textoSelecionado] && (
                 <div className="p-4 border-t bg-gray-50">
                   <div className="p-4 bg-white border rounded-lg">
-                    {gerando === textoSelecionado ? (
-                      <div className="relative">
-                        <textarea
-                          ref={textareaRef}
-                          className="w-full min-h-[300px] max-h-[500px] p-4 border rounded text-gray-800 bg-white text-display resize-none overflow-y-auto"
-                          readOnly
-                          value={textos[textoSelecionado] || ''}
-                          placeholder={gerando ? 'Gerando texto, aguarde...' : `Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
-                        />
-                        <div className="absolute bottom-4 right-4 flex items-center bg-white/90 px-3 py-1.5 rounded-full shadow-sm border text-sm">
-                          <Loader2 className="h-4 w-4 animate-spin text-oraculo-blue mr-2" />
-                          <span className="text-gray-700">Gerando texto...</span>
-                        </div>
-                      </div>
-                    ) : textos[textoSelecionado] ? (
-                      <>
-                        <div className="prose max-w-none">
-                          <textarea
-                            className="w-full min-h-[300px] max-h-[500px] p-4 border rounded text-gray-800 bg-white resize-none overflow-y-auto"
-                            value={textos[textoSelecionado]}
-                            onChange={(e) => {
-                              setTextos(prev => ({
-                                ...prev,
-                                [textoSelecionado]: e.target.value
-                              }));
-                            }}
-                            placeholder={`Digite ou gere o texto para ${textoSelecionado.replace('_', ' ').toLowerCase()}...`}
-                          />
-                        </div>
-                        
-                        {/* Campo para sugestão de alteração */}
-                        <div className="mt-8 pt-8 border-t-2 border-gray-200">
-                          <h3 className="text-xl font-bold text-gray-900 mb-4">
-                            Dê uma sugestão para a IA alterar o texto
-                          </h3>
-                          <textarea
-                            className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[120px] text-gray-800 leading-relaxed resize-y mb-4"
-                            value={sugestaoTexto}
-                            onChange={(e) => setSugestaoTexto(e.target.value)}
-                            placeholder="Ex: Adicione mais detalhes sobre o cronograma de execução..."
-                            disabled={aplicandoSugestao}
-                          />
-                          <div className="flex justify-end">
-                            <Button
-                              onClick={async () => {
-                                if (!sugestaoTexto.trim()) {
-                                  alert('Por favor, digite uma sugestão antes de aplicar.');
-                                  return;
-                                }
-
-                                setAplicandoSugestao(true);
-
-                                try {
-                                  const textoBase = textos[textoSelecionado] || '';
-                                  
-                                  if (!textoBase.trim()) {
-                                    alert('Erro: texto do projeto inválido');
-                                    setAplicandoSugestao(false);
-                                    return;
-                                  }
-
-                                  // Buscar portfolio do usuário
-                                  let portfolioTexto = '';
-                                  if (user) {
-                                    try {
-                                      const db = getFirestore();
-                                      const userDocRef = doc(db, 'usuarios', user.uid);
-                                      const userDoc = await getDoc(userDocRef);
-                                      if (userDoc.exists()) {
-                                        portfolioTexto = userDoc.data().portfolio || '';
-                                      }
-                                    } catch (err) {
-                                      console.error('Erro ao buscar portfolio:', err);
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                      Dê uma sugestão para a IA alterar o texto &quot;{textoSelecionado.replace(/_/g, ' ')}&quot;
+                    </h3>
+                    <textarea
+                      className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[100px] text-gray-800 leading-relaxed resize-y mb-4"
+                      value={sugestaoTexto}
+                      onChange={(e) => setSugestaoTexto(e.target.value)}
+                      placeholder="Ex: Adicione mais detalhes sobre o cronograma..."
+                      disabled={aplicandoSugestao}
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={async () => {
+                          if (!sugestaoTexto.trim()) {
+                            alert('Digite uma sugestão antes de aplicar.');
+                            return;
+                          }
+                          setAplicandoSugestao(true);
+                          try {
+                            const textoBase = textos[textoSelecionado] || '';
+                            if (!textoBase.trim()) {
+                              alert('Erro: texto inválido');
+                              setAplicandoSugestao(false);
+                              return;
+                            }
+                            let portfolioTexto = '';
+                            if (user) {
+                              try {
+                                const db = getFirestore();
+                                const userDocRef = doc(db, 'usuarios', user.uid);
+                                const userDoc = await getDoc(userDocRef);
+                                if (userDoc.exists()) portfolioTexto = userDoc.data().portfolio || '';
+                              } catch (err) {
+                                console.error('Erro ao buscar portfolio:', err);
+                              }
+                            }
+                            const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+                            const response = await fetch(endpoint, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                textoAtual: textoBase,
+                                sugestao: sugestaoTexto,
+                                portfolio: portfolioTexto,
+                                userId: user?.uid,
+                              }),
+                            });
+                            if (!response.ok) {
+                              const errorData = await response.json().catch(() => ({}));
+                              throw new Error(`Erro: ${response.status} - ${JSON.stringify(errorData)}`);
+                            }
+                            const reader = response.body?.getReader();
+                            const decoder = new TextDecoder();
+                            let novoTexto = '';
+                            if (!reader) throw new Error('Não foi possível ler a resposta do servidor');
+                            while (true) {
+                              const { done, value } = await reader.read();
+                              if (done) break;
+                              const chunk = decoder.decode(value);
+                              const lines = chunk.split('\n');
+                              for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                  const data = line.slice(6);
+                                  if (data === '[DONE]') break;
+                                  try {
+                                    const parsed = JSON.parse(data);
+                                    if (parsed.content) {
+                                      novoTexto += parsed.content;
+                                      setTextos(prev => ({ ...prev, [textoSelecionado]: novoTexto }));
                                     }
+                                  } catch {
+                                    // ignorar
                                   }
-
-                                  const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
-                                  
-                                  const response = await fetch(endpoint, {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                      textoAtual: textoBase,
-                                      sugestao: sugestaoTexto,
-                                      portfolio: portfolioTexto,
-                                      userId: user?.uid,
-                                    }),
-                                  });
-                                  
-                                  if (!response.ok) {
-                                    const errorData = await response.json().catch(() => ({}));
-                                    throw new Error(`Erro ao alterar texto: ${response.status} - ${JSON.stringify(errorData)}`);
-                                  }
-                                  
-                                  // Processar resposta streaming
-                                  const reader = response.body?.getReader();
-                                  const decoder = new TextDecoder();
-                                  let novoTexto = '';
-                                  
-                                  if (!reader) {
-                                    throw new Error('Não foi possível ler a resposta do servidor');
-                                  }
-                                  
-                                  while (true) {
-                                    const { done, value } = await reader.read();
-                                    if (done) break;
-                                    
-                                    const chunk = decoder.decode(value);
-                                    const lines = chunk.split('\n');
-                                    
-                                    for (const line of lines) {
-                                      if (line.startsWith('data: ')) {
-                                        const data = line.slice(6);
-                                        if (data === '[DONE]') {
-                                          break;
-                                        }
-                                        try {
-                                          const parsed = JSON.parse(data);
-                                          if (parsed.content) {
-                                            novoTexto += parsed.content;
-                                            setTextos(prev => ({
-                                              ...prev,
-                                              [textoSelecionado]: novoTexto
-                                            }));
-                                          }
-                                        } catch (e) {
-                                          // Ignorar erros de parsing
-                                        }
-                                      }
-                                    }
-                                  }
-                                  
-                                  // Salvar o novo texto no Firestore
-                                  if (id && novoTexto.trim()) {
-                                    await salvarNoFirestore(textoSelecionado as TextoTipo, novoTexto);
-                                  }
-                                  
-                                  // Limpar o campo de sugestão
-                                  setSugestaoTexto('');
-                                  
-                                } catch (e) {
-                                  console.error('Erro ao processar sugestão:', e);
-                                  alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
-                                } finally {
-                                  setAplicandoSugestao(false);
                                 }
-                              }}
-                              disabled={aplicandoSugestao || !sugestaoTexto.trim()}
-                              className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white px-6 py-2"
-                            >
-                              {aplicandoSugestao ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Aplicando...
-                                </>
-                              ) : (
-                                'Aplicar Sugestão'
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        <p>Selecione um tipo de texto e clique em "Gerar Texto" para começar.</p>
-                      </div>
-                    )}
+                              }
+                            }
+                            if (id && novoTexto.trim()) await salvarNoFirestore(textoSelecionado as TextoTipo, novoTexto);
+                            setSugestaoTexto('');
+                          } catch (e) {
+                            console.error('Erro ao processar sugestão:', e);
+                            alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
+                          } finally {
+                            setAplicandoSugestao(false);
+                          }
+                        }}
+                        disabled={aplicandoSugestao || !sugestaoTexto.trim()}
+                        className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white px-6 py-2"
+                      >
+                        {aplicandoSugestao ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Aplicando...
+                          </>
+                        ) : (
+                          'Aplicar Sugestão'
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
             
-            {/* Botões de ação */}
-            <div className="mt-8 flex justify-end items-center">
+            {/* Próximo passo: Criar Orçamento — responsivo */}
+            <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
               <Button
-                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
-                className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 py-3"
                 size="lg"
+                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
               >
-                Próximo: Criar Orçamento
-                <DollarSign className="ml-2 h-5 w-5" />
+                Próximo: Criar Orçamento <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
               </Button>
             </div>
           </div>

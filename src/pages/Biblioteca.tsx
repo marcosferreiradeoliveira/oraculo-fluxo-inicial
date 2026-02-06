@@ -72,9 +72,17 @@ const Biblioteca = () => {
         const snapshot = await getDocs(collection(db, 'guias'));
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Ordenar: especiais primeiro, depois os normais
+        // Especiais primeiro; depois normais ordenados por data de criação (mais recente primeiro)
         const guiasEspeciais = data.filter((g: any) => g.especial === true);
         const guiasNormais = data.filter((g: any) => !g.especial || g.especial === false);
+        const toDate = (v: any): number => {
+          if (!v) return 0;
+          if (v && typeof v.toDate === 'function') return v.toDate().getTime();
+          if (v && typeof v.seconds === 'number') return v.seconds * 1000;
+          if (typeof v === 'string' || typeof v === 'number') return new Date(v).getTime();
+          return 0;
+        };
+        guiasNormais.sort((a: any, b: any) => toDate(b.criadoEm) - toDate(a.criadoEm));
         const guiasOrdenados = [...guiasEspeciais, ...guiasNormais];
         
         setGuias(guiasOrdenados);

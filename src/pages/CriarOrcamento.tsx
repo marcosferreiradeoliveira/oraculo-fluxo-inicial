@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -191,9 +191,30 @@ const CriarOrcamento = () => {
   const [temAlteracoesPendentes, setTemAlteracoesPendentes] = useState(false); // Flag para indicar se há alterações não salvas
   const [sugestoesAlteracoes, setSugestoesAlteracoes] = useState<string>('');
   const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
-
+  const [isPremium, setIsPremium] = useState(false);
+  const [creditos, setCreditos] = useState<number>(0);
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 4;
+
+  // Carregar premium e créditos (sem plano: 3 créditos para salvar orçamento)
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) return;
+      try {
+        const db = getFirestore();
+        const userRef = doc(db, 'usuarios', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const d = userSnap.data();
+          setIsPremium(d?.isPremium === true);
+          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
+        }
+      } catch (e) {
+        console.error('Erro ao verificar acesso:', e);
+      }
+    };
+    checkAccess();
+  }, [user]);
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -361,10 +382,16 @@ const CriarOrcamento = () => {
       return;
     }
 
+    if (!isPremium && (creditos ?? 0) < CREDITOS_ORCAMENTO) {
+      navigate('/cadastro-premium?motivo=creditos_insuficientes');
+      return;
+    }
+
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
     setRubricas([]);
-    
+
+    let gerouComSucesso = false;
     try {
       // Buscar dados do projeto para enviar à IA
       const descricaoProjeto = projeto.descricao || '';
@@ -550,6 +577,7 @@ const CriarOrcamento = () => {
                   
                   return rubricasFinais.length > 0 ? rubricasFinais : prev;
                 });
+                gerouComSucesso = true;
               }
             } catch (e) {
               // Ignorar erros de parsing, continuar processando
@@ -641,6 +669,7 @@ const CriarOrcamento = () => {
           
           return rubricasFinais.length > 0 ? rubricasFinais : prev;
         });
+        gerouComSucesso = true;
       }
 
     } catch (error) {
@@ -650,6 +679,16 @@ const CriarOrcamento = () => {
         duration: 5000,
       });
     } finally {
+      if (gerouComSucesso && user && !isPremium) {
+        try {
+          const db = getFirestore();
+          const userRef = doc(db, 'usuarios', user.uid);
+          await updateDoc(userRef, { creditos: increment(-CREDITOS_ORCAMENTO) });
+          setCreditos((c) => Math.max(0, c - CREDITOS_ORCAMENTO));
+        } catch (e) {
+          console.error('Erro ao descontar créditos orçamento:', e);
+        }
+      }
       setGerandoOrcamento(false);
     }
   };
@@ -1223,7 +1262,9 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
     }
   };
 
-  // Salvar orçamento
+  const CREDITOS_ORCAMENTO = 3;
+
+  // Salvar orçamento (não desconta créditos; a geração já descontou)
   const salvarOrcamento = async () => {
     if (!id) return;
 
@@ -1241,7 +1282,6 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
         }
       });
 
-      // Limpar flag de alterações pendentes após salvar
       setTemAlteracoesPendentes(false);
       setRubricasAnteriores([]);
 
@@ -1411,29 +1451,41 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <DashboardHeader />
         
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                Criar Orçamento
-              </h1>
-              <p className="text-gray-600 text-sm md:text-base">
-                Crie um orçamento detalhado para o projeto "{projeto.nome || 'sem nome'}"
-              </p>
+        <main className="flex-1 p-3 md:p-8 overflow-x-hidden pb-20 md:pb-8 min-h-0">
+          <div className="max-w-7xl mx-auto min-w-0">
+            <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">
+                  Criar Orçamento
+                </h1>
+                <p className="text-gray-600 text-sm md:text-base break-words">
+                  Crie um orçamento detalhado para o projeto &quot;{projeto.nome || 'sem nome'}&quot;
+                </p>
+              </div>
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+                <Button
+                  size="lg"
+                  onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
+                  className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
+                >
+                  Próximo: Criar Cronograma <span className="ml-2 opacity-90">→</span>
+                </Button>
+              </div>
             </div>
 
-            {/* Barra de progresso */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
+            {/* Barra de progresso - scroll horizontal no mobile */}
+            <div className="mb-6 md:mb-8 overflow-hidden">
+              <div className="flex items-center gap-2 md:justify-between mb-2 overflow-x-auto pb-2 md:pb-0 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.map((step, index) => {
                   const isClickable = index <= currentStep;
                   return (
                     <div
                       key={index}
-                      className={`flex flex-col items-center ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      className={`flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                     >
                       <div
                         className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
@@ -1445,7 +1497,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         {index + 1}
                       </div>
                       <span
-                        className={`text-xs mt-1 text-center transition-colors ${
+                        className={`text-xs mt-1 text-center whitespace-nowrap transition-colors ${
                           index === currentStep
                             ? 'font-medium text-oraculo-blue'
                             : index < currentStep
@@ -1459,7 +1511,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                   );
                 })}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-2 min-w-0">
                 <div
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300"
                   style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
@@ -1469,9 +1521,9 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               {/* Teto do Orçamento */}
-              <div className="p-6 border-b">
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
+              <div className="p-4 md:p-6 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                  <div className="flex-1 min-w-0">
                     <Label htmlFor="teto" className="text-base font-semibold mb-2 block">
                       Teto do Orçamento (R$)
                     </Label>
@@ -1483,7 +1535,6 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                       value={tetoOrcamento === 0 ? '' : tetoOrcamento}
                       onChange={(e) => {
                         const valorDigitado = e.target.value;
-                        // Se o campo está vazio, manter como 0 internamente mas mostrar vazio
                         if (valorDigitado === '' || valorDigitado.trim() === '') {
                           setTetoOrcamento(0);
                         } else {
@@ -1491,20 +1542,20 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                           setTetoOrcamento(valor);
                         }
                       }}
-                      className="text-lg h-11"
+                      className="text-lg h-11 w-full min-w-0"
                       placeholder="0.00"
                     />
                     {edital && tetoOrcamento > 0 && (
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-gray-500 mt-1 break-words">
                         Sugerido do edital: {edital.titulo || edital.nome || 'Edital associado'} (você pode editar)
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col justify-end" style={{ paddingTop: '28px' }}>
+                  <div className="flex flex-col justify-end sm:pt-7">
                     <Button
                       onClick={gerarOrcamento}
                       disabled={gerandoOrcamento || tetoOrcamento <= 0}
-                      className="bg-gradient-to-r from-oraculo-purple to-oraculo-blue hover:opacity-90 text-white px-6 py-2 h-11 whitespace-nowrap"
+                      className="bg-gradient-to-r from-oraculo-purple to-oraculo-blue hover:opacity-90 text-white px-6 py-2 h-11 whitespace-nowrap w-full sm:w-auto"
                     >
                       {gerandoOrcamento ? (
                         <>
@@ -1515,6 +1566,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         <>
                           <Sparkles className="mr-2 h-4 w-4" />
                           Gerar Orçamento
+                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>
@@ -1522,8 +1574,9 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                 </div>
               </div>
 
-              {/* Campo de Sugestões de Alterações */}
-              <div className="p-6 border-b border-gray-200">
+              {/* Campo de Sugestões de Alterações — só aparece depois de gerado o primeiro orçamento */}
+              {rubricas.length > 0 && (
+              <div className="p-4 md:p-6 border-b border-gray-200">
                 <Label htmlFor="sugestoes" className="text-base font-semibold text-gray-900 mb-2 block">
                   Sugestões de Alterações ao Orçamento
                 </Label>
@@ -1532,17 +1585,17 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                   value={sugestoesAlteracoes}
                   onChange={(e) => setSugestoesAlteracoes(e.target.value)}
                   placeholder="Digite suas sugestões de alterações ou observações sobre o orçamento..."
-                  className="min-h-[100px] resize-y mb-3"
+                  className="min-h-[100px] resize-y mb-3 w-full min-w-0"
                   rows={4}
                 />
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-500">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-sm text-gray-500 order-2 sm:order-1">
                     Use este campo para adicionar comentários, sugestões ou observações sobre o orçamento gerado.
                   </p>
                   <Button
                     onClick={processarAlteracoes}
-                    disabled={!sugestoesAlteracoes.trim() || processandoAlteracoes || rubricas.length === 0}
-                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                    disabled={!sugestoesAlteracoes.trim() || processandoAlteracoes}
+                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white w-full sm:w-auto order-1 sm:order-2"
                   >
                     {processandoAlteracoes ? (
                       <>
@@ -1558,60 +1611,61 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                   </Button>
                 </div>
               </div>
+              )}
 
               {/* Tabela de Rubricas */}
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="p-4 md:p-6 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Rubricas do Orçamento</h2>
                   <Button
                     onClick={adicionarRubrica}
-                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
+                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white w-full sm:w-auto"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Adicionar Rubrica
                   </Button>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                <div className="overflow-x-auto -mx-2 md:mx-0">
+                  <table className="w-full border-collapse min-w-[640px]">
                     <thead>
                       <tr className="border-b-2 border-gray-300">
-                        <th className="text-left p-3 font-semibold text-gray-700">Nome da Rubrica</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Quantidade</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Unidade</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Qtd. Unidade</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Valor Unitário (R$)</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Total (R$)</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Ações</th>
+                        <th className="text-left p-2 md:p-3 font-semibold text-gray-700 text-sm">Nome da Rubrica</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Qtd</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Unidade</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Qtd. Un.</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Valor Unit. (R$)</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Total (R$)</th>
+                        <th className="text-center p-2 md:p-3 font-semibold text-gray-700 text-sm">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rubricas.map((rubrica, index) => (
                         <tr key={rubrica.id} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Input
                               value={rubrica.nome}
                               onChange={(e) => atualizarRubrica(rubrica.id, 'nome', e.target.value)}
                               placeholder="Ex: Material gráfico"
-                              className="min-w-[200px]"
+                              className="min-w-[120px] md:min-w-[200px] w-full max-w-[200px]"
                             />
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Input
                               type="number"
                               min="0"
                               step="0.01"
                               value={rubrica.quantidade}
                               onChange={(e) => atualizarRubrica(rubrica.id, 'quantidade', parseFloat(e.target.value) || 0)}
-                              className="text-center w-20"
+                              className="text-center w-16 md:w-20"
                             />
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Select
                               value={rubrica.unidade}
                               onValueChange={(value) => atualizarRubrica(rubrica.id, 'unidade', value)}
                             >
-                              <SelectTrigger className="w-32">
+                              <SelectTrigger className="w-24 md:w-32">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1623,32 +1677,32 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Input
                               type="number"
                               min="0"
                               step="0.01"
                               value={rubrica.quantidadeUnidade}
                               onChange={(e) => atualizarRubrica(rubrica.id, 'quantidadeUnidade', parseFloat(e.target.value) || 0)}
-                              className="text-center w-24"
+                              className="text-center w-16 md:w-24"
                             />
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Input
                               type="number"
                               min="0"
                               step="0.01"
                               value={rubrica.valorUnitario}
                               onChange={(e) => atualizarRubrica(rubrica.id, 'valorUnitario', parseFloat(e.target.value) || 0)}
-                              className="text-center w-28"
+                              className="text-center w-20 md:w-28"
                             />
                           </td>
-                          <td className="p-3">
-                            <div className="text-center font-semibold text-gray-900 bg-gray-100 px-3 py-2 rounded">
+                          <td className="p-2 md:p-3">
+                            <div className="text-center font-semibold text-gray-900 bg-gray-100 px-2 md:px-3 py-2 rounded text-sm">
                               {rubrica.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1663,20 +1717,20 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
-                        <td colSpan={5} className="p-3 text-right">
+                        <td colSpan={5} className="p-2 md:p-3 text-right text-sm md:text-base">
                           Total Geral:
                         </td>
-                        <td className="p-3 text-center text-lg text-oraculo-blue">
+                        <td className="p-2 md:p-3 text-center text-base md:text-lg text-oraculo-blue">
                           {totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td></td>
                       </tr>
                       {tetoOrcamento > 0 && (
                         <tr className="bg-blue-50">
-                          <td colSpan={5} className="p-3 text-right">
+                          <td colSpan={5} className="p-2 md:p-3 text-right text-sm md:text-base">
                             Diferença (Teto - Total):
                           </td>
-                          <td className={`p-3 text-center font-semibold ${
+                          <td className={`p-2 md:p-3 text-center font-semibold text-sm md:text-base ${
                             diferencaTeto >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
                             {diferencaTeto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1690,16 +1744,16 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
               </div>
 
               {/* Botões de ação */}
-              <div className="p-6 border-t bg-gray-50 flex justify-between">
+              <div className="p-4 md:p-6 border-t bg-gray-50 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-start">
                 <Button
                   variant="outline"
                   onClick={() => navigate(`/projeto/${id}/gerar-textos`)}
-                  className="border-gray-300"
+                  className="border-gray-300 w-full sm:w-auto order-2 sm:order-1"
                 >
                   Voltar
                 </Button>
-                <div className="flex gap-3">
-                  <div className="flex gap-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center order-1 sm:order-2 min-w-0">
+                  <div className="flex flex-wrap gap-2 justify-start">
                     <Button
                       onClick={exportarParaPDF}
                       disabled={rubricas.length === 0}
@@ -1726,7 +1780,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         className="border-orange-300 text-orange-700 hover:bg-orange-50"
                       >
                         <Undo2 className="mr-2 h-4 w-4" />
-                        Desfazer Alterações
+                        Desfazer
                       </Button>
                     )}
                     <Button
@@ -1742,19 +1796,25 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                       ) : (
                         <>
                           <Save className="mr-2 h-4 w-4" />
-                          Salvar Orçamento
+                          Salvar
                         </>
                       )}
                     </Button>
                   </div>
-                  <Button
-                    onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
-                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
-                  >
-                    Próximo: Criar Cronograma
-                  </Button>
                 </div>
               </div>
+            </div>
+
+            {/* Próximo passo: Criar Cronograma — mesmo formato da página Gerar Textos */}
+            <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+              <Button
+                size="lg"
+                onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
+                className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
+              >
+                Próximo: Criar Cronograma <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+              </Button>
             </div>
           </div>
         </main>

@@ -5,7 +5,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Loader2, Upload, FileText, Download, CheckCircle, AlertCircle, ClipboardList } from 'lucide-react';
+import { Loader2, Upload, FileText, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -296,13 +296,13 @@ const PreencherAnexos = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <DashboardHeader />
-        <main className="flex-1 p-4 md:p-8 animate-fade-in">
-          <div className="max-w-4xl mx-auto">
-            {/* Barra de progresso (bolinhas) - mesma estética das outras páginas */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
+        <main className="flex-1 p-3 md:p-8 overflow-x-hidden overflow-y-auto pb-20 md:pb-8 min-h-0 animate-fade-in">
+          <div className="max-w-4xl mx-auto min-w-0">
+            {/* Barra de progresso - scroll horizontal no mobile */}
+            <div className="mb-6 md:mb-8 overflow-hidden">
+              <div className="flex items-center gap-2 mb-2 overflow-x-auto pb-2 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.map((step, index) => {
                   const isClickable = index <= currentStep;
                   const routes = [
@@ -318,13 +318,13 @@ const PreencherAnexos = () => {
                   return (
                     <div
                       key={index}
-                      className={`flex flex-col items-center flex-1 min-w-0 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      className={`flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0 md:flex-1 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                       onClick={() => {
                         if (isClickable && routes[index]) navigate(routes[index]);
                       }}
                     >
                       <div
-                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${
+                        className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm transition-colors flex-shrink-0 ${
                           index <= currentStep
                             ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90'
                             : 'bg-gray-200 text-gray-600'
@@ -333,13 +333,14 @@ const PreencherAnexos = () => {
                         {index + 1}
                       </div>
                       <span
-                        className={`text-xs mt-1 text-center transition-colors truncate w-full ${
+                        className={`text-[10px] md:text-xs mt-1 text-center transition-colors whitespace-nowrap ${
                           index === currentStep
                             ? 'font-medium text-oraculo-blue'
                             : index < currentStep
                               ? 'text-oraculo-blue'
                               : 'text-gray-500'
                         }`}
+                        title={step}
                       >
                         {step}
                       </span>
@@ -347,7 +348,7 @@ const PreencherAnexos = () => {
                   );
                 })}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-2 min-w-0">
                 <div
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300"
                   style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
@@ -355,39 +356,41 @@ const PreencherAnexos = () => {
               </div>
             </div>
 
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                  <FileText className="h-8 w-8 text-oraculo-blue" />
-                  Preencher Anexos
-                <span className="ml-2 px-2 py-1 text-xs font-semibold bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-full">
-                  BETA
-                </span>
-              </h1>
-              <p className="text-gray-600">
-                Faça upload de documentos em PDF e deixe a IA preencher automaticamente com os dados cadastrais e nome do projeto
-              </p>
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2 flex flex-wrap items-center gap-2 break-words">
+                  <FileText className="h-7 w-7 md:h-8 md:w-8 text-oraculo-blue flex-shrink-0" />
+                  <span className="break-words">Preencher Anexos</span>
+                  <span className="px-2 py-1 text-xs font-semibold bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-full flex-shrink-0">
+                    BETA
+                  </span>
+                </h1>
+                <p className="text-gray-600 text-sm md:text-base break-words">
+                  Faça upload de documentos em PDF e deixe a IA preencher automaticamente com os dados cadastrais e nome do projeto
+                </p>
               </div>
-              <Button
-                variant="outline"
-                className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10 shrink-0"
-                onClick={() => navigate(`/projeto/${id}/resumo`)}
-              >
-                <ClipboardList className="h-4 w-4 mr-2" />
-                Resumo do Projeto
-              </Button>
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+                <Button
+                  size="lg"
+                  onClick={() => navigate(`/projeto/${id}/resumo`)}
+                  className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
+                >
+                  Próximo: Resumo do Projeto <span className="ml-2 opacity-90">→</span>
+                </Button>
+              </div>
             </div>
 
             {/* Card principal */}
-            <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-6">
+            <div className="bg-white rounded-xl shadow-lg p-4 md:p-8 space-y-6 overflow-hidden">
               {/* Informações do projeto */}
               {projeto && (
-                <div className="bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 rounded-lg p-4 border-l-4 border-oraculo-blue">
-                  <h3 className="font-semibold text-gray-900 mb-2">Projeto: {projeto.nome || 'Sem nome'}</h3>
+                <div className="bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 rounded-lg p-4 border-l-4 border-oraculo-blue min-w-0">
+                  <h3 className="font-semibold text-gray-900 mb-2 break-words">Projeto: {projeto.nome || 'Sem nome'}</h3>
                   {!userData?.dadosCadastrais && (
                     <div className="flex items-start gap-2 mt-2 text-sm text-orange-600">
-                      <AlertCircle className="h-4 w-4 mt-0.5" />
-                      <span>
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span className="break-words">
                         Você precisa preencher os dados cadastrais na página{' '}
                         <button
                           onClick={() => navigate('/conta')}
@@ -403,16 +406,16 @@ const PreencherAnexos = () => {
               )}
 
               {/* Upload de arquivo */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900">1. Selecione o arquivo PDF</h3>
+              <div className="space-y-4 min-w-0">
+                <h3 className="text-base md:text-lg font-semibold text-gray-900">1. Selecione o arquivo PDF</h3>
                 
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+                  className={`border-2 border-dashed rounded-lg p-6 md:p-8 text-center transition-all min-w-0 ${
                     isDragging
-                      ? 'border-oraculo-blue bg-oraculo-blue/5 scale-105'
+                      ? 'border-oraculo-blue bg-oraculo-blue/5 scale-[1.02] md:scale-105'
                       : 'border-gray-300 hover:border-oraculo-blue'
                   } ${uploading || processing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
@@ -425,24 +428,24 @@ const PreencherAnexos = () => {
                     disabled={uploading || processing}
                   />
                   <label htmlFor="file-upload" className="cursor-pointer block">
-                    <Upload className={`h-12 w-12 mx-auto mb-4 ${isDragging ? 'text-oraculo-blue' : 'text-gray-400'}`} />
-                    <p className={`mb-2 ${isDragging ? 'text-oraculo-blue font-medium' : 'text-gray-600'}`}>
+                    <Upload className={`h-10 w-10 md:h-12 md:w-12 mx-auto mb-3 md:mb-4 ${isDragging ? 'text-oraculo-blue' : 'text-gray-400'}`} />
+                    <p className={`mb-2 text-sm md:text-base ${isDragging ? 'text-oraculo-blue font-medium' : 'text-gray-600'}`}>
                       {isDragging
                         ? 'Solte o arquivo PDF aqui'
                         : 'Clique para selecionar ou arraste um arquivo PDF'}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-xs md:text-sm text-gray-500">
                       Máximo 10MB
                     </p>
                   </label>
                 </div>
 
                 {selectedFile && (
-                  <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-8 w-8 text-oraculo-blue" />
-                      <div>
-                        <p className="font-medium text-gray-900">{selectedFile.name}</p>
+                  <div className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <FileText className="h-8 w-8 text-oraculo-blue flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate break-all">{selectedFile.name}</p>
                         <p className="text-sm text-gray-500">
                           {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                         </p>
@@ -452,7 +455,7 @@ const PreencherAnexos = () => {
                       <Button
                         onClick={handleUpload}
                         disabled={uploading}
-                        className="bg-oraculo-blue hover:bg-oraculo-blue/90"
+                        className="bg-oraculo-blue hover:bg-oraculo-blue/90 w-full sm:w-auto flex-shrink-0"
                       >
                         {uploading ? (
                           <>
@@ -468,33 +471,33 @@ const PreencherAnexos = () => {
                 )}
 
                 {fileUrl && !fileUrl.startsWith('blob:') && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="text-green-800 font-medium">Arquivo enviado com sucesso! Agora você pode processar o PDF.</span>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start sm:items-center gap-3 min-w-0">
+                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+                    <span className="text-green-800 font-medium text-sm md:text-base break-words">Arquivo enviado com sucesso! Agora você pode processar o PDF.</span>
                   </div>
                 )}
               </div>
 
               {/* Processar com IA */}
               {fileUrl && userData?.dadosCadastrais && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">2. Preencher com IA</h3>
+                <div className="space-y-4 min-w-0">
+                  <h3 className="text-base md:text-lg font-semibold text-gray-900">2. Preencher com IA</h3>
                   
-                  <div className="bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-lg p-6 border border-oraculo-blue/20">
-                    <p className="text-gray-700 mb-4">
+                  <div className="bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-lg p-4 md:p-6 border border-oraculo-blue/20">
+                    <p className="text-gray-700 mb-4 text-sm md:text-base">
                       A IA irá analisar o PDF e preencher automaticamente os campos com:
                     </p>
-                    <ul className="space-y-2 text-gray-700 mb-6">
+                    <ul className="space-y-2 text-gray-700 mb-6 text-sm md:text-base">
                       <li className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                         Dados cadastrais da empresa
                       </li>
                       <li className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                         Nome do projeto
                       </li>
                       <li className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                         Outras informações relevantes
                       </li>
                     </ul>
@@ -508,7 +511,7 @@ const PreencherAnexos = () => {
                       {processing ? (
                         <>
                           <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                          {progress || 'Processando...'}
+                          <span className="truncate">{progress || 'Processando...'}</span>
                         </>
                       ) : (
                         <>
@@ -523,13 +526,13 @@ const PreencherAnexos = () => {
 
               {/* Download do PDF preenchido */}
               {filledPdfUrl && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">3. Download do PDF preenchido</h3>
+                <div className="space-y-4 min-w-0">
+                  <h3 className="text-base md:text-lg font-semibold text-gray-900">3. Download do PDF preenchido</h3>
                   
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 md:p-6">
                     <div className="flex items-center gap-3 mb-4">
-                      <CheckCircle className="h-6 w-6 text-green-600" />
-                      <span className="text-green-800 font-medium">PDF preenchido com sucesso!</span>
+                      <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
+                      <span className="text-green-800 font-medium text-sm md:text-base break-words">PDF preenchido com sucesso!</span>
                     </div>
                     
                     <Button
@@ -546,11 +549,23 @@ const PreencherAnexos = () => {
 
               {/* Progress indicator */}
               {progress && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-blue-800 text-sm">{progress}</p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 min-w-0">
+                  <p className="text-blue-800 text-sm break-words">{progress}</p>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Próximo passo: Resumo do Projeto — mesmo formato das outras páginas */}
+          <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+            <Button
+              size="lg"
+              onClick={() => navigate(`/projeto/${id}/resumo`)}
+              className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
+            >
+              Próximo: Resumo do Projeto <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+            </Button>
           </div>
         </main>
       </div>

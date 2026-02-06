@@ -4,7 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Headphones, Play, Clock, Calendar, Download, Pause } from 'lucide-react';
+import { Headphones, Play, Clock, Calendar, Download, Pause, Pencil } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -116,6 +116,11 @@ const Podcast = () => {
                   <CardHeader>
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className="bg-oraculo-magenta text-white">Mais Recente</Badge>
+                      {user?.email === 'marcosferreira@mobcontent.com.br' && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/editar-episodio/${episodios[0].id}`)}>
+                          <Pencil className="h-4 w-4 mr-1" /> Editar
+                        </Button>
+                      )}
                     </div>
                     <CardTitle className="text-2xl mb-2">
                       <Link to={`/podcast/${episodios[0].id}`} className="hover:underline">
@@ -242,12 +247,19 @@ const Podcast = () => {
                             </div>
                           </div>
                         </div>
-                        <Button variant="outline" className="ml-4" asChild>
+                        <div className="flex items-center gap-2 ml-4">
+                          {user?.email === 'marcosferreira@mobcontent.com.br' && (
+                            <Button variant="outline" size="sm" onClick={() => navigate(`/editar-episodio/${episodio.id}`)}>
+                              <Pencil className="h-4 w-4 mr-1" /> Editar
+                            </Button>
+                          )}
+                        <Button variant="outline" asChild>
                           <a href={episodio.mp3Url} target="_blank" rel="noopener noreferrer">
                             <Play className="h-4 w-4 mr-2" />
                             Ouvir
                           </a>
                         </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

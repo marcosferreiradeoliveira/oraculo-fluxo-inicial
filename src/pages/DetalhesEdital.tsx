@@ -19,7 +19,8 @@ import {
   ClipboardList,
   History,
   Award,
-  Plus
+  Plus,
+  Download
 } from 'lucide-react';
 
 interface Edital {
@@ -47,6 +48,7 @@ interface Edital {
   projetos_selecionados?: any[];
   nomeArquivo?: string;
   pdf_url?: string;
+  link_edital?: string;
 }
 
 const DetalhesEdital = () => {
@@ -218,14 +220,14 @@ const DetalhesEdital = () => {
               )}
             </div>
 
-            {/* Botão Criar Projeto */}
+            {/* Botão Formatar Projeto — destaque no topo */}
             <Button 
               size="lg"
-              onClick={() => navigate('/criar-projeto')}
-              className="mt-6 bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center gap-2"
+              onClick={() => navigate(`/criar-projeto?edital=${id}`)}
+              className="mt-6 w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
             >
-              <Plus className="h-5 w-5" />
-              Criar Projeto para este Edital
+              <Plus className="h-6 w-6" />
+              Formatar para este edital
             </Button>
           </div>
 
@@ -261,14 +263,35 @@ const DetalhesEdital = () => {
 
             <Card>
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Status</p>
-                    <p className="text-lg font-semibold capitalize">
-                      {edital.status || 'Aberto'}
-                    </p>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-500 mb-1">Edital em PDF</p>
+                    {(edital.link_edital || edital.pdf_url) ? (
+                      <a
+                        href={edital.link_edital || edital.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-lg font-semibold text-oraculo-blue hover:underline truncate block"
+                      >
+                        Baixar edital
+                      </a>
+                    ) : (
+                      <p className="text-lg font-semibold text-gray-500">Não disponível</p>
+                    )}
                   </div>
-                  <CheckCircle className="h-8 w-8 text-blue-600" />
+                  {(edital.link_edital || edital.pdf_url) ? (
+                    <a
+                      href={edital.link_edital || edital.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 rounded-lg bg-oraculo-blue p-2 text-white hover:bg-oraculo-blue/90 transition-colors"
+                      title="Baixar edital"
+                    >
+                      <Download className="h-8 w-8" />
+                    </a>
+                  ) : (
+                    <Download className="h-8 w-8 text-gray-300 flex-shrink-0" />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -284,10 +307,22 @@ const DetalhesEdital = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700 leading-relaxed">{edital.escopo}</p>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{edital.escopo}</p>
               </CardContent>
             </Card>
           )}
+
+          {/* Botão — acima de Critérios de Avaliação */}
+          <div className="mb-6">
+            <Button 
+              size="lg"
+              onClick={() => navigate(`/criar-projeto?edital=${id}`)}
+              className="w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Plus className="h-6 w-6" />
+              Começar projeto
+            </Button>
+          </div>
 
           {/* Critérios de Avaliação */}
           {edital.criterios && (
@@ -299,10 +334,22 @@ const DetalhesEdital = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700 leading-relaxed">{edital.criterios}</p>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{edital.criterios}</p>
               </CardContent>
             </Card>
           )}
+
+          {/* Botão — acima de Categorias */}
+          <div className="mb-6">
+            <Button 
+              size="lg"
+              onClick={() => navigate(`/criar-projeto?edital=${id}`)}
+              className="w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Plus className="h-6 w-6" />
+              Formatar meu projeto
+            </Button>
+          </div>
 
           {/* Categorias */}
           {edital.categorias && Array.isArray(edital.categorias) && edital.categorias.length > 0 && (
@@ -346,6 +393,18 @@ const DetalhesEdital = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Botão — acima de Documentação exigida */}
+          <div className="mb-6">
+            <Button 
+              size="lg"
+              onClick={() => navigate(`/criar-projeto?edital=${id}`)}
+              className="w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Plus className="h-6 w-6" />
+              Formatar neste edital
+            </Button>
+          </div>
 
           {/* Documentação Exigida */}
           {edital.documentacao_exigida && Array.isArray(edital.documentacao_exigida) && edital.documentacao_exigida.length > 0 && (
@@ -427,25 +486,15 @@ const DetalhesEdital = () => {
             </Card>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-4 mt-8">
-            {edital.pdf_url && (
-              <Button 
-                size="lg"
-                variant="default"
-                onClick={() => window.open(edital.pdf_url, '_blank')}
-                className="flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Ver PDF do Edital
-              </Button>
-            )}
+          {/* Botão Formatar Projeto — destaque no pé */}
+          <div className="mt-10 pt-8 border-t-2 border-gray-100 flex justify-center">
             <Button 
               size="lg"
-              variant="outline"
-              onClick={() => navigate('/oraculo-ai')}
+              onClick={() => navigate(`/criar-projeto?edital=${edital.id}`)}
+              className="w-full sm:w-auto px-10 py-6 text-lg md:text-xl font-bold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-3 shadow-xl"
             >
-              Voltar para Editais
+              <Plus className="h-7 w-7" />
+              Formatar projeto agora
             </Button>
           </div>
         </main>

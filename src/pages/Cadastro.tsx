@@ -28,6 +28,7 @@ const Cadastro = () => {
   const [showSenha, setShowSenha] = useState(false);
   const [showRepitaSenha, setShowRepitaSenha] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [cadastroConcluido, setCadastroConcluido] = useState(false);
   const navigate = useNavigate();
 
   const handleGoogleSignIn = async () => {
@@ -231,6 +232,7 @@ const Cadastro = () => {
         // Criar novo documento (cadastro com email)
         const dadosParaSalvar = {
           createdAt: timestamp,
+          creditos: 15,
           dadosCadastrais: '',
           data_cadastro: timestamp,
           email: userEmail,
@@ -247,6 +249,7 @@ const Cadastro = () => {
         };
         
         await setDoc(userDocRef, dadosParaSalvar);
+        setCadastroConcluido(true);
       } else {
         // Atualizar documento existente (login com Google que precisa completar dados)
         await updateDoc(userDocRef, {
@@ -260,10 +263,9 @@ const Cadastro = () => {
         if (currentUser) {
           trackLoginSuccess({ tipoLogin: 'social' });
         }
+        const target = redirect && redirect.startsWith('/') ? redirect : '/';
+        navigate(target);
       }
-      
-      const target = redirect && redirect.startsWith('/') ? redirect : '/';
-      navigate(target);
     } catch (err: any) {
       console.error('Erro ao salvar informações:', err);
       setErro('Erro ao salvar informações adicionais.');
@@ -271,6 +273,34 @@ const Cadastro = () => {
       setLoading(false);
     }
   };
+
+  if (cadastroConcluido) {
+    const target = redirect && redirect.startsWith('/') ? redirect : '/';
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 text-center">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 className="h-8 w-8 md:h-10 md:w-10 text-white" />
+            </div>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">Conta criada com sucesso!</h1>
+            <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20">
+              <p className="text-base md:text-lg text-gray-800 font-medium leading-relaxed">
+                Parabéns, você ganhou 15 créditos gratuitamente para testar a plataforma!
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(target)}
+              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
+            >
+              Ir para a plataforma
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showExtra) {
     return (

@@ -538,7 +538,7 @@ const InteligenciaMercado = () => {
                           </CardTitle>
                           <div className="mt-2">
                             <div
-                              className={`text-sm text-muted-foreground ${isExpandido ? '' : 'line-clamp-2'} [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold`}
+                              className={`text-sm text-muted-foreground break-words [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug ${isExpandido ? '' : 'overflow-hidden max-h-[4.5rem]'}`}
                               dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
                             />
                             {descricaoLonga && (

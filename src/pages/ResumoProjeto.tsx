@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ClipboardList, ExternalLink, Send, CheckCircle2 } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -21,6 +20,15 @@ interface ProjetoDocument {
   documentos_inscricao?: Array<{ url?: string }>;
   resumo_etapas?: boolean[];
   edital_id?: string;
+  [key: string]: unknown;
+}
+
+interface EditalDoc {
+  id?: string;
+  nome?: string;
+  link_inscricao?: string;
+  link_edital?: string;
+  pdf_url?: string;
   [key: string]: unknown;
 }
 
@@ -40,9 +48,9 @@ const ResumoProjeto = () => {
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<ProjetoDocument | null>(null);
+  const [edital, setEdital] = useState<EditalDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [completed, setCompleted] = useState<boolean[]>(Array(STEPS.length).fill(false));
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,6 +69,14 @@ const ResumoProjeto = () => {
         const data = { id: projetoSnap.id, ...projetoSnap.data() } as ProjetoDocument;
         setProjeto(data);
 
+        if (data.edital_id) {
+          const editalRef = doc(db, 'editais', data.edital_id as string);
+          const editalSnap = await getDoc(editalRef);
+          if (editalSnap.exists()) {
+            setEdital({ id: editalSnap.id, ...editalSnap.data() } as EditalDoc);
+          }
+        }
+
         const computed: boolean[] = [
           true,
           !!(data.analise_ia && String(data.analise_ia).trim().length > 0),
@@ -71,9 +87,7 @@ const ResumoProjeto = () => {
           !!(data.documentos_inscricao && data.documentos_inscricao.length > 0 && data.documentos_inscricao.some((d) => d?.url)),
           false,
         ];
-        const saved = data.resumo_etapas && Array.isArray(data.resumo_etapas) ? data.resumo_etapas : null;
-        const merged = computed.map((c, i) => (saved && saved[i] !== undefined ? saved[i] : c));
-        setCompleted(merged);
+        setCompleted(computed);
       } catch (error) {
         console.error('Erro ao carregar projeto:', error);
         toast.error('Erro ao carregar projeto');
@@ -84,22 +98,19 @@ const ResumoProjeto = () => {
     fetchData();
   }, [id, user]);
 
-  const toggleStep = async (index: number) => {
-    if (!id || !projeto) return;
-    const next = [...completed];
-    next[index] = !next[index];
-    setCompleted(next);
-    setSaving(true);
-    try {
-      const db = getFirestore();
-      await updateDoc(doc(db, 'projetos', id), { resumo_etapas: next });
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-      toast.error('Erro ao salvar');
-      setCompleted(completed);
-    } finally {
-      setSaving(false);
-    }
+  const getStepRoute = (index: number): string => {
+    if (!id) return '#';
+    const routes: Record<number, string> = {
+      0: '/criar-projeto',
+      1: `/projeto/${id}`,
+      2: `/projeto/${id}/alterar-com-ia`,
+      3: `/projeto/${id}/gerar-textos`,
+      4: `/projeto/${id}/criar-orcamento`,
+      5: `/projeto/${id}/criar-cronograma`,
+      6: `/projeto/${id}/documentos-inscricao`,
+      7: `/projeto/${id}/preencher-anexos`,
+    };
+    return routes[index] ?? '#';
   };
 
   const percent = STEPS.length ? Math.round((completed.filter(Boolean).length / STEPS.length) * 100) : 0;
@@ -195,34 +206,74 @@ const ResumoProjeto = () => {
                   <span className="text-sm text-gray-500">concluído</span>
                 </div>
 
-                {/* Lista de checkboxes */}
+                {/* Lista de etapas — só leitura; clique leva à seção correspondente */}
                 <div className="flex-1 w-full space-y-3">
-                  {STEPS.map((step, index) => (
-                    <label
-                      key={index}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        completed[index] ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Checkbox
-                        checked={completed[index]}
-                        onCheckedChange={() => toggleStep(index)}
-                        disabled={saving}
-                        className="data-[state=checked]:bg-oraculo-blue data-[state=checked]:border-oraculo-blue"
-                      />
-                      <span className={completed[index] ? 'font-medium text-gray-900' : 'text-gray-700'}>
-                        {index + 1}. {step}
-                      </span>
-                    </label>
-                  ))}
+                  {STEPS.map((step, index) => {
+                    const route = getStepRoute(index);
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => route !== '#' && navigate(route)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
+                          completed[index] ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:bg-gray-50'
+                        } ${route !== '#' ? 'cursor-pointer hover:border-oraculo-blue/50' : 'cursor-default'}`}
+                      >
+                        {completed[index] ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" aria-hidden />
+                        ) : (
+                          <span className="w-5 h-5 rounded border-2 border-gray-300 flex-shrink-0" aria-hidden />
+                        )}
+                        <span className={completed[index] ? 'font-medium text-gray-900' : 'text-gray-700'}>
+                          {index + 1}. {step}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Button variant="outline" onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}>
                 Voltar para Preencher Anexos
               </Button>
+              <div className="flex gap-3 flex-wrap">
+                {edital?.link_inscricao ? (
+                  <Button
+                    className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                    onClick={() => window.open(edital.link_inscricao, '_blank', 'noopener,noreferrer')}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Inscrever no edital
+                  </Button>
+                ) : (
+                  <Button
+                    className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                    disabled
+                    title="Cadastre o link de inscrição (link_inscricao) no edital para habilitar."
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Inscrever no edital
+                  </Button>
+                )}
+                {(edital?.link_edital || edital?.pdf_url) && (
+                  <Button
+                    variant="outline"
+                    className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                    asChild
+                  >
+                    <a
+                      href={edital?.link_edital || edital?.pdf_url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Ver edital
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </main>

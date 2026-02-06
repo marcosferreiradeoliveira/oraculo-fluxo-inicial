@@ -26,6 +26,7 @@ import Projeto from "./pages/Projeto";
 import AlterarComIA from "./pages/AlterarComIA";
 import EditarEdital from './pages/EditarEdital';
 import CadastrarEpisodio from './pages/CadastrarEpisodio';
+import EditarEpisodio from './pages/EditarEpisodio';
 import PodcastDetalhes from './pages/PodcastDetalhes';
 import CadastrarGuia from './pages/CadastrarGuia';
 import EditarGuia from './pages/EditarGuia';
@@ -114,6 +115,7 @@ const App = () => (
           <Route path="/editar-edital/:id" element={<ProtectedRoute><EditarEdital /></ProtectedRoute>} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />
           <Route path="/cadastrar-episodio" element={<ProtectedRoute><CadastrarEpisodio /></ProtectedRoute>} />
+          <Route path="/editar-episodio/:id" element={<ProtectedRoute><EditarEpisodio /></ProtectedRoute>} />
           <Route path="/podcast/:id" element={<PodcastDetalhes />} />
           <Route path="/cadastrar-guia" element={<ProtectedRoute><CadastrarGuia /></ProtectedRoute>} />
           <Route path="/editar-guia/:id" element={<ProtectedRoute><EditarGuia /></ProtectedRoute>} />

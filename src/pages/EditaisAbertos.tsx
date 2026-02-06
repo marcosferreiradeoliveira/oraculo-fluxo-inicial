@@ -348,7 +348,7 @@ const EditaisAbertos = () => {
                             }}
                           >
                             <Plus className="h-4 w-4 mr-2" />
-                            Inscrever-se
+                            Formatar Projeto
                           </Button>
                         </CardContent>
                       </Card>
@@ -440,7 +440,7 @@ const EditaisAbertos = () => {
                       placeholder="Seu melhor email"
                       value={emailNewsletter}
                       onChange={(e) => setEmailNewsletter(e.target.value)}
-                      className="text-sm"
+                      className="text-sm bg-white border-gray-200"
                       disabled={salvandoEmail}
                       required
                     />

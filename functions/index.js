@@ -1,3 +1,6 @@
+// Carregar .env na pasta functions ao rodar local/emulador (OPENAI_API_KEY etc.)
+require("dotenv").config({ path: require("path").resolve(__dirname, ".env") });
+
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
@@ -34,7 +37,7 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 // Definir secret para Brevo
 const brevoApiKey = defineSecret("BREVO_API_KEY");
 
-// Definir secret para OpenAI
+// Definir secret para OpenAI. Em produção usa Secret Manager; localmente usa .env (emulador não injeta secrets)
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
 
 // Lazy initialization helpers
@@ -44,11 +47,24 @@ let preferenceInstance = null;
 let preapprovalInstance = null;
 let preapprovalPlanInstance = null;
 
+// Produção: chave vem do Secret Manager. Local (emulador): NÃO chama secrets, usa só functions/.env
+function getOpenAIApiKey() {
+  try {
+    const fromSecret = openaiApiKey.value();
+    if (fromSecret && typeof fromSecret === "string" && fromSecret.trim()) return fromSecret.trim();
+  } catch (e) {
+    // Emulador não injeta secrets → usa .env
+  }
+  return process.env.OPENAI_API_KEY || "";
+}
+
 function getOpenAI() {
   if (!openaiInstance) {
-    openaiInstance = new OpenAI({ 
-      apiKey: openaiApiKey.value() || "" 
-    });
+    const key = getOpenAIApiKey();
+    if (!key) {
+      throw new Error("OPENAI_API_KEY não configurado. Em produção: Firebase Console > Secrets. Local: defina OPENAI_API_KEY no .env da pasta functions.");
+    }
+    openaiInstance = new OpenAI({ apiKey: key });
   }
   return openaiInstance;
 }
@@ -177,43 +193,74 @@ exports.avaliarProjetoIA = onRequest(
   }
   try {
     // Receber dados do projeto, edital, critérios e portfolio
-    const { 
-      textoProjeto, 
-      nomeProjeto, 
-      nomeEdital, 
-      criteriosEdital, 
+    const {
+      projetoId,
+      textoProjeto,
+      nomeProjeto,
+      nomeEdital,
+      criteriosEdital,
       textoEdital,
-      portfolio,
+      portfolio: portfolioBody,
+      equipeBio: equipeBioBody,
       projetosSelecionados,
       userId,
       stream: useStream = false
     } = req.body;
-      
+
     if (!textoProjeto || !criteriosEdital) {
       return res.status(400).json({ error: 'Texto do projeto e critérios do edital são obrigatórios' });
     }
+
+    // Trava: evitar loop / uso excessivo — 1 análise por projeto a cada 60s
+    const ANALISE_COOLDOWN_MS = 60 * 1000;
+    const lockId = `analise_${projetoId || userId || 'anon'}`;
+    const lockRef = db.collection('locks').doc(lockId);
+    const lockSnap = await lockRef.get();
+    const now = Date.now();
+    if (lockSnap.exists) {
+      const lockedUntil = lockSnap.data().lockedUntil;
+      if (lockedUntil && lockedUntil > now) {
+        const secLeft = Math.ceil((lockedUntil - now) / 1000);
+        return res.status(429).json({
+          error: 'Aguarde antes de nova análise',
+          retryAfterSeconds: secLeft,
+          message: `Aguarde ${secLeft} segundos antes de solicitar uma nova análise para este projeto.`
+        });
+      }
+    }
+    await lockRef.set({ lockedUntil: now + ANALISE_COOLDOWN_MS });
+
+    // Em produção: Secret Manager; local: .env (emulador não injeta secrets)
+    const key = getOpenAIApiKey();
+    if (!key) {
+      return res.status(500).json({
+        error: "OPENAI_API_KEY não configurado. Produção: Firebase Secrets. Local: crie functions/.env com OPENAI_API_KEY=sua-chave"
+      });
+    }
     
-    // Buscar dados do usuário (equipeBio e portfolio) se userId fornecido
-    let equipeBio = '';
-    let userPortfolio = portfolio || '';
+    // Usar portfolio e equipeBio do body quando enviados; só buscar no Firestore se faltar
+    let equipeBio = equipeBioBody || '';
+    let userPortfolio = portfolioBody || '';
     
-    if (userId) {
+    if (userId && !userPortfolio) {
       try {
         const userDoc = await db.collection('usuarios').doc(userId).get();
         if (userDoc.exists) {
           const userData = userDoc.data();
-          equipeBio = userData.equipeBio || '';
-          // Se portfolio não foi enviado no body, buscar do usuário
-          if (!userPortfolio) {
-            userPortfolio = userData.portfolio || '';
-          }
+          equipeBio = equipeBio || (userData.equipeBio || '');
+          userPortfolio = userData.portfolio || '';
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        // Continuar sem os dados do usuário em caso de erro
       }
     }
     
+    // Limitar tamanho dos textos para reduzir tempo até a primeira resposta (TTFT)
+    const MAX_TEXTO_EDITAL = 6000;
+    const textoEditalTrim = (typeof textoEdital === 'string' && textoEdital.length > MAX_TEXTO_EDITAL)
+      ? textoEdital.slice(0, MAX_TEXTO_EDITAL) + '\n\n[... texto do edital truncado para análise ...]'
+      : (textoEdital || '');
+
     // Construir o prompt detalhado de avaliação
     const prompt = `Você é um avaliador experiente de projetos culturais para leis de incentivo fiscal. 
 Sua tarefa é avaliar rigorosamente o projeto apresentado contra os critérios específicos do edital.
@@ -237,7 +284,7 @@ IMPORTANTE:
 - Avalie o projeto usando APENAS os critérios listados acima no campo "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS".
 - Não invente ou assuma critérios que não estejam explicitamente listados acima.
 
-${textoEdital ? `**TEXTO COMPLETO DO EDITAL (para contexto adicional):**\n${textoEdital}` : ''}
+${textoEditalTrim ? `**TEXTO COMPLETO DO EDITAL (para contexto adicional):**\n${textoEditalTrim}` : ''}
 
 ${projetosSelecionados ? `**PROJETOS JÁ SELECIONADOS NESTE EDITAL (para referência comparativa):**\n${projetosSelecionados.slice(0, 2000)}\n\nUse como referência de qualidade e adequação esperada.` : ''}
 
@@ -274,7 +321,20 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
-      
+      res.setHeader('X-Accel-Buffering', 'no'); // Desabilita buffer em proxies (nginx)
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+      const flushWrite = (data) => {
+        return new Promise((resolve, reject) => {
+          res.write(data, (err) => {
+            if (err) reject(err);
+            else setImmediate(resolve);
+          });
+        });
+      };
+
+      await flushWrite(': stream started\n\n');
+
       const stream = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
@@ -295,13 +355,11 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
           fullContent += content;
-          // Enviar chunk via SSE
-          res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
+          await flushWrite(`data: ${JSON.stringify({ content, done: false })}\n\n`);
         }
       }
       
-      // Enviar sinal de conclusão
-      res.write(`data: ${JSON.stringify({ content: '', done: true, fullContent })}\n\n`);
+      await flushWrite(`data: ${JSON.stringify({ content: '', done: true, fullContent })}\n\n`);
       res.end();
       return;
     }
@@ -513,27 +571,26 @@ exports.alterarTextoComIA = onRequest(
       portfolioContext = `\n\nCONTEXTO ADICIONAL - PORTFOLIO DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR NO TEXTO):\n${userPortfolio}\n\nIMPORTANTE: O portfolio acima é apenas contexto de referência sobre o histórico e experiência do proponente. NÃO inclua o portfolio literalmente no texto reescrito. Use-o apenas para entender melhor o contexto quando a sugestão exigir menção a experiência/capacidade, mas faça isso de forma sutil e integrada ao projeto, sem copiar trechos do portfolio.`;
     }
     
-    const prompt = `Com base na sugestão abaixo, reescreva APENAS o texto específico fornecido, incorporando a sugestão.
+    const prompt = `Você recebe o TEXTO COMPLETO do projeto (textoAtual) e uma SUGESTÃO de melhoria. Sua tarefa é devolver o TEXTO COMPLETO do projeto com LEVES ALTERAÇÕES que incorporem a sugestão.
 
-IMPORTANTE: Você está reescrevendo APENAS um texto específico (como justificativa, objetivos, metodologia, etc.), NÃO o projeto completo.
+REGRA OBRIGATÓRIA: A sua resposta deve ser O MESMO TEXTO INTEIRO do projeto, do início ao fim, apenas com pequenos ajustes onde a sugestão se aplicar. NUNCA devolva só a sugestão ou um trecho. Devolva SEMPRE o texto completo, com alterações mínimas.
 
-SUGESTÃO:
+SUGESTÃO (incorporar ao texto com alterações leves):
 ${sugestao}
 
-TEXTO ATUAL (APENAS ESTE TEXTO DEVE SER REESCRITO):
+TEXTO COMPLETO DO PROJETO (manter inteiro e devolver com leves alterações):
 ${textoAtual}${portfolioContext}
 
-INSTRUÇÕES CRÍTICAS:
-- Reescreva APENAS o texto fornecido acima, incorporando a sugestão de forma natural
-- A sugestão deve estar integrada ao texto, não apenas mencionada
-- Mantenha a estrutura, tom e estilo do texto original
-- O resultado deve ser uma versão melhorada deste texto específico que incorpora a sugestão
-- NÃO reescreva o projeto completo, apenas este texto específico
-- NÃO inclua o portfolio literalmente no texto reescrito
-- Se a sugestão exigir menção a experiência/capacidade, use o contexto do portfolio apenas para dar credibilidade, mas de forma SUTIL e INTEGRADA, sem copiar trechos
-- O texto gerado deve ter o mesmo foco e escopo do texto original fornecido
+INSTRUÇÕES:
+- Devolva o texto completo do projeto, do primeiro ao último caractere
+- Faça apenas as alterações necessárias para incorporar a sugestão de forma natural
+- Mantenha todo o resto do texto igual (estrutura, parágrafos, tom, demais trechos)
+- NÃO apague partes do projeto. NÃO substitua o texto pela sugestão. NÃO devolva só um parágrafo
+- Se a sugestão se aplicar a um trecho específico, altere só esse trecho e mantenha o resto intacto
+- NÃO inclua o portfolio literalmente; use-o só como contexto se a sugestão exigir
+- Sua resposta = texto completo do projeto com leves alterações
 
-TEXTO REESCRITO:`;
+TEXTO DO PROJETO (completo, com as alterações):`;
 
     const openai = getOpenAI();
     
@@ -547,11 +604,11 @@ TEXTO REESCRITO:`;
       messages: [
         { 
           role: 'system', 
-          content: 'Você é um especialista em projetos culturais. Quando receber uma sugestão e um texto específico (como justificativa, objetivos, metodologia, etc.), reescreva APENAS esse texto específico incorporando a sugestão de forma natural e integrada. NÃO reescreva o projeto completo, apenas o texto fornecido. Não apenas mencione a sugestão, mas incorpore-a ao texto de forma natural.' 
+          content: 'Você é um especialista em projetos culturais. Você recebe o texto COMPLETO do projeto e uma sugestão. Sua resposta deve ser SEMPRE o texto COMPLETO do projeto, do início ao fim, com apenas leves alterações que incorporem a sugestão. NUNCA devolva só a sugestão ou um trecho. Mantenha todo o texto original e altere apenas o necessário para integrar a sugestão.' 
         },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 2000,
+      max_tokens: 4096,
       temperature: 0.3,
       stream: true,
     });
@@ -602,6 +659,25 @@ exports.gerarTextosProjeto = onRequest(
     if (!projetoId || !tipo || !dadosProjeto) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    // Trava: evitar loop / uso excessivo — 1 geração por (user, projeto, tipo) a cada 30s
+    const TEXTO_COOLDOWN_MS = 30 * 1000;
+    const textoLockId = `texto_${userId || 'anon'}_${projetoId}_${String(tipo).slice(0, 50)}`;
+    const textoLockRef = db.collection('locks').doc(textoLockId);
+    const textoLockSnap = await textoLockRef.get();
+    const textoNow = Date.now();
+    if (textoLockSnap.exists) {
+      const lockedUntil = textoLockSnap.data().lockedUntil;
+      if (lockedUntil && lockedUntil > textoNow) {
+        const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
+        return res.status(429).json({
+          error: 'Aguarde antes de gerar novamente',
+          retryAfterSeconds: secLeft,
+          message: `Aguarde ${secLeft} segundos antes de gerar este texto novamente.`
+        });
+      }
+    }
+    await textoLockRef.set({ lockedUntil: textoNow + TEXTO_COOLDOWN_MS });
     
     // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
     let equipeBio = dadosProjeto.equipeBio || '';
@@ -911,6 +987,8 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
 exports.gerarCronogramaIA = onRequest(
   {
     secrets: [openaiApiKey],
+    memory: '128MiB',
+    cpu: 0.0833,
   },
   async (req, res) => {
     res.set('Access-Control-Allow-Origin', '*');
@@ -1662,7 +1740,9 @@ exports.criarCheckoutGuiaStripe = onRequest(
     cors: true,
     maxInstances: 10,
     invoker: 'public',
-    secrets: [stripeSecretKey]
+    secrets: [stripeSecretKey],
+    memory: '128MiB',
+    cpu: 0.0833,
   },
   async (req, res) => {
     res.set('Access-Control-Allow-Origin', '*');
@@ -2702,6 +2782,8 @@ exports.enviarContatoPremium = onRequest(
     ],
     invoker: 'public',
     secrets: [brevoApiKey],
+    memory: '128MiB',
+    cpu: 0.0833,
   },
   async (req, res) => {
     // Set CORS headers BEFORE any checks
@@ -2803,6 +2885,8 @@ exports.adicionarContatoBrevo = onRequest(
     cors: true,
     invoker: 'public',
     secrets: [brevoApiKey],
+    memory: '128MiB',
+    cpu: 0.0833,
   },
   async (req, res) => {
     // Set CORS headers
@@ -4122,6 +4206,8 @@ exports.sincronizarUsuarioBrevo = onDocumentCreated(
   {
     document: "usuarios/{userId}",
     secrets: [brevoApiKey],
+    memory: '128MiB',
+    cpu: 0.0833,
   },
   async (event) => {
     try {

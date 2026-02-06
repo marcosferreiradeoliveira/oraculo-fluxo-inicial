@@ -280,11 +280,11 @@ const OraculoAI = () => {
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <DashboardHeader />
         
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto min-h-0">
+          <div className="max-w-7xl mx-auto min-w-0">
             <div className="mb-8">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                 <Brain className="h-8 w-8 text-oraculo-blue" />
@@ -465,15 +465,15 @@ const OraculoAI = () => {
                       }}
                       className="flex flex-col gap-2 max-w-md"
                     >
-                      <Input
-                        type="email"
-                        placeholder="Seu melhor email"
-                        value={emailNewsletter}
-                        onChange={(e) => setEmailNewsletter(e.target.value)}
-                        className="text-sm"
-                        disabled={salvandoEmail}
-                        required
-                      />
+<Input
+                      type="email"
+                      placeholder="Seu melhor email"
+                      value={emailNewsletter}
+                      onChange={(e) => setEmailNewsletter(e.target.value)}
+                      className="text-sm bg-white border-gray-200"
+                      disabled={salvandoEmail}
+                      required
+                    />
                       <Button
                         type="submit"
                         className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"

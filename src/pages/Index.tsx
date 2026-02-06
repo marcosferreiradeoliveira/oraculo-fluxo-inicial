@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { QuickAccessCards } from '@/components/QuickAccessCards';
 import { FeaturedGuides } from '@/components/FeaturedGuides';
 import { RecentContent } from '@/components/RecentContent';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones } from 'lucide-react';
+import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -220,8 +219,27 @@ const Index = () => {
         {/* Main Content */}
         <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
-            {/* Quick Access Section */}
-            <QuickAccessCards />
+            {/* CTA: Comece por aqui */}
+            <div className="mb-10 rounded-2xl bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple p-6 md:p-8 shadow-xl border-2 border-oraculo-purple/30">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div className="flex-1">
+                  <h2 className="text-xl md:text-2xl font-bold text-white mb-3">
+                    Comece por aqui sua jornada para ganhar mais editais
+                  </h2>
+                  <p className="text-white/95 text-sm md:text-base leading-relaxed max-w-2xl">
+                    Descreva seu projeto cultural, por voz ou texto, e o nosso oráculo vai fazer a avaliação como se fosse um parecerista, direcionada para os editais que você escolher. Depois disso, a gente cria os textos, orçamento, cronograma e organiza suas certidões. Vamos lá!
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => navigate('/criar-projeto')}
+                  className="flex-shrink-0 w-full md:w-auto bg-white text-oraculo-blue hover:bg-white/95 font-bold text-base md:text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all border-2 border-white/50"
+                >
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  Começar Agora
+                </Button>
+              </div>
+            </div>
 
             {/* Editais Abertos */}
             <div id="editais-abertos" className="mb-12 scroll-mt-24">
@@ -231,7 +249,7 @@ const Index = () => {
                 </h2>
                 <Button 
                   variant="outline" 
-                  onClick={() => navigate('/oraculo-ai')}
+                  onClick={() => navigate('/editais-abertos')}
                   className="hidden md:flex"
                 >
                   Ver Mais
@@ -292,6 +310,15 @@ const Index = () => {
                           )}
                           <div className="flex flex-col gap-2 mt-2">
                             <Button 
+                              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white hover:opacity-90"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/criar-projeto?edital=${edital.id}`);
+                              }}
+                            >
+                              Avalie seu projeto neste edital
+                            </Button>
+                            <Button 
                               variant="outline" 
                               className="w-full"
                               onClick={(e) => {
@@ -300,15 +327,6 @@ const Index = () => {
                               }}
                             >
                               Ver Detalhes
-                            </Button>
-                            <Button 
-                              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white hover:opacity-90"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/criar-projeto?edital=${edital.id}`);
-                              }}
-                            >
-                              Avalie seu projeto neste edital
                             </Button>
                           </div>
                         </CardContent>
@@ -319,7 +337,7 @@ const Index = () => {
               </div>
               <Button 
                 variant="outline" 
-                onClick={() => navigate('/oraculo-ai')}
+                onClick={() => navigate('/editais-abertos')}
                 className="w-full mt-6 md:hidden"
               >
                 Ver Mais Editais
@@ -413,7 +431,7 @@ const Index = () => {
                         placeholder="Seu melhor email"
                         value={emailNewsletter}
                         onChange={(e) => setEmailNewsletter(e.target.value)}
-                        className="text-sm"
+                        className="text-sm bg-white border-gray-200"
                         disabled={salvandoEmail}
                         required
                       />
@@ -481,7 +499,7 @@ const Index = () => {
                             {guia.titulo}
                           </CardTitle>
                           <div
-                            className="text-sm text-muted-foreground line-clamp-2 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold"
+                            className="text-sm text-muted-foreground overflow-hidden break-words max-h-[4.5rem] [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug"
                             dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
                           />
                         </CardHeader>

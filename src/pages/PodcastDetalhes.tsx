@@ -6,7 +6,7 @@ import { doc, getDoc, updateDoc, arrayUnion, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Calendar, Download, Pause, Play, Home, ChevronRight } from 'lucide-react';
+import { Calendar, Download, Pause, Play, Home, ChevronRight, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -169,6 +169,14 @@ const PodcastDetalhes = () => {
                 {episodio?.titulo || 'Detalhes'}
               </span>
             </nav>
+            
+            {!loading && episodio && user?.email === 'marcosferreira@mobcontent.com.br' && (
+              <div className="mb-4">
+                <Button variant="outline" size="sm" onClick={() => navigate(`/editar-episodio/${episodio.id}`)}>
+                  <Pencil className="h-4 w-4 mr-1" /> Editar episódio
+                </Button>
+              </div>
+            )}
             
             {loading ? (
               <div className="p-8 text-gray-500 text-left">Carregando...</div>

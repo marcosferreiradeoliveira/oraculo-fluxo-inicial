@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { identifyMixpanelUser, trackIntentLogin } from '@/lib/analytics';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [creditos, setCreditos] = useState<number | null>(null);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ export function DashboardHeader() {
           console.log('Boolean(isPremium):', Boolean(userData.isPremium));
           
           setIsPremium(userData.isPremium === true);
+          setCreditos(typeof userData.creditos === 'number' ? userData.creditos : (userData.creditos ?? 0));
           
           // Identificar usuário no Mixpanel
           identifyMixpanelUser(firebaseUser.uid, {
@@ -94,38 +97,62 @@ export function DashboardHeader() {
           const displayName = firebaseUser.displayName ? firebaseUser.displayName.split(' ')[0] : 'usuário';
           console.log('Usuário não encontrado no Firestore, usando displayName:', displayName);
           setNomeUsuario(displayName);
+          setCreditos(null);
         }
       } else {
         setNomeUsuario(null);
         setIsPremium(false);
+        setCreditos(null);
         setPhotoURL(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  // Atualizar créditos (e isPremium) em tempo real quando o documento do usuário mudar
+  useEffect(() => {
+    if (!user?.uid) return;
+    const db = getFirestore();
+    const userDocRef = doc(db, 'usuarios', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setIsPremium(d?.isPremium === true);
+        setCreditos(typeof d?.creditos === 'number' ? d.creditos : (d?.creditos ?? 0));
+      }
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const handleLogout = async () => {
     await signOut(auth);
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-end">
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 relative z-40">
+      <div className="flex items-center justify-end min-w-0">
         {/* User Section */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-1 justify-end">
 
           {/* User Profile ou chamada para criar conta */}
-          <div className="flex items-center space-x-3 relative">
+          <div className="flex items-center space-x-2 sm:space-x-3 relative min-w-0 z-50">
             {user ? (
               <>
-                <div className="text-right">
+                <div className="text-right min-w-0 max-w-[50vw] sm:max-w-none">
                   <div className="text-sm font-medium text-gray-900">
-                    <div className="flex items-center">
-                      <span>Olá{nomeUsuario ? `, ${nomeUsuario}` : ', usuário'}</span>
-                      {isPremium && <span className="ml-2 px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full">PREMIUM</span>}
+                    <div className="flex items-center flex-wrap gap-2 justify-end">
+                      <span className="truncate" title={nomeUsuario ? `Olá, ${nomeUsuario}` : 'Olá, usuário'}>Olá{nomeUsuario ? `, ${nomeUsuario}` : ', usuário'}</span>
+                      {isPremium && <span className="px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full flex-shrink-0">PREMIUM</span>}
+                      {!isPremium && creditos !== null && (
+                        <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full flex-shrink-0" title="Créditos para avaliação, textos, orçamento e cronograma">
+                          <Coins className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                          <span className="hidden sm:inline">{creditos} {creditos === 1 ? 'crédito' : 'créditos'}</span>
+                          <span className="sm:hidden">{creditos}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">Bem-vindo de volta</p>
+                  <p className="text-xs text-gray-500 truncate">Bem-vindo de volta</p>
                 </div>
                 <div className="relative group">
                   <Avatar className="cursor-pointer ring-2 ring-transparent group-hover:ring-oraculo-blue transition-all">
@@ -136,8 +163,8 @@ export function DashboardHeader() {
                       {nomeUsuario ? nomeUsuario[0].toUpperCase() : (user.displayName || user.email || 'U')[0].toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  {/* Botão de logoff no hover */}
-                  <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-50 transform scale-95 group-hover:scale-100">
+                  {/* Botão de logoff no hover — z-[100] para ficar acima do conteúdo da página */}
+                  <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-[100] transform scale-95 group-hover:scale-100">
                     <button
                       className="flex items-center w-full px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-lg transition-colors whitespace-nowrap"
                       onClick={handleLogout}

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ClipboardList } from 'lucide-react';
+import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -37,9 +37,31 @@ const CriarCronograma = () => {
   const [etapas, setEtapas] = useState<EtapaCronograma[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [gerandoCronograma, setGerandoCronograma] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [creditos, setCreditos] = useState<number>(0);
 
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 5;
+
+  // Carregar premium e créditos (sem plano: 3 créditos para gerar cronograma)
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) return;
+      try {
+        const db = getFirestore();
+        const userRef = doc(db, 'usuarios', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const d = userSnap.data();
+          setIsPremium(d?.isPremium === true);
+          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
+        }
+      } catch (e) {
+        console.error('Erro ao verificar acesso:', e);
+      }
+    };
+    checkAccess();
+  }, [user]);
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -84,8 +106,14 @@ const CriarCronograma = () => {
     );
   };
 
+  const CREDITOS_CRONOGRAMA = 3;
+
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
+    if (!isPremium && (creditos ?? 0) < CREDITOS_CRONOGRAMA) {
+      navigate('/cadastro-premium?motivo=creditos_insuficientes');
+      return;
+    }
     setGerandoCronograma(true);
     try {
       const res = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarCronogramaIA', {
@@ -106,6 +134,16 @@ const CriarCronograma = () => {
         ...e,
         id: gerarId(),
       })));
+      if (!isPremium) {
+        try {
+          const db = getFirestore();
+          const userRef = doc(db, 'usuarios', user.uid);
+          await updateDoc(userRef, { creditos: increment(-CREDITOS_CRONOGRAMA) });
+          setCreditos((c) => Math.max(0, c - CREDITOS_CRONOGRAMA));
+        } catch (e) {
+          console.error('Erro ao descontar créditos cronograma:', e);
+        }
+      }
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
@@ -262,39 +300,41 @@ const CriarCronograma = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <DashboardHeader />
 
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+        <main className="flex-1 p-3 md:p-8 overflow-x-hidden pb-20 md:pb-8 min-h-0">
+          <div className="max-w-7xl mx-auto min-w-0">
+            <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">
                   Criar Cronograma
                 </h1>
-                <p className="text-gray-600 text-sm md:text-base">
+                <p className="text-gray-600 text-sm md:text-base break-words">
                   Cronograma do projeto &quot;{projeto.nome || 'sem nome'}&quot;
                 </p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
-                className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10 shrink-0"
-              >
-                <ClipboardList className="h-4 w-4 mr-2" />
-                Documentos de Inscrição
-              </Button>
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+                <Button
+                  size="lg"
+                  onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
+                  className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
+                >
+                  Próxima etapa: Documentos de Inscrição <span className="ml-2 opacity-90">→</span>
+                </Button>
+              </div>
             </div>
 
-            {/* Barra de progresso */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
+            {/* Barra de progresso - scroll horizontal no mobile */}
+            <div className="mb-6 md:mb-8 overflow-hidden">
+              <div className="flex items-center gap-2 md:justify-between mb-2 overflow-x-auto pb-2 md:pb-0 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.map((step, index) => {
                   const isClickable = index <= currentStep;
                   return (
                     <div
                       key={index}
-                      className={`flex flex-col items-center ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      className={`flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                       onClick={() => {
                         if (isClickable) {
                           const routes = [
@@ -321,7 +361,7 @@ const CriarCronograma = () => {
                         {index + 1}
                       </div>
                       <span
-                        className={`text-xs mt-1 text-center transition-colors ${
+                        className={`text-xs mt-1 text-center whitespace-nowrap transition-colors ${
                           index === currentStep
                             ? 'font-medium text-oraculo-blue'
                             : index < currentStep
@@ -335,7 +375,7 @@ const CriarCronograma = () => {
                   );
                 })}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-2 min-w-0">
                 <div
                   className="bg-oraculo-blue h-2 rounded-full transition-all duration-300"
                   style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
@@ -344,22 +384,22 @@ const CriarCronograma = () => {
             </div>
 
             {/* Formulário de etapas */}
-            <Card className="bg-white shadow-lg border-2 border-gray-200 mb-8">
-              <CardHeader className="pb-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-6 w-6 text-oraculo-blue" />
+            <Card className="bg-white shadow-lg border-2 border-gray-200 mb-6 md:mb-8">
+              <CardHeader className="pb-4 px-4 md:px-6 pt-4 md:pt-6">
+                <div className="flex flex-col gap-4">
+                  <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                    <Calendar className="h-5 w-5 md:h-6 md:w-6 text-oraculo-blue flex-shrink-0" />
                     Etapas do cronograma
                   </CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600">
                     A opção &quot;Criar com IA&quot; gera etapas com base no orçamento, nos textos do projeto e no prazo do edital.
                   </p>
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       onClick={gerarCronogramaComIA}
                       disabled={gerandoCronograma}
-                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white w-full sm:w-auto"
                     >
                       {gerandoCronograma ? (
                         <>
@@ -370,6 +410,7 @@ const CriarCronograma = () => {
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
                           Criar com IA
+                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>
@@ -377,7 +418,7 @@ const CriarCronograma = () => {
                       type="button"
                       onClick={adicionarEtapa}
                       variant="outline"
-                      className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                      className="border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10 w-full sm:w-auto"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Nova etapa
@@ -385,21 +426,21 @@ const CriarCronograma = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[600px]">
+              <CardContent className="space-y-4 px-4 md:px-6 pb-4 md:pb-6">
+                <div className="overflow-x-auto -mx-2 md:mx-0">
+                  <table className="w-full min-w-[520px]">
                     <thead>
-                      <tr className="border-b text-left text-sm text-gray-600">
+                      <tr className="border-b text-left text-xs md:text-sm text-gray-600">
                         <th className="pb-2 pr-2">Etapa</th>
                         <th className="pb-2 pr-2">Início</th>
                         <th className="pb-2 pr-2">Fim</th>
-                        <th className="pb-2 w-12" />
+                        <th className="pb-2 w-10 md:w-12" />
                       </tr>
                     </thead>
                     <tbody>
                       {etapas.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-6 text-center text-gray-500">
+                          <td colSpan={4} className="py-6 text-center text-gray-500 text-sm">
                             Nenhuma etapa. Clique em &quot;Nova etapa&quot; para adicionar.
                           </td>
                         </tr>
@@ -411,7 +452,7 @@ const CriarCronograma = () => {
                                 placeholder="Ex: Produção, Divulgação..."
                                 value={e.etapa}
                                 onChange={(ev) => atualizarEtapa(e.id, 'etapa', ev.target.value)}
-                                className="max-w-xs"
+                                className="min-w-0 w-full max-w-[200px]"
                               />
                             </td>
                             <td className="py-2 pr-2">
@@ -419,6 +460,7 @@ const CriarCronograma = () => {
                                 type="date"
                                 value={e.inicio}
                                 onChange={(ev) => atualizarEtapa(e.id, 'inicio', ev.target.value)}
+                                className="min-w-0 w-full max-w-[140px]"
                               />
                             </td>
                             <td className="py-2 pr-2">
@@ -426,6 +468,7 @@ const CriarCronograma = () => {
                                 type="date"
                                 value={e.fim}
                                 onChange={(ev) => atualizarEtapa(e.id, 'fim', ev.target.value)}
+                                className="min-w-0 w-full max-w-[140px]"
                               />
                             </td>
                             <td className="py-2">
@@ -445,11 +488,11 @@ const CriarCronograma = () => {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex flex-wrap gap-3 pt-2 items-center">
+                <div className="flex flex-wrap gap-2 md:gap-3 pt-2 items-stretch sm:items-center">
                   <Button
                     onClick={salvarCronograma}
                     disabled={salvando || etapas.length === 0}
-                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                    className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white w-full sm:w-auto"
                   >
                     {salvando ? 'Salvando...' : 'Salvar cronograma'}
                   </Button>
@@ -457,48 +500,36 @@ const CriarCronograma = () => {
                     variant="outline"
                     onClick={exportarCronogramaPDF}
                     disabled={etapas.filter((e) => e.etapa.trim() || e.inicio || e.fim).length === 0}
+                    className="flex-1 sm:flex-initial min-w-0"
                   >
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Exportar PDF
+                    <FileDown className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="truncate">Exportar PDF</span>
                   </Button>
                   <Button
                     variant="outline"
                     onClick={exportarCronogramaXLSX}
                     disabled={etapas.filter((e) => e.etapa.trim() || e.inicio || e.fim).length === 0}
+                    className="flex-1 sm:flex-initial min-w-0"
                   >
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Exportar XLSX
+                    <FileDown className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="truncate">Exportar XLSX</span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
-                  >
-                    <ClipboardList className="h-4 w-4 mr-2" />
-                    Documentos de Inscrição
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/projeto/${id}/preencher-anexos`)}
-                  >
-                    Continuar para Preencher Anexos
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </div>
+                  </div>
               </CardContent>
             </Card>
 
             {/* Gantt */}
             {etapasComDatas.length > 0 && (
               <Card className="bg-white shadow-lg border-2 border-gray-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-6 w-6 text-oraculo-blue" />
+                <CardHeader className="px-4 md:px-6">
+                  <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                    <Clock className="h-5 w-5 md:h-6 md:w-6 text-oraculo-blue flex-shrink-0" />
                     Visão Gantt
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[600px]">
+                <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
+                  <div className="overflow-x-auto -mx-2 md:mx-0">
+                    <div className="min-w-[520px]">
                       {/* Eixo do tempo: meses */}
                       <div className="flex text-xs text-gray-500 mb-2 border-b pb-1">
                         <div className="w-40 flex-shrink-0" />
@@ -554,6 +585,18 @@ const CriarCronograma = () => {
                 </CardContent>
               </Card>
             )}
+
+            {/* Próximo passo: Documentos de Inscrição — no pé da página */}
+            <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
+              <Button
+                size="lg"
+                onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
+                className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
+              >
+                Próxima etapa: Documentos de Inscrição <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+              </Button>
+            </div>
           </div>
         </main>
       </div>

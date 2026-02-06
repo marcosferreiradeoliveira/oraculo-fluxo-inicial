@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { 
   Home, 
   Brain, 
@@ -15,7 +17,7 @@ import {
   PlayCircle,
   ExternalLink,
   Calendar,
-  Briefcase
+  LogOut
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +36,6 @@ const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
-  { title: 'Portfolio', url: '/portfolio', icon: Briefcase, menuItem: 'portfolio' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
@@ -178,9 +179,6 @@ export function DashboardSidebar() {
                       <item.icon className="h-5 w-5" />
                       <span className="font-medium">{item.title}</span>
                     </div>
-                    {item.title === 'Portfolio' && (
-                      <Badge className="bg-orange-500 text-white text-xs px-1.5 py-0.5 ml-2">BETA</Badge>
-                    )}
                   </NavLink>
                 )}
               </li>
@@ -188,8 +186,20 @@ export function DashboardSidebar() {
           </ul>
         </nav>
 
+        {/* Logout ao pé do menu — visível em todas as telas */}
+        <div className="px-4 pb-3 border-t border-purple-800/30">
+          <button
+            type="button"
+            onClick={() => signOut(auth)}
+            className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-red-600/90 hover:bg-red-600 border border-red-500/50 font-medium transition-colors"
+          >
+            <LogOut className="h-5 w-5" />
+            Sair da conta
+          </button>
+        </div>
+
         {/* Footer */}
-        <div className="p-4 border-t border-purple-800/30 mt-auto">
+        <div className="p-4 border-t border-purple-800/30">
           <div className="text-center text-sm text-purple-300">
             <p> 2026 Oráculo Cultural</p>
           </div>
