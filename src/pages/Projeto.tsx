@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -19,6 +19,7 @@ import {
   trackAnalysisFailed,
   trackSuggestionApplied
 } from '@/lib/analytics';
+import { toast } from 'sonner';
 
 const steps = [
   'Criar Projeto',
@@ -44,6 +45,25 @@ const limparMarkdown = (texto: string): string => {
     .replace(/`(.*?)`/g, '$1') // Remove `código`
     .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links [texto](url)
     .trim();
+};
+
+/** Remove do texto qualquer bloco "CONTEXTO ADICIONAL / PORTFOLIO DO PROPONENTE" que a IA às vezes inclui na resposta. */
+const removerContextoPortfolioDaResposta = (texto: string): string => {
+  if (!texto || !texto.trim()) return texto;
+  const markers = [
+    /CONTEXTO ADICIONAL\s*[-–]?\s*PORTFOLIO DO PROPONENTE/i,
+    /PORTFOLIO DO PROPONENTE\s*\(APENAS PARA REFERÊNCIA/i,
+    /\[CONTEXTO INTERNO\s*[-–]?\s*NÃO FAZER PARTE/i,
+  ];
+  let out = texto;
+  for (const m of markers) {
+    const idx = out.search(m);
+    if (idx !== -1) {
+      out = out.slice(0, idx).trimEnd();
+      break;
+    }
+  }
+  return out.trim();
 };
 
 // Função para extrair sugestões de forma robusta
@@ -235,6 +255,7 @@ const Projeto = () => {
   const [aplicandoSugestaoPersonalizada, setAplicandoSugestaoPersonalizada] = useState(false);
   const [textoAnterior, setTextoAnterior] = useState<string>(''); // Armazena o texto antes de aplicar sugestão
   const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [creditos, setCreditos] = useState<number>(0);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
@@ -415,24 +436,23 @@ const Projeto = () => {
   const handleAprovar = async (idx: number) => {
     if (!checkPremiumAccess()) return;
     
-    // Mark suggestion as approved
+    const textoBase = descricaoEditada || projeto?.descricao || '';
+    if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
+      console.error('Texto ou sugestão vazios');
+      alert('Erro: texto ou sugestão inválidos');
+      return;
+    }
+    setTextoAnterior(textoBase);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const novasAprovacoes = [...aprovacoes];
     novasAprovacoes[idx] = true;
     setAprovacoes(novasAprovacoes);
-    setGerandoSugestao(idx); // Usa o índice específico da sugestão
+    setGerandoSugestao(idx);
+    const el = document.getElementById('texto-do-projeto');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     try {
-      // Use the current edited description as base, or fallback to original
-      const textoBase = descricaoEditada || projeto?.descricao || '';
-      
-      if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
-        console.error('Texto ou sugestão vazios');
-        alert('Erro: texto ou sugestão inválidos');
-        setGerandoSugestao(null);
-        return;
-      }
-      
-      // Buscar portfolio do usuário
       let portfolioTexto = '';
       if (user) {
         try {
@@ -448,13 +468,13 @@ const Projeto = () => {
       }
       
       const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
-      
       console.log('Enviando texto e sugestão para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           textoAtual: textoBase,
           sugestao: sugestoes[idx],
@@ -480,54 +500,47 @@ const Projeto = () => {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
-        
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
-            if (data === '[DONE]') {
-              break;
-            }
+            if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 novoTexto += parsed.content;
-                setDescricaoEditada(novoTexto);
+                setDescricaoEditada(removerContextoPortfolioDaResposta(novoTexto));
               }
-            } catch (e) {
+            } catch {
               // Ignorar erros de parsing
             }
           }
         }
       }
       
-      // Não salvar imediatamente - aguardar aprovação do usuário
       if (id && novoTexto.trim()) {
-        // Salvar versão anterior antes de mostrar a nova
+        const textoLimpo = removerContextoPortfolioDaResposta(novoTexto);
         setTextoAnterior(textoBase);
-        setDescricaoEditada(novoTexto);
+        setDescricaoEditada(textoLimpo);
         setAguardandoAprovacao(true);
-        
-        // Scroll para a seção "Texto do Projeto" para ver a mudança
         setTimeout(() => {
           const elemento = document.getElementById('texto-do-projeto');
-          if (elemento) {
-            elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
+          if (elemento) elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
       }
-      
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
       console.error('Erro ao processar sugestão:', e);
       alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
-      // Reverter a aprovação em caso de erro
       const novasAprovacoes = [...aprovacoes];
       novasAprovacoes[idx] = false;
       setAprovacoes(novasAprovacoes);
     } finally {
-      setGerandoSugestao(null); // Limpa o estado de loading
+      abortControllerRef.current = null;
+      setGerandoSugestao(null);
     }
   };
 
@@ -593,18 +606,38 @@ const Projeto = () => {
     }, 300);
   };
 
+  const interromperGeracaoEReverter = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (textoAnterior) setDescricaoEditada(textoAnterior);
+    const idx = gerandoSugestao;
+    setGerandoSugestao(null);
+    setAplicandoSugestaoPersonalizada(false);
+    setAguardandoAprovacao(false);
+    if (idx !== null) {
+      const novasAprovacoes = [...aprovacoes];
+      novasAprovacoes[idx] = false;
+      setAprovacoes(novasAprovacoes);
+    }
+  };
+
   // Função para copiar o texto do projeto
   const copiarTextoProjeto = async () => {
     const textoParaCopiar = descricaoEditada || projeto?.descricao || '';
     
     if (!textoParaCopiar.trim()) {
-      alert('Não há texto para copiar.');
+      toast.error('Não há texto para copiar.');
       return;
     }
 
     try {
       await navigator.clipboard.writeText(textoParaCopiar);
-      alert('Texto copiado para a área de transferência!');
+      toast.success('Texto copiado', {
+        description: 'O conteúdo foi copiado para a área de transferência.',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Erro ao copiar texto:', error);
       // Fallback para navegadores mais antigos
@@ -616,9 +649,12 @@ const Projeto = () => {
       textarea.select();
       try {
         document.execCommand('copy');
-        alert('Texto copiado para a área de transferência!');
+        toast.success('Texto copiado', {
+          description: 'O conteúdo foi copiado para a área de transferência.',
+          duration: 3000,
+        });
       } catch (err) {
-        alert('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
+        toast.error('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
       }
       document.body.removeChild(textarea);
     }
@@ -651,20 +687,19 @@ const Projeto = () => {
       return;
     }
     
+    const textoBase = descricaoEditada || projeto?.descricao || '';
+    if (!textoBase.trim()) {
+      alert('Erro: texto do projeto inválido');
+      return;
+    }
+    setTextoAnterior(textoBase);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setAplicandoSugestaoPersonalizada(true);
+    const el = document.getElementById('texto-do-projeto');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     try {
-      // Use the current edited description as base, or fallback to original
-      const textoBase = descricaoEditada || projeto?.descricao || '';
-      
-      if (!textoBase.trim()) {
-        console.error('Texto do projeto vazio');
-        alert('Erro: texto do projeto inválido');
-        setAplicandoSugestaoPersonalizada(false);
-        return;
-      }
-      
-      // Buscar portfolio do usuário
       let portfolioTexto = '';
       if (user) {
         try {
@@ -680,13 +715,13 @@ const Projeto = () => {
       }
       
       const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
-      
       console.log('Enviando texto e sugestão personalizada para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           textoAtual: textoBase,
           sugestao: sugestaoPersonalizada,
@@ -700,64 +735,50 @@ const Projeto = () => {
         throw new Error(`Erro ao alterar texto: ${response.status} - ${JSON.stringify(errorData)}`);
       }
       
-      // Processar resposta streaming
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let novoTexto = '';
-      
-      if (!reader) {
-        throw new Error('Não foi possível ler a resposta do servidor');
-      }
+      if (!reader) throw new Error('Não foi possível ler a resposta do servidor');
       
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
-        
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
-            if (data === '[DONE]') {
-              break;
-            }
+            if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 novoTexto += parsed.content;
-                setDescricaoEditada(novoTexto);
+                setDescricaoEditada(removerContextoPortfolioDaResposta(novoTexto));
               }
-            } catch (e) {
+            } catch {
               // Ignorar erros de parsing
             }
           }
         }
       }
       
-      // Não salvar imediatamente - aguardar aprovação do usuário
       if (id && novoTexto.trim()) {
-        // Salvar versão anterior antes de mostrar a nova
+        const textoLimpo = removerContextoPortfolioDaResposta(novoTexto);
         setTextoAnterior(textoBase);
-        setDescricaoEditada(novoTexto);
+        setDescricaoEditada(textoLimpo);
         setAguardandoAprovacao(true);
-        
-        // Limpar o campo de sugestão personalizada após aplicar
         setSugestaoPersonalizada('');
-        
-        // Scroll para a seção "Texto do Projeto" para ver a mudança
         setTimeout(() => {
           const elemento = document.getElementById('texto-do-projeto');
-          if (elemento) {
-            elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
+          if (elemento) elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
       }
-      
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       console.error('Erro ao processar sugestão personalizada:', e);
       alert(`Erro ao aplicar sugestão: ${e instanceof Error ? e.message : 'Erro desconhecido'}`);
     } finally {
+      abortControllerRef.current = null;
       setAplicandoSugestaoPersonalizada(false);
     }
   };
@@ -2196,6 +2217,24 @@ const Projeto = () => {
                               </Button>
                             </div>
                           </div>
+                          {(gerandoSugestao !== null || aplicandoSugestaoPersonalizada) && (
+                            <div className="mb-3 p-3 bg-amber-50 border-2 border-amber-400 rounded-lg flex items-center justify-between flex-wrap gap-2">
+                              <span className="text-amber-900 font-medium flex items-center gap-2">
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                                Gerando alterações no texto...
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={interromperGeracaoEReverter}
+                                className="border-red-500 text-red-600 hover:bg-red-50"
+                              >
+                                <X className="mr-2 h-4 w-4" />
+                                Interromper e reverter para versão anterior
+                              </Button>
+                            </div>
+                          )}
                           <textarea
                             className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[600px] text-gray-800 leading-relaxed resize-y"
                             value={descricaoEditada || projeto.descricao || ''}

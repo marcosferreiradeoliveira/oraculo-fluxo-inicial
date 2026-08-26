@@ -9,6 +9,7 @@ import { Loader2, Upload, FileText, Download, CheckCircle, AlertCircle } from 'l
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackProjectStepViewed } from '@/lib/analytics';
 
 interface ProjetoDocument {
   id: string;
@@ -38,6 +39,18 @@ const PreencherAnexos = () => {
 
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 7;
+
+  // Analytics: etapa "Preencher Anexos" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'preencher_anexos',
+      });
+    }
+  }, [id, projeto]);
 
   useEffect(() => {
     const fetchData = async () => {

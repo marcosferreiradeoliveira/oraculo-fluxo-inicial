@@ -10,6 +10,7 @@ import { ClipboardList, Upload, FileText, CheckCircle, Loader2, ArrowLeft, Arrow
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackProjectStepViewed } from '@/lib/analytics';
 
 interface ProjetoDocument {
   id: string;
@@ -49,6 +50,19 @@ const DocumentosInscricao = () => {
     : [];
 
   const documentosSalvos = projeto?.documentos_inscricao ?? [];
+
+  // Analytics: etapa "Documentos de Inscrição" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'documentos_inscricao',
+        planType: isPremium ? 'premium' : undefined,
+      });
+    }
+  }, [id, projeto, isPremium]);
 
   useEffect(() => {
     const fetchData = async () => {

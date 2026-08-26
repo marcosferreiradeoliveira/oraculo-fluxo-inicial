@@ -14,7 +14,12 @@ const Cadastro = () => {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode');
   const redirect = searchParams.get('redirect');
+  const iniciar = searchParams.get('iniciar');
   const [isLogin, setIsLogin] = useState(mode === 'login');
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [repitaSenha, setRepitaSenha] = useState('');
@@ -23,12 +28,11 @@ const Cadastro = () => {
   const [aceitaTermos, setAceitaTermos] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
   const [nomeCompleto, setNomeCompleto] = useState('');
-  const [empresa, setEmpresa] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [userUid, setUserUid] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [showRepitaSenha, setShowRepitaSenha] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [cadastroConcluido, setCadastroConcluido] = useState(false);
   const navigate = useNavigate();
 
   const handleGoogleSignIn = async () => {
@@ -45,25 +49,25 @@ const Cadastro = () => {
       const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
-        // Usuário novo - mostrar formulário para coletar nome e empresa
+        // Usuário novo - mostrar formulário para coletar nome e WhatsApp
         setUserUid(user.uid);
         setNomeCompleto(user.displayName || '');
-        setEmpresa('');
+        setWhatsapp('');
         setShowExtra(true);
         setLoadingGoogle(false);
         return;
       }
 
-      // Usuário existente - verificar se tem nome completo e empresa
+      // Usuário existente - verificar se tem nome completo e WhatsApp
       const userData = userDoc.data();
       const hasNomeCompleto = userData.nome_completo && userData.nome_completo.trim() !== '';
-      const hasEmpresa = userData.empresa && userData.empresa.trim() !== '';
+      const hasWhatsapp = userData.whatsapp && userData.whatsapp.trim() !== '';
 
-      if (!hasNomeCompleto || !hasEmpresa) {
+      if (!hasNomeCompleto || !hasWhatsapp) {
         // Falta informação - mostrar formulário para completar
         setUserUid(user.uid);
         setNomeCompleto(userData.nome_completo || user.displayName || '');
-        setEmpresa(userData.empresa || '');
+        setWhatsapp(userData.whatsapp || '');
         setShowExtra(true);
         setLoadingGoogle(false);
         return;
@@ -79,7 +83,10 @@ const Cadastro = () => {
       // Track login success
       trackLoginSuccess({ tipoLogin: 'social' });
 
-      const target = redirect && redirect.startsWith('/') ? redirect : '/';
+      let target = redirect && redirect.startsWith('/') ? redirect : '/';
+      if (target !== '/' && (target === '/avaliar-projeto' || target.startsWith('/avaliar-projeto')) && iniciar) {
+        target = target.includes('?') ? target + '&iniciar=1' : target + '?iniciar=1';
+      }
       navigate(target);
     } catch (err: any) {
       console.error('Erro ao fazer login com Google:', err);
@@ -141,7 +148,10 @@ const Cadastro = () => {
           // Não bloquear o login se a atualização falhar
         }
         
-        const target = redirect && redirect.startsWith('/') ? redirect : '/';
+        let target = redirect && redirect.startsWith('/') ? redirect : '/';
+        if (target !== '/' && (target === '/avaliar-projeto' || target.startsWith('/avaliar-projeto')) && iniciar) {
+          target = target.includes('?') ? target + '&iniciar=1' : target + '?iniciar=1';
+        }
         navigate(target);
       } else {
         if (senha !== repitaSenha) {
@@ -190,7 +200,7 @@ const Cadastro = () => {
         
         // Limpar campos antes de mostrar o formulário extra
         setNomeCompleto('');
-        setEmpresa('');
+        setWhatsapp('');
         setShowExtra(true);
       }
     } catch (err: any) {
@@ -208,10 +218,15 @@ const Cadastro = () => {
     
     // Validar que os campos foram preenchidos
     const nomeCompletoTrimmed = nomeCompleto.trim();
-    const empresaTrimmed = empresa.trim();
+    const whatsappTrimmed = whatsapp.trim();
     
     if (!nomeCompletoTrimmed) {
       setErro('Por favor, preencha o nome completo.');
+      setLoading(false);
+      return;
+    }
+    if (!whatsappTrimmed) {
+      setErro('Por favor, preencha seu WhatsApp.');
       setLoading(false);
       return;
     }
@@ -236,7 +251,7 @@ const Cadastro = () => {
           dadosCadastrais: '',
           data_cadastro: timestamp,
           email: userEmail,
-          empresa: empresaTrimmed || '',
+          empresa: '',
           equipeBio: '',
           isPremium: false,
           lastLoginAt: timestamp,
@@ -246,15 +261,24 @@ const Cadastro = () => {
           role: 'super_admin',
           ultimo_login: timestamp,
           uid: userUid,
+          whatsapp: whatsappTrimmed,
         };
         
         await setDoc(userDocRef, dadosParaSalvar);
-        setCadastroConcluido(true);
+        if (redirect && redirect.startsWith('/')) {
+          let target = redirect;
+          if ((target === '/avaliar-projeto' || target.startsWith('/avaliar-projeto')) && iniciar) {
+            target = target.includes('?') ? target + '&iniciar=1' : target + '?iniciar=1';
+          }
+          navigate(target);
+        } else {
+          navigate('/', { state: { showCadastroSuccess: true } });
+        }
       } else {
         // Atualizar documento existente (login com Google que precisa completar dados)
         await updateDoc(userDocRef, {
           nome_completo: nomeCompletoTrimmed,
-          empresa: empresaTrimmed || '',
+          whatsapp: whatsappTrimmed,
           lastLoginAt: timestamp,
           ultimo_login: timestamp,
         });
@@ -263,8 +287,15 @@ const Cadastro = () => {
         if (currentUser) {
           trackLoginSuccess({ tipoLogin: 'social' });
         }
-        const target = redirect && redirect.startsWith('/') ? redirect : '/';
-        navigate(target);
+        if (redirect && redirect.startsWith('/')) {
+          let target = redirect;
+          if ((target === '/avaliar-projeto' || target.startsWith('/avaliar-projeto')) && iniciar) {
+            target = target.includes('?') ? target + '&iniciar=1' : target + '?iniciar=1';
+          }
+          navigate(target);
+        } else {
+          navigate('/');
+        }
       }
     } catch (err: any) {
       console.error('Erro ao salvar informações:', err);
@@ -273,34 +304,6 @@ const Cadastro = () => {
       setLoading(false);
     }
   };
-
-  if (cadastroConcluido) {
-    const target = redirect && redirect.startsWith('/') ? redirect : '/';
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 text-center">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-8 w-8 md:h-10 md:w-10 text-white" />
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">Conta criada com sucesso!</h1>
-            <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20">
-              <p className="text-base md:text-lg text-gray-800 font-medium leading-relaxed">
-                Parabéns, você ganhou 15 créditos gratuitamente para testar a plataforma!
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate(target)}
-              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
-            >
-              Ir para a plataforma
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (showExtra) {
     return (
@@ -328,13 +331,13 @@ const Cadastro = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Empresa <span className="text-gray-400 text-xs">(opcional)</span></label>
+              <label className="block text-sm font-medium mb-1 text-gray-700">WhatsApp</label>
               <input
-                type="text"
+                type="tel"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
-                value={empresa}
-                onChange={e => setEmpresa(e.target.value)}
-                placeholder="Ex: Alalaô produções"
+                value={whatsapp}
+                onChange={e => setWhatsapp(e.target.value)}
+                placeholder="Ex: (21) 99999-9999"
               />
             </div>
             {erro && <div className="text-red-500 text-sm text-center">{erro}</div>}

@@ -11,7 +11,10 @@ import { Loader2, Plus, Trash2, Save, DollarSign, Sparkles, FileDown, FileText, 
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Clock } from 'lucide-react';
+import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 
 interface RubricaOrcamento {
   id: string;
@@ -191,10 +194,24 @@ const CriarOrcamento = () => {
   const [temAlteracoesPendentes, setTemAlteracoesPendentes] = useState(false); // Flag para indicar se há alterações não salvas
   const [sugestoesAlteracoes, setSugestoesAlteracoes] = useState<string>('');
   const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
+  const [rateLimitModal, setRateLimitModal] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [creditos, setCreditos] = useState<number>(0);
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 4;
+
+  // Analytics: etapa "Criar Orçamento" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'criar_orcamento',
+        planType: isPremium ? 'premium' : undefined,
+      });
+    }
+  }, [id, projeto, isPremium]);
 
   // Carregar premium e créditos (sem plano: 3 créditos para salvar orçamento)
   useEffect(() => {
@@ -390,6 +407,13 @@ const CriarOrcamento = () => {
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
     setRubricas([]);
+
+    const startTimeOrcamento = Date.now();
+    trackTextGenerationStarted({
+      projectId: id!,
+      textType: 'orcamento',
+      planType: isPremium ? 'premium' : undefined,
+    });
 
     let gerouComSucesso = false;
     try {
@@ -679,6 +703,14 @@ const CriarOrcamento = () => {
         duration: 5000,
       });
     } finally {
+      if (gerouComSucesso) {
+        trackTextGenerationCompleted({
+          projectId: id!,
+          textType: 'orcamento',
+          durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
+          planType: isPremium ? 'premium' : undefined,
+        });
+      }
       if (gerouComSucesso && user && !isPremium) {
         try {
           const db = getFirestore();
@@ -1035,6 +1067,13 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          const message = (errorData as { message?: string }).message ?? (errorData as { error?: string }).error ?? 'Aguarde alguns segundos antes de gerar este texto novamente.';
+          const retryAfterSeconds = (errorData as { retryAfterSeconds?: number }).retryAfterSeconds;
+          setRateLimitModal({ message, retryAfterSeconds });
+          setProcessandoAlteracoes(false);
+          return;
+        }
         throw new Error(`Erro ao processar alterações: ${response.status} - ${JSON.stringify(errorData)}`);
       }
 
@@ -1819,6 +1858,41 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
           </div>
         </main>
       </div>
+
+      {/* Popup estilizado para limite de taxa (429) */}
+      <Dialog open={!!rateLimitModal} onOpenChange={(open) => !open && setRateLimitModal(null)}>
+        <DialogContent className="sm:max-w-md bg-white border-2 border-amber-200/80 shadow-xl rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/80 pointer-events-none" />
+          <DialogHeader className="relative">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 border-2 border-amber-300/80 shadow-inner">
+              <Clock className="h-7 w-7 text-amber-600" />
+            </div>
+            <DialogTitle className="text-center text-xl font-semibold text-gray-800 pt-3">
+              Aguarde um momento
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-center space-y-3 pt-1 pb-2">
+                <p className="text-gray-600 leading-relaxed">
+                  {rateLimitModal?.message}
+                </p>
+                {rateLimitModal?.retryAfterSeconds != null && (
+                  <p className="text-sm font-medium text-amber-700 bg-amber-100/80 rounded-lg py-2 px-3 inline-block">
+                    Tente novamente em cerca de {rateLimitModal.retryAfterSeconds} segundos
+                  </p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative flex justify-center pb-1">
+            <Button
+              onClick={() => setRateLimitModal(null)}
+              className="bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl px-6 py-2 shadow-md"
+            >
+              Entendi
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

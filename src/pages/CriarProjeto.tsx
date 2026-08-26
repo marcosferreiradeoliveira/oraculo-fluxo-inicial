@@ -10,11 +10,16 @@ import { Link } from 'react-router-dom';
 import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trackAnalysisFailed } from '@/lib/analytics';
 import { Brain, Loader2, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
+const MICROFONE_POPUP_KEY = 'criar-projeto-microfone-popup-visto';
 
-// Em dev: use emulador se VITE_FUNCTIONS_BASE_URL estiver definido (ex.: http://127.0.0.1:5001/culturalapp-fb9b0/us-central1)
-const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL || 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
+// Produção: sempre Cloud Functions. Dev: emulador só se VITE_FUNCTIONS_BASE_URL estiver definido
+const PRODUCTION_FUNCTIONS = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
+const FUNCTIONS_BASE = import.meta.env.DEV && import.meta.env.VITE_FUNCTIONS_BASE_URL
+  ? import.meta.env.VITE_FUNCTIONS_BASE_URL
+  : PRODUCTION_FUNCTIONS;
 const AVALIAR_PROJETO_IA_URL = `${FUNCTIONS_BASE}/avaliarProjetoIA`;
 
 // Web Speech API (Chrome, Edge) - tipos não estão no DOM padrão
@@ -210,6 +215,9 @@ const CriarProjeto = () => {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptLiveRef = useRef('');
   const stopRecordingRef = useRef<() => void>(() => {});
+
+  // Popup de permissão do microfone (exibido apenas uma vez por sessão)
+  const [showMicrophonePopup, setShowMicrophonePopup] = useState(false);
 
   // Alternar dicas a cada 5 segundos quando estiver analisando
   useEffect(() => {
@@ -662,6 +670,26 @@ const CriarProjeto = () => {
     };
   }, []);
 
+  const onIniciarGravacaoClick = () => {
+    if (typeof sessionStorage === 'undefined') {
+      startRecording();
+      return;
+    }
+    if (sessionStorage.getItem(MICROFONE_POPUP_KEY)) {
+      startRecording();
+      return;
+    }
+    setShowMicrophonePopup(true);
+  };
+
+  const confirmarMicrofoneEIniciar = () => {
+    try {
+      sessionStorage.setItem(MICROFONE_POPUP_KEY, '1');
+    } catch (_) {}
+    setShowMicrophonePopup(false);
+    startRecording();
+  };
+
   const startRecording = async () => {
     const SpeechRecognitionClass = getSpeechRecognition();
     if (!SpeechRecognitionClass) {
@@ -903,6 +931,13 @@ const CriarProjeto = () => {
         projectId: docRef.id,
         hasEdital: !!editalId,
       });
+
+      // Evento para Tag Manager / Analytics: project_created (configurar conversão no GTM com esse evento)
+      if (typeof (window as unknown as { gtag?: (a: string, b: string, c: object) => void }).gtag === 'function') {
+        (window as unknown as { gtag: (a: string, b: string, c: object) => void }).gtag('event', 'project_created', {
+          creator_id: user?.uid ?? '',
+        });
+      }
       
       // Iniciar análise imediatamente na mesma tela
       setProjetoId(docRef.id);
@@ -1041,7 +1076,27 @@ const CriarProjeto = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <>
+      <Dialog open={showMicrophonePopup} onOpenChange={setShowMicrophonePopup}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acesso ao microfone</DialogTitle>
+            <DialogDescription>
+              Para usar a gravação por voz, é necessário permitir o acesso ao microfone no navegador. 
+              Quando você clicar em &quot;Permitir e iniciar&quot;, o navegador pode exibir um aviso pedindo a permissão — aceite para continuar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={() => setShowMicrophonePopup(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmarMicrofoneEIniciar}>
+              Permitir e iniciar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar />
       
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -1185,7 +1240,7 @@ const CriarProjeto = () => {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={isRecording ? () => stopRecordingRef.current() : startRecording}
+                        onClick={isRecording ? () => stopRecordingRef.current() : onIniciarGravacaoClick}
                         disabled={transcribing && !isRecording}
                         className={`w-full sm:w-auto border-2 rounded-xl py-4 px-6 font-semibold flex items-center justify-center gap-2 ${
                           isRecording
@@ -1247,6 +1302,7 @@ const CriarProjeto = () => {
         </main>
       </div>
     </div>
+    </>
   );
 };
 

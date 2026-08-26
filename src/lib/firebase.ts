@@ -68,10 +68,10 @@ export const firebaseInit = () => {
     // Enable Firebase Emulator Suite in development
     if (import.meta.env.DEV) {
       try {
-        // Uncomment these lines if you want to use Firebase Emulator
+        // Descomente estas linhas para usar os emuladores locais
         // connectAuthEmulator(auth, 'http://localhost:9099');
-        // connectFirestoreEmulator(db, 'localhost', 8080);
-        // connectStorageEmulator(storage, 'localhost', 9199);
+        // connectFirestoreEmulator(db, 'localhost', 8081);
+        // connectStorageEmulator(storage, 'localhost', 9199');
         console.log('Firebase running in development mode');
       } catch (error) {
         console.error('Firebase emulator connection error:', error);

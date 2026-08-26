@@ -22,6 +22,7 @@ import Conta from "./pages/Conta";
 import Suporte from "./pages/Suporte";
 import Cadastro from "./pages/Cadastro";
 import CriarProjeto from "./pages/CriarProjeto";
+import AvaliarProjeto from "./pages/AvaliarProjeto";
 import Projeto from "./pages/Projeto";
 import AlterarComIA from "./pages/AlterarComIA";
 import EditarEdital from './pages/EditarEdital';
@@ -35,6 +36,7 @@ import CadastroPremium from './pages/CadastroPremium';
 import ContatoPremium from './pages/ContatoPremium';
 import GerenciarAssinatura from './pages/GerenciarAssinatura';
 import GerarTextos from './pages/GerarTextos';
+import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
 import PreencherAnexos from './pages/PreencherAnexos';
 import CriarOrcamento from './pages/CriarOrcamento';
 import CriarCronograma from './pages/CriarCronograma';
@@ -47,7 +49,9 @@ import InteligenciaMercado from './pages/InteligenciaMercado';
 import ConfirmarEmail from './pages/ConfirmarEmail';
 import EditaisAbertos from './pages/EditaisAbertos';
 import Portfolio from './pages/Portfolio';
+import Admin from './pages/Admin';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { FloatWhatsApp } from './components/FloatWhatsApp';
 
 const queryClient = new QueryClient();
 
@@ -83,6 +87,7 @@ const App = () => (
       <BrowserRouter>
         <AnalyticsListener />
         <GoogleTagManagerRouteTracker />
+        <FloatWhatsApp />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/cadastro" element={<Cadastro />} />
@@ -103,6 +108,8 @@ const App = () => (
           <Route path="/contato-premium" element={<ProtectedRoute><ContatoPremium /></ProtectedRoute>} />
           <Route path="/gerenciar-assinatura" element={<ProtectedRoute><GerenciarAssinatura /></ProtectedRoute>} />
           <Route path="/criar-projeto" element={<ProtectedRoute><CriarProjeto /></ProtectedRoute>} />
+          <Route path="/avaliar-projeto" element={<AvaliarProjeto />} />
+          <Route path="/avaliar-projeto/gerar-textos" element={<GerarTextosAvaliar />} />
           {/* Rotas específicas de projeto devem vir antes da rota genérica /projeto/:id */}
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><GerarTextos /></ProtectedRoute>} />
@@ -120,6 +127,7 @@ const App = () => (
           <Route path="/cadastrar-guia" element={<ProtectedRoute><CadastrarGuia /></ProtectedRoute>} />
           <Route path="/editar-guia/:id" element={<ProtectedRoute><EditarGuia /></ProtectedRoute>} />
           <Route path="/guia-especial/:id" element={<DetalhesGuiaEspecial />} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

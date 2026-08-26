@@ -335,7 +335,11 @@ const EditaisAbertos = () => {
                             className="w-full"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/edital/${edital.id}`);
+                              if (!user) {
+                                navigate(`/cadastro?redirect=/edital/${edital.id}`);
+                              } else {
+                                navigate(`/edital/${edital.id}`);
+                              }
                             }}
                           >
                             Ver Detalhes

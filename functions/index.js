@@ -172,13 +172,14 @@ function getMercadoPago() {
 
 exports.avaliarProjetoIA = onRequest(
   {
+    cors: true,
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-  // Set CORS headers BEFORE any checks
+  // CORS já tratado por cors: true; manter headers para compatibilidade
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
   res.set('Access-Control-Max-Age', '3600');
   
   // Handle preflight requests FIRST
@@ -344,7 +345,7 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
           },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000, // Aumentado para garantir análise completa com todas as sugestões
         temperature: 0.3,
         stream: true,
       });
@@ -568,29 +569,32 @@ exports.alterarTextoComIA = onRequest(
     
     let portfolioContext = '';
     if (userPortfolio && userPortfolio.trim()) {
-      portfolioContext = `\n\nCONTEXTO ADICIONAL - PORTFOLIO DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR NO TEXTO):\n${userPortfolio}\n\nIMPORTANTE: O portfolio acima é apenas contexto de referência sobre o histórico e experiência do proponente. NÃO inclua o portfolio literalmente no texto reescrito. Use-o apenas para entender melhor o contexto quando a sugestão exigir menção a experiência/capacidade, mas faça isso de forma sutil e integrada ao projeto, sem copiar trechos do portfolio.`;
+      portfolioContext = `
+
+[CONTEXTO INTERNO - NÃO FAZER PARTE DA SUA RESPOSTA]
+Abaixo está o portfolio do proponente apenas para você usar como referência ao aplicar a sugestão. Sua resposta deve ser SOMENTE o texto do projeto revisado. Não inclua esta linha nem o conteúdo do portfolio na sua resposta.
+---
+${userPortfolio}
+---
+[FIM DO CONTEXTO - SUA RESPOSTA DEVE SER APENAS O TEXTO DO PROJETO REVISADO]`;
     }
     
-    const prompt = `Você recebe o TEXTO COMPLETO do projeto (textoAtual) e uma SUGESTÃO de melhoria. Sua tarefa é devolver o TEXTO COMPLETO do projeto com LEVES ALTERAÇÕES que incorporem a sugestão.
+    const prompt = `Você recebe o TEXTO COMPLETO do projeto (textoAtual) e uma SUGESTÃO de melhoria. Sua tarefa é devolver SOMENTE o TEXTO COMPLETO do projeto com LEVES ALTERAÇÕES que incorporem a sugestão.
 
-REGRA OBRIGATÓRIA: A sua resposta deve ser O MESMO TEXTO INTEIRO do projeto, do início ao fim, apenas com pequenos ajustes onde a sugestão se aplicar. NUNCA devolva só a sugestão ou um trecho. Devolva SEMPRE o texto completo, com alterações mínimas.
+REGRA OBRIGATÓRIA: Sua resposta deve conter EXCLUSIVAMENTE o texto do projeto revisado, do primeiro ao último caractere. NUNCA inclua títulos, cabeçalhos, "CONTEXTO ADICIONAL", "PORTFOLIO" ou qualquer texto que não seja o próprio texto do projeto. NUNCA devolva só a sugestão ou um trecho.
 
 SUGESTÃO (incorporar ao texto com alterações leves):
 ${sugestao}
 
-TEXTO COMPLETO DO PROJETO (manter inteiro e devolver com leves alterações):
+TEXTO COMPLETO DO PROJETO (devolver este texto inteiro com leves alterações; sua resposta = só este texto, nada mais):
 ${textoAtual}${portfolioContext}
 
 INSTRUÇÕES:
-- Devolva o texto completo do projeto, do primeiro ao último caractere
-- Faça apenas as alterações necessárias para incorporar a sugestão de forma natural
-- Mantenha todo o resto do texto igual (estrutura, parágrafos, tom, demais trechos)
-- NÃO apague partes do projeto. NÃO substitua o texto pela sugestão. NÃO devolva só um parágrafo
-- Se a sugestão se aplicar a um trecho específico, altere só esse trecho e mantenha o resto intacto
-- NÃO inclua o portfolio literalmente; use-o só como contexto se a sugestão exigir
-- Sua resposta = texto completo do projeto com leves alterações
+- Sua resposta = EXATAMENTE o texto do projeto, do início ao fim, com apenas as alterações necessárias para a sugestão
+- Não inclua na resposta: "CONTEXTO ADICIONAL", "PORTFOLIO", "REFERÊNCIA" ou qualquer cabeçalho. Apenas o texto do projeto.
+- Mantenha estrutura, parágrafos e tom. Altere só o que a sugestão pedir.
 
-TEXTO DO PROJETO (completo, com as alterações):`;
+Comece sua resposta diretamente com o primeiro caractere do texto do projeto:`;
 
     const openai = getOpenAI();
     
@@ -728,6 +732,8 @@ exports.gerarTextosProjeto = onRequest(
     // Criar prompt específico com dados do projeto
     // IMPORTANTE: Sempre incluir a descrição completa do projeto para basear a geração
     let promptEspecifico = '';
+    let orcamentoAtualEnviado = '';
+    let promptAlteracoesEnviado = '';
     
     // Instruções de formatação (sem asteriscos/markdown)
     const instrucoesFormatacao = `
@@ -762,9 +768,16 @@ REGRA CRÍTICA DE FORMATAÇÃO:
       
       console.log('[gerarTextosProjeto] Teto máximo detectado para orçamento:', tetoMaximo);
       
-      const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-      
-      promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
+      orcamentoAtualEnviado = dadosProjeto.orcamentoAtual && String(dadosProjeto.orcamentoAtual).trim();
+      promptAlteracoesEnviado = prompt && String(prompt).trim();
+      // Pedido de ALTERAÇÕES: usar o prompt do frontend (já contém ORÇAMENTO ATUAL + SUGESTÕES) — alterar em cima do estado salvo
+      if (orcamentoAtualEnviado && promptAlteracoesEnviado) {
+        promptEspecifico = promptAlteracoesEnviado;
+        console.log('[gerarTextosProjeto] Modo alterações: usando prompt do frontend (orçamento atual + sugestões)');
+      } else {
+        // Geração do ZERO: criar orçamento completo desde o início
+        const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+        promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
 Crie um orçamento COMPLETO, DETALHADO E ABRANGENTE para o projeto cultural descrito abaixo.
 
 CRÍTICO - NÃO CRIE JUSTIFICATIVAS:
@@ -787,6 +800,22 @@ IMPORTANTE: Gere um orçamento COMPLETO desde o início, incluindo TODAS as rubr
 
 Seja ESPECÍFICO e DETALHADO. Não seja genérico. Liste todas as rubricas importantes que um projeto cultural precisa.
 Cada rubrica deve ter um valor realista e proporcional ao projeto descrito.
+
+BOAS PRÁTICAS – ORÇAMENTO EFICIENTE E REALISTA:
+
+1) Detalhamento técnico e especificação:
+Evite rubricas genéricas. Descreva o "quê", o "quanto" e o "porquê". Em vez de apenas "Cenografia", especifique materiais, metragens e tempo de uso quando fizer sentido. Esse nível de detalhe justifica o valor perante órgãos de controle e evita questionamentos por falta de clareza sobre preço de mercado.
+
+2) Pesquisa de mercado e margens de segurança:
+A base do orçamento deve refletir preços de mercado realistas. Projetos culturais podem sofrer com inflação (materiais, eletrônicos, passagens). Inclua margem de segurança nas rubricas críticas para absorver flutuações entre o planejamento e o pagamento. Use valores coerentes com a média de mercado do setor cultural.
+
+3) Encargos e impostos:
+Ao orçar contratações, considere a carga tributária. Para Pessoa Física (PF) é obrigatório prever encargos como INSS patronal (cerca de 20%) e IRRF quando aplicável. Para PJ, certifique-se de que os valores contemplam impostos incidentes sobre a nota fiscal. Evite suborçar por ignorar tributos.
+
+4) Itens operacionais, logísticos e administrativos:
+- Logística e infraestrutura: inclua quando fizer sentido geradores, brigadistas, seguranças, limpeza, taxas de licenciamento (ECAD, alvarás municipais).
+- Acessibilidade: inclua rubricas específicas para intérpretes de Libras, audiodescrição e adaptações físicas, exigidas em muitos editais.
+- Custos administrativos: respeite os limites da legislação (geralmente entre 15% e 20% do total) para contabilidade, advocacia e materiais de escritório.
 
 IMPORTANTE SOBRE UNIDADES - USE DIVERSIDADE DE UNIDADES:
 Para cada rubrica, SEMPRE indique a unidade apropriada. VARIE as unidades de acordo com o tipo de rubrica:
@@ -860,6 +889,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ X.XXX,XX" ou "Nome da Rubrica - 
 Liste UMA rubrica por linha.
 
 Gere o orçamento COMPLETO agora:`;
+      }
     } else {
       // Para todos os outros tipos de texto, incluir a descrição completa do projeto
       const tipoTextoFormatado = tipo.split('_').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -907,15 +937,16 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     
+    const orcamentoAlteracoes = tipo === 'orcamento' && orcamentoAtualEnviado && promptAlteracoesEnviado;
+    const systemOrcamento = orcamentoAlteracoes
+      ? 'Você é um especialista em orçamentos para projetos culturais. O usuário enviou um ORÇAMENTO ATUAL e SUGESTÕES DE ALTERAÇÕES. Sua tarefa é devolver SOMENTE o orçamento atualizado: aplique as alterações pedidas EM CIMA do orçamento atual. NÃO gere um orçamento do zero. Mantenha rubricas que não forem citadas nas sugestões; altere, remova ou adicione apenas o que as sugestões pedirem. Respeite o teto máximo. Formato: texto puro, uma rubrica por linha (Nome: R$ valor ou Nome - R$ valor), sem markdown.'
+      : (tipo === 'orcamento'
+        ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados baseados EXCLUSIVAMENTE nos dados do projeto fornecido. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito.'
+        : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados baseados EXCLUSIVAMENTE na descrição do projeto fornecida. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito. NÃO use apenas o portfolio como base.');
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { 
-          role: 'system', 
-          content: tipo === 'orcamento' 
-            ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados baseados EXCLUSIVAMENTE nos dados do projeto fornecido. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito.'
-            : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados baseados EXCLUSIVAMENTE na descrição do projeto fornecida. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito. NÃO use apenas o portfolio como base.'
-        },
+        { role: 'system', content: systemOrcamento },
         { role: 'user', content: promptFinal },
       ],
       max_tokens: 2000,
@@ -986,18 +1017,23 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
 // Gera cronograma (etapas com início e fim) com base no orçamento, textos do projeto e edital
 exports.gerarCronogramaIA = onRequest(
   {
+    cors: true,
     secrets: [openaiApiKey],
-    memory: '128MiB',
-    cpu: 0.0833,
+    memory: '512MiB',
+    timeoutSeconds: 120,
+    cpu: 1,
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    res.set('Access-Control-Max-Age', '3600');
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    };
+    Object.entries(corsHeaders).forEach(([k, v]) => res.setHeader(k, v));
 
     if (req.method === 'OPTIONS') {
-      res.status(204).send('');
+      res.status(200).end();
       return;
     }
 
@@ -1007,10 +1043,18 @@ exports.gerarCronogramaIA = onRequest(
     }
 
     try {
-      const { projetoId } = req.body;
+      let body = req.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch (e) { return res.status(400).json({ error: 'Body JSON inválido' }); }
+      }
+      if (!body || typeof body !== 'object') body = {};
+      const { projetoId, sugestoes, etapasAtuais, duracaoMeses: duracaoMesesBody } = body;
       if (!projetoId) {
         return res.status(400).json({ error: 'projetoId é obrigatório' });
       }
+      const duracaoMesesUsuario = typeof duracaoMesesBody === 'number' && duracaoMesesBody >= 1
+        ? Math.min(120, Math.floor(duracaoMesesBody))
+        : null;
 
       const projetoRef = db.collection('projetos').doc(projetoId);
       const projetoSnap = await projetoRef.get();
@@ -1047,60 +1091,140 @@ exports.gerarCronogramaIA = onRequest(
       }
 
       const hoje = new Date();
-      const fimMaximo = dataEncerramentoEdital && !isNaN(dataEncerramentoEdital.getTime())
+      // Início do cronograma: daqui a 6 meses (não na data de geração)
+      const inicioCronograma = new Date(hoje);
+      inicioCronograma.setMonth(inicioCronograma.getMonth() + 6);
+      const dataInicioMin = inicioCronograma.toISOString().slice(0, 10);
+
+      // Duração total: usuário informou OU conforme orçamento (até 300k = 6 meses, acima escala até máx 12 meses)
+      let duracaoMeses = (duracaoMesesUsuario && duracaoMesesUsuario >= 1) ? duracaoMesesUsuario : 6;
+      const totalOrcamento = tetoOrcamento > 0 ? tetoOrcamento : rubricas.reduce((s, r) => s + Number(r.total || r.valor || 0), 0);
+      if (!duracaoMesesUsuario || duracaoMesesUsuario < 1) {
+        if (totalOrcamento <= 300000) {
+          duracaoMeses = 6;
+        } else if (totalOrcamento >= 600000) {
+          duracaoMeses = 12;
+        } else {
+          duracaoMeses = Math.round(6 + (6 * (totalOrcamento - 300000) / 300000));
+        }
+      }
+      const fimPorDuracao = new Date(inicioCronograma);
+      fimPorDuracao.setMonth(fimPorDuracao.getMonth() + duracaoMeses);
+      let fimMaximo = dataEncerramentoEdital && !isNaN(dataEncerramentoEdital.getTime())
         ? dataEncerramentoEdital
-        : new Date(hoje.getFullYear() + 1, hoje.getMonth(), hoje.getDate());
-      const dataInicioMin = hoje.toISOString().slice(0, 10);
+        : fimPorDuracao;
+      if (fimPorDuracao.getTime() < fimMaximo.getTime()) fimMaximo = fimPorDuracao;
       const dataFimMax = fimMaximo.toISOString().slice(0, 10);
 
-      const rubricasTexto = rubricas.length > 0
-        ? rubricas.map((r) => `- ${r.nome || r.rubrica || 'Rubrica'}: R$ ${Number(r.total || r.valor || 0).toLocaleString('pt-BR')}`).join('\n')
-        : 'Orçamento não informado ou vazio.';
+      const sugestoesTrim = typeof sugestoes === 'string' ? sugestoes.trim() : '';
+      const isAlteracoes = sugestoesTrim.length > 0 && Array.isArray(etapasAtuais) && etapasAtuais.length > 0;
+      const nomesRubricasSet = new Set(
+        (rubricas || []).map((r) => String(r.nome || r.rubrica || '').trim()).filter(Boolean)
+      );
 
-      const textosResumo = Object.keys(textosGerados).length > 0
-        ? Object.entries(textosGerados)
-          .filter(([, v]) => v && typeof v === 'string')
-          .map(([k, v]) => `[${k}]:\n${String(v).slice(0, 1500)}`)
-          .join('\n\n')
-        : 'Textos do projeto não informados.';
+      let prompt;
+      let systemContent;
 
-      const prompt = `Você é um especialista em planejamento de projetos culturais para editais.
+      if (isAlteracoes) {
+        const cronogramaAtualJson = JSON.stringify(etapasAtuais.map((e) => ({
+          etapa: e.etapa || '',
+          inicio: String(e.inicio || '').slice(0, 10),
+          fim: String(e.fim || '').slice(0, 10),
+        })), null, 2);
+        prompt = `Você é um especialista em planejamento de projetos culturais.
 
-Com base EXCLUSIVAMENTE nos dados abaixo do projeto, orçamento e textos já elaborados, gere um CRONOGRAMA de etapas em JSON.
+O usuário enviou o CRONOGRAMA ATUAL (array JSON) e PEDIDOS DE ALTERAÇÃO. Sua tarefa é devolver APENAS o array JSON do cronograma ATUALIZADO, aplicando as alterações EM CIMA do cronograma atual. NÃO gere um cronograma do zero. Mantenha etapas que não forem citadas nas sugestões; altere, remova ou adicione apenas o que as sugestões pedirem.
 
-REGRAS OBRIGATÓRIAS:
-- Retorne APENAS um array JSON válido, sem texto antes ou depois. Nenhuma explicação, apenas o JSON.
-- Cada item do array deve ter exatamente: "etapa" (nome curto da etapa), "inicio" (data YYYY-MM-DD), "fim" (data YYYY-MM-DD).
-- As datas devem estar entre ${dataInicioMin} (hoje) e ${dataFimMax} (prazo máximo do edital/projeto).
-- As etapas devem refletir as fases naturais do projeto: planejamento, pré-produção, produção, divulgação, execução, prestação de contas, etc., conforme o orçamento e os textos.
-- Use as rubricas do orçamento e os textos (metodologia, objetivos, justificativa) para definir etapas coerentes e realistas.
-- Cada etapa deve ter duração razoável (semanas ou meses). Não crie etapas de um único dia, exceto marcos específicos se fizer sentido.
-- As etapas devem ser sequenciais ou parcialmente sobrepostas quando fizer sentido (ex.: divulgação durante produção).
+REGRAS:
+- Retorne SOMENTE um array JSON válido, sem texto antes ou depois.
+- Cada item: "etapa" (string), "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (exatamente: pre_producao, producao, divulgacao ou pos_producao). Mantenha ou atribua macroEtapa coerente com a natureza de cada etapa.
+- Datas devem estar entre ${dataInicioMin} e ${dataFimMax}.
+- Durações razoáveis (semanas ou meses).
+${duracaoMesesUsuario ? `- O usuário informou duração total do projeto de ${duracaoMesesUsuario} meses; o cronograma deve caber nesse período.` : ''}
+
+CRONOGRAMA ATUAL:
+${cronogramaAtualJson}
+
+PEDIDOS DE ALTERAÇÃO:
+${sugestoesTrim}
+
+Retorne somente o array JSON atualizado:`;
+        systemContent = 'Você recebe um cronograma atual (JSON) e pedidos de alteração. Devolva APENAS o array JSON atualizado, aplicando as alterações em cima do atual. Cada objeto deve ter "etapa", "inicio", "fim" e "macroEtapa" (pre_producao, producao, divulgacao ou pos_producao), coerente com a natureza da etapa. Não inclua texto explicativo.';
+        console.log('[gerarCronogramaIA] Modo alterações: aplicando sugestões em cima do cronograma atual');
+      } else {
+        const nomesRubricas = rubricas.map((r) => String(r.nome || r.rubrica || '').trim()).filter(Boolean);
+        const rubricasTexto = rubricas.length > 0
+          ? rubricas.map((r) => `- ${r.nome || r.rubrica || 'Rubrica'}: R$ ${Number(r.total || r.valor || 0).toLocaleString('pt-BR')}`).join('\n')
+          : 'Orçamento não informado ou vazio.';
+        const listaNomesRubricasParaPrompt = nomesRubricas.length > 0
+          ? `Lista EXATA de nomes de rubricas (use estes nomes em "rubricasAssociadas"): ${JSON.stringify(nomesRubricas)}`
+          : '';
+
+        const textosResumo = Object.keys(textosGerados).length > 0
+          ? Object.entries(textosGerados)
+            .filter(([, v]) => v && typeof v === 'string')
+            .map(([k, v]) => `[${k}]:\n${String(v).slice(0, 1500)}`)
+            .join('\n\n')
+          : 'Textos do projeto não informados.';
+
+        prompt = `Você é um especialista em planejamento de projetos culturais para editais e leis de incentivo.
+
+Com base nos dados do projeto, no ORÇAMENTO GERADO (rubricas abaixo) e nos textos, gere um CRONOGRAMA de etapas em JSON.
+
+NÍVEL DE DETALHAMENTO – OBRIGATÓRIO:
+- NÃO gere apenas 4 macro etapas (pré-produção, produção, pós-produção, prestação de contas). Isso é insuficiente.
+- Gere entre 10 e 20 etapas, com nível intermediário de detalhe: cada rubrica ou grupo lógico de rubricas do orçamento deve refletir em uma ou mais etapas concretas (ex.: contratações, licenciamentos, locações, ensaios, gravação, divulgação, montagem, sessões, desmontagem, documentação, prestação de contas).
+- Use os NOMES e a NATUREZA das rubricas do orçamento para batizar e definir as etapas (ex.: se há rubrica "Locação de equipamento de som", crie etapa como "Locação e instalação de som"; se há "Divulgação", crie "Campanha de divulgação" ou "Produção de material de divulgação"). Não invente rubricas; derive as etapas do orçamento e dos textos.
+- Não seja excessivamente detalhado (evite dezenas de etapas de um dia); cada etapa deve ter duração razoável (semanas ou poucos meses).
+
+BOAS PRÁTICAS (estrutura em fases, mas desdobradas em etapas concretas):
+- Pré-produção: contratos, seguros, reservas, licenças (ECAD, alvarás), alinhamento com fornecedores → virem etapas específicas conforme as rubricas.
+- Produção: atividades centrais (ensaios, gravações, montagens) + janelas de respiro → uma ou mais etapas por tipo de atividade relevante no orçamento.
+- Pós-produção: desmontagem, devolução, documentação (clipping, acessibilidade, listas) → etapas nomeadas de forma clara.
+- Prestação de contas: período de 30 a 60 dias no final, como etapa explícita.
+- Sincronia físico-financeira: datas dentro do prazo; considerar prazos de fornecedores. Margem de segurança (~15%) em tarefas críticas.
+
+REGRAS DE DATAS E DISTRIBUIÇÃO – CRÍTICO:
+- O cronograma começa em ${dataInicioMin} (data inicial de execução) e termina em ${dataFimMax}. NÃO use a data de hoje; a primeira etapa deve INICIAR em ${dataInicioMin} ou logo após.
+- DISTRIUA as etapas ao longo de TODO o período (${dataInicioMin} a ${dataFimMax}). É PROIBIDO concentrar todas as etapas em um único mês. Cada etapa deve ter duração realista (semanas ou meses). A primeira etapa começa em ${dataInicioMin}; a última etapa deve terminar próximo a ${dataFimMax}.
+- ETAPAS CONCOMITANTES: Muitas etapas podem e devem ocorrer em paralelo (mesmas datas ou sobreposição). NÃO gere tudo em sequência rígida (uma termina e só então começa a outra). Exemplos: produção de material de divulgação e ensaios ao mesmo tempo; campanha de divulgação durante as apresentações; várias atividades de pré-produção sobrepostas (contratação e locação simultâneas). Só exija sequência quando for obrigatório (ex.: montagem antes de apresentações; desmontagem depois).
+- Duração total do projeto neste cronograma: ${duracaoMeses} meses (baseada no orçamento: até ~300 mil = 6 meses; acima disso escala até no máximo 12 meses). Respeite esse arco temporal.
+
+REGRAS DE FORMATO:
+- Retorne APENAS um array JSON válido, sem texto antes ou depois.
+- Cada item deve ter: "etapa" (nome curto e concreto), "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (fase do cronograma) e "rubricasAssociadas" (array de strings).
+- rubricasAssociadas OBRIGATÓRIO: em cada etapa, indique os NOMES EXATOS das rubricas do orçamento que se aplicam a essa etapa (custos/despesas daquela atividade). Use somente nomes da lista de rubricas do projeto. Pode ser um ou mais; se não houver rubrica específica, use a mais próxima ou deixe [].
+${listaNomesRubricasParaPrompt ? `\n${listaNomesRubricasParaPrompt}\n` : ''}
+- macroEtapa OBRIGATÓRIO: use exatamente um destes valores em cada etapa, conforme a natureza da atividade:
+  - pre_producao: contratos, licenciamentos (ECAD, alvarás), contratação de equipe, reserva e locação de espaços/equipamentos, planejamento, mobilização.
+  - producao: ensaios, gravações, montagem técnica/cenográfica, apresentações, realização do evento, atividades centrais de execução.
+  - divulgacao: produção de material de divulgação, campanha de divulgação, assessoria de imprensa, marketing.
+  - pos_producao: desmontagem, devolução de equipamentos, documentação pedagógica, clipping, prestação de contas (RCO e documentação).
+Atribua macroEtapa de forma coerente com o tipo de cada etapa; não use "producao" para tudo.
 
 DADOS DO PROJETO:
 Nome: ${nomeProjeto}
 ${descricaoProjeto ? `Descrição/Resumo:\n${descricaoProjeto.slice(0, 2000)}\n` : ''}
 
-ORÇAMENTO (rubricas):
+ORÇAMENTO GERADO DO PROJETO – RUBRICAS (derive as etapas do cronograma a partir destas rubricas; crie etapas concretas que correspondam às atividades/despesas listadas):
 ${rubricasTexto}
 ${tetoOrcamento ? `Teto total: R$ ${tetoOrcamento.toLocaleString('pt-BR')}` : ''}
 
 TEXTOS DO PROJETO (trechos):
 ${textosResumo}
 
-${nomeEdital ? `Edital: ${nomeEdital}. Data limite de encerramento: ${dataFimMax}.` : ''}
+${nomeEdital ? `Edital: ${nomeEdital}. Data limite: ${dataFimMax}.` : ''}
 
-Retorne somente o array JSON, por exemplo:
-[{"etapa":"Planejamento e pré-produção","inicio":"2025-02-01","fim":"2025-03-15"},{"etapa":"Produção","inicio":"2025-03-16","fim":"2025-06-30"}]`;
+Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macroEtapa e rubricasAssociadas com nomes exatos das rubricas):
+[{"etapa":"Contratos e licenciamentos (ECAD, alvarás)","inicio":"2025-02-01","fim":"2025-02-28","macroEtapa":"pre_producao","rubricasAssociadas":["Licenças e direitos autorais"]},{"etapa":"Contratação de equipe técnica e artística","inicio":"2025-03-01","fim":"2025-03-15","macroEtapa":"pre_producao","rubricasAssociadas":["Equipe técnica","Equipe artística"]},{"etapa":"Reserva e locação de espaços e equipamentos","inicio":"2025-03-10","fim":"2025-03-31","macroEtapa":"pre_producao","rubricasAssociadas":["Locação de espaços","Equipamentos"]},{"etapa":"Ensaios e preparação","inicio":"2025-04-01","fim":"2025-04-30","macroEtapa":"producao","rubricasAssociadas":["Ensaios","Produção"]},{"etapa":"Produção de material de divulgação","inicio":"2025-04-15","fim":"2025-05-15","macroEtapa":"divulgacao","rubricasAssociadas":["Divulgação"]},{"etapa":"Montagem técnica e cenográfica","inicio":"2025-05-01","fim":"2025-05-20","macroEtapa":"producao","rubricasAssociadas":["Montagem","Cenografia"]},{"etapa":"Apresentações e realização do evento","inicio":"2025-05-21","fim":"2025-06-15","macroEtapa":"producao","rubricasAssociadas":["Apresentações","Produção"]},{"etapa":"Campanha de divulgação e assessoria","inicio":"2025-05-01","fim":"2025-06-30","macroEtapa":"divulgacao","rubricasAssociadas":["Divulgação","Assessoria de imprensa"]},{"etapa":"Desmontagem e devolução de equipamentos","inicio":"2025-06-16","fim":"2025-06-30","macroEtapa":"pos_producao","rubricasAssociadas":["Logística"]},{"etapa":"Documentação pedagógica e clipping","inicio":"2025-07-01","fim":"2025-07-20","macroEtapa":"pos_producao","rubricasAssociadas":["Documentação","Acessibilidade"]},{"etapa":"Prestação de contas (RCO e documentação)","inicio":"2025-07-21","fim":"2025-09-15","macroEtapa":"pos_producao","rubricasAssociadas":["Administrativo"]}]`;
+        systemContent = 'Você gera um array JSON de etapas de cronograma. Cada objeto: "etapa", "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (pre_producao, producao, divulgacao ou pos_producao) e "rubricasAssociadas" (array de strings com os NOMES EXATOS das rubricas do orçamento que se aplicam àquela etapa). Use apenas nomes de rubricas fornecidos na lista do projeto. IMPORTANTE: muitas etapas devem ser CONCOMITANTES (datas sobrepostas). Resposta: apenas o JSON.';
+      }
 
       const openai = getOpenAI();
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
-          {
-            role: 'system',
-            content: 'Você gera apenas um array JSON de etapas de cronograma. Cada objeto tem "etapa" (string), "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD). Nenhum texto extra, apenas o JSON.',
-          },
+          { role: 'system', content: systemContent },
           { role: 'user', content: prompt },
         ],
         max_tokens: 1500,
@@ -1114,13 +1238,33 @@ Retorne somente o array JSON, por exemplo:
         try {
           etapas = JSON.parse(jsonMatch[0]);
           if (!Array.isArray(etapas)) etapas = [];
+          const macroValidos = ['pre_producao', 'producao', 'divulgacao', 'pos_producao'];
           etapas = etapas
             .filter((e) => e && typeof e.etapa === 'string' && e.inicio && e.fim)
-            .map((e) => ({
-              etapa: String(e.etapa).trim(),
-              inicio: String(e.inicio).slice(0, 10),
-              fim: String(e.fim).slice(0, 10),
-            }));
+            .map((e) => {
+              const macro = e.macroEtapa && macroValidos.includes(String(e.macroEtapa)) ? String(e.macroEtapa) : 'producao';
+              const rawRubricas = Array.isArray(e.rubricasAssociadas) ? e.rubricasAssociadas : [];
+              const rubricasAssociadas = rawRubricas
+                .filter((n) => typeof n === 'string' && nomesRubricasSet.has(String(n).trim()))
+                .map((n) => String(n).trim());
+              return {
+                etapa: String(e.etapa).trim(),
+                inicio: String(e.inicio).slice(0, 10),
+                fim: String(e.fim).slice(0, 10),
+                macroEtapa: macro,
+                rubricasAssociadas: rubricasAssociadas.length ? rubricasAssociadas : [],
+              };
+            });
+          if (isAlteracoes && Array.isArray(etapasAtuais) && etapasAtuais.length > 0) {
+            const mapaPorEtapa = new Map(etapasAtuais.map((e) => [e.etapa || '', e]));
+            etapas = etapas.map((e) => {
+              const anterior = mapaPorEtapa.get(e.etapa);
+              const mantidas = anterior && Array.isArray(anterior.rubricasAssociadas)
+                ? anterior.rubricasAssociadas.filter((n) => nomesRubricasSet.has(String(n).trim()))
+                : (e.rubricasAssociadas || []);
+              return { ...e, rubricasAssociadas: mantidas.length ? mantidas : (e.rubricasAssociadas || []) };
+            });
+          }
         } catch (parseErr) {
           console.error('[gerarCronogramaIA] Erro ao parsear JSON:', parseErr);
         }
@@ -1731,27 +1875,36 @@ exports.criarAssinaturaPremiumStripe = onRequest(
 
 const BASE_URL = process.env.BASE_URL || 'https://oraculocultural.com.br';
 
+function setCorsGuiaStripe(res) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+}
+
 /**
  * Checkout Stripe one-time para guia especial (ex.: guia prestação de contas).
  * Cria sessão de pagamento único e redireciona para o Stripe.
  */
 exports.criarCheckoutGuiaStripe = onRequest(
   {
-    cors: true,
+    cors: false,
     maxInstances: 10,
     invoker: 'public',
     secrets: [stripeSecretKey],
-    memory: '128MiB',
+    memory: '256MiB',
+    timeoutSeconds: 60,
     cpu: 0.0833,
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    res.set('Access-Control-Max-Age', '3600');
+    setCorsGuiaStripe(res);
+    const sendError = (status, err, details) => {
+      setCorsGuiaStripe(res);
+      if (!res.headersSent) res.status(status).json({ error: err, details: details || undefined });
+    };
 
     if (req.method === 'OPTIONS') {
-      res.status(204).send('');
+      res.status(204).end();
       return;
     }
 
@@ -1761,7 +1914,10 @@ exports.criarCheckoutGuiaStripe = onRequest(
     }
 
     try {
-      const { guiaId, userId, email } = req.body || {};
+      const body = req.body || {};
+      const guiaId = body.guiaId;
+      const userId = body.userId;
+      const email = body.email;
 
       if (!guiaId) {
         return res.status(400).json({ error: 'guiaId é obrigatório' });
@@ -1794,8 +1950,9 @@ exports.criarCheckoutGuiaStripe = onRequest(
       } catch (e) {
         stripeKey = process.env.STRIPE_SECRET_KEY;
       }
-      if (!stripeKey) {
-        throw new Error('STRIPE_SECRET_KEY não configurado.');
+      if (!stripeKey || typeof stripeKey !== 'string' || !stripeKey.trim()) {
+        console.error('[criarCheckoutGuiaStripe] STRIPE_SECRET_KEY não configurado (Secret Manager ou env).');
+        return res.status(500).json({ error: 'Configuração de pagamento indisponível.', details: 'Chave Stripe não configurada.' });
       }
       stripeKey = stripeKey.toString().trim();
       const stripeInstance = stripe(stripeKey);
@@ -1843,12 +2000,15 @@ exports.criarCheckoutGuiaStripe = onRequest(
             }];
           }
         } catch (error) {
-          console.error(`[criarCheckoutGuiaStripe] Erro ao usar Product ID ${stripeProductId}:`, error);
-          // Fallback para criação dinâmica
+          console.error(`[criarCheckoutGuiaStripe] Erro ao usar Product ID ${stripeProductId}:`, error.message);
+          // Fallback: criar sessão com product_data (sem Product ID) para não falhar
           lineItems = [{
             price_data: {
               currency: 'brl',
-              product: stripeProductId, // Usar o Product ID mesmo assim
+              product_data: {
+                name: titulo,
+                description: 'Guia para prestação de contas - Oráculo Cultural',
+              },
               unit_amount: unitAmount,
             },
             quantity: 1,
@@ -1890,20 +2050,26 @@ exports.criarCheckoutGuiaStripe = onRequest(
 
       const session = await stripeInstance.checkout.sessions.create(sessionParams);
 
-      await db.collection('stripe_sessions').doc(session.id).set({
-        userId: effectiveUserId,
-        email: effectiveEmail,
-        guiaId,
-        tipo: 'guia',
-        planType: null,
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      try {
+        await db.collection('stripe_sessions').doc(session.id).set({
+          userId: effectiveUserId,
+          email: effectiveEmail,
+          guiaId,
+          tipo: 'guia',
+          planType: null,
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (firestoreErr) {
+        console.error('[criarCheckoutGuiaStripe] Erro ao salvar stripe_sessions (checkout criado):', firestoreErr.message);
+        // Não falha a resposta: o checkout já foi criado
+      }
 
       res.status(200).json({ checkout_url: session.url, session_id: session.id });
     } catch (error) {
       console.error('[criarCheckoutGuiaStripe] Error:', error.message);
-      res.status(500).json({ error: 'Erro ao criar checkout do guia', details: error.message });
+      const safeDetails = error.message && !String(error.message).includes('sk_') ? error.message : 'Erro ao criar sessão de pagamento.';
+      sendError(500, 'Erro ao criar checkout do guia', safeDetails);
     }
   }
 );

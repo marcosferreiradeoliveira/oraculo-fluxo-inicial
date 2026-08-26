@@ -57,6 +57,7 @@ const InteligenciaMercado = () => {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [descricoesExpandidas, setDescricoesExpandidas] = useState<Set<string>>(new Set());
+  const [abaAtiva, setAbaAtiva] = useState<string>('guias');
 
   console.log('🎯 [InteligenciaMercado] Componente renderizado');
   console.log('🎯 [InteligenciaMercado] User:', user);
@@ -354,8 +355,8 @@ const InteligenciaMercado = () => {
             </p>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="podcasts" className="w-full">
+          {/* Tabs — aba inicial: Guias */}
+          <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="w-full">
             <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
               <TabsTrigger value="podcasts" className="flex items-center gap-2">
                 <Headphones className="h-4 w-4" />

@@ -239,6 +239,22 @@ export const trackTextGenerationCompleted = (params: {
   });
 };
 
+/**
+ * Etapa de criação de projeto visualizada (Gerar Textos, Criar Cronograma, etc.)
+ * Para Mixpanel/Firebase/GTM: funnel de etapas do projeto.
+ */
+export const trackProjectStepViewed = (params: {
+  projectId: string;
+  step: string; // 'gerar_textos' | 'criar_cronograma' | 'criar_orcamento' | 'alterar_com_ia' | 'documentos_inscricao' | 'preencher_anexos'
+  planType?: string;
+}) => {
+  trackEvent('project_step_viewed', {
+    project_id: params.projectId,
+    step: params.step,
+    plan_type: params.planType,
+  });
+};
+
 // ==========================================
 // EVENTOS DE ASSINATURA/PREMIUM
 // ==========================================
@@ -431,6 +447,18 @@ export const trackExternalLinkClicked = (params: {
   });
 };
 
+/**
+ * Clique no botão/link do WhatsApp (flutuante ou popup).
+ * Enviado para Firebase Analytics, GTM e Mixpanel.
+ */
+export const trackWhatsAppClicked = (params: {
+  source: 'float_button' | 'popup_cta';
+}) => {
+  trackEvent('whatsapp_clicked', {
+    source: params.source,
+  });
+};
+
 // ==========================================
 // EVENTOS DE INTENÇÃO (menu / navegação)
 // Mentalidade: "O que o usuário tentou fazer?" em vez de "O que clicou?"
@@ -483,6 +511,17 @@ export const trackIntentLogin = (params?: { source?: string }) => {
     destination: '/cadastro?mode=login',
     section: params?.source ?? 'header',
     cta_type: 'nav_link',
+  });
+};
+
+/**
+ * CTA "Ver como funciona na prática" (home → cadastro → após cadastro vai para avaliar projeto)
+ */
+export const trackCtaVerComoFunciona = () => {
+  trackEvent('cta_ver_como_funciona', {
+    destination: '/cadastro',
+    redirect_after: '/avaliar-projeto',
+    origem: 'home',
   });
 };
 
@@ -681,6 +720,19 @@ export const trackGuiaEspecialPdfDownloaded = (params: {
 // ==========================================
 // EVENTOS DE AUTENTICAÇÃO
 // ==========================================
+
+/**
+ * Cadastro/Registro concluído (Lead Generated)
+ * 🟠 ALTA: Conversão principal
+ */
+export const trackSignUp = (params?: {
+  method?: 'email' | 'google';
+}) => {
+  // GA4: evento padrão "sign_up" (configurar como conversão "Lead Generated" no GA4)
+  trackEvent('sign_up', {
+    method: params?.method || 'email',
+  });
+};
 
 /**
  * Login bem-sucedido

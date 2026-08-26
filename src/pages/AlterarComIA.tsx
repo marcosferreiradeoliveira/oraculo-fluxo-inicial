@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, DocumentData } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -8,6 +8,8 @@ import { Brain, Loader2, CheckCircle, Check, X, Copy, Download } from 'lucide-re
 import AnalisarImg from '@/assets/Analisar.jpeg';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
+import { toast } from 'sonner';
+import { trackProjectStepViewed } from '@/lib/analytics';
 
 const steps = [
   'Criar Projeto',
@@ -33,6 +35,25 @@ const limparMarkdown = (texto: string): string => {
     .replace(/`(.*?)`/g, '$1') // Remove `código`
     .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links [texto](url)
     .trim();
+};
+
+/** Remove da resposta qualquer bloco "CONTEXTO ADICIONAL / PORTFOLIO DO PROPONENTE" que a IA às vezes inclui. */
+const removerContextoPortfolioDaResposta = (texto: string): string => {
+  if (!texto || !texto.trim()) return texto;
+  const markers = [
+    /CONTEXTO ADICIONAL\s*[-–]?\s*PORTFOLIO DO PROPONENTE/i,
+    /PORTFOLIO DO PROPONENTE\s*\(APENAS PARA REFERÊNCIA/i,
+    /\[CONTEXTO INTERNO\s*[-–]?\s*NÃO FAZER PARTE/i,
+  ];
+  let out = texto;
+  for (const m of markers) {
+    const idx = out.search(m);
+    if (idx !== -1) {
+      out = out.slice(0, idx).trimEnd();
+      break;
+    }
+  }
+  return out.trim();
 };
 
 // Função para extrair sugestões de forma robusta
@@ -141,6 +162,7 @@ interface Projeto extends DocumentData {
 const AlterarComIA = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [user] = useAuthState(auth);
   const [projeto, setProjeto] = useState<Projeto | null>(null);
   const [editalNome, setEditalNome] = useState<string>('');
@@ -206,25 +228,26 @@ const AlterarComIA = () => {
     const fetchProjeto = async () => {
       if (!id) return;
       setLoading(true);
+      setProjeto(null);
+      setAnalise(null);
+      setSugestoes([]);
       const db = getFirestore();
       try {
-        console.log('Fetching project with ID:', id);
         const ref = doc(db, 'projetos', id);
         const snap = await getDoc(ref);
         
         if (!snap.exists()) {
-          console.error('Project not found');
           setLoading(false);
           return;
         }
 
-        const data = { id: snap.id, ...snap.data() } as Projeto;
-        console.log('Project data:', data);
+        const raw = snap.data();
+        const analiseIa = typeof raw?.analise_ia === 'string' ? raw.analise_ia : null;
+        const data = { id: snap.id, ...raw } as Projeto;
         setProjeto(data);
-        setAnalise((data as any).analise_ia || null);
+        setAnalise(analiseIa);
         setDescricaoEditada(data.descricao || '');
         
-        // Fetch edital name if edital_associado exists
         if (data.edital_associado) {
           console.log('Fetching edital with ID:', data.edital_associado);
           try {
@@ -267,7 +290,20 @@ const AlterarComIA = () => {
     };
     
     fetchProjeto();
-  }, [id]);
+  }, [id, location.pathname]);
+
+  // Analytics: etapa "Alterar com IA" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'alterar_com_ia',
+        planType: isPremium ? 'premium' : undefined,
+      });
+    }
+  }, [id, projeto, isPremium]);
 
   useEffect(() => {
     if (analise) {
@@ -352,7 +388,7 @@ const AlterarComIA = () => {
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 novoTexto += parsed.content;
-          setDescricaoEditada(novoTexto);
+                setDescricaoEditada(removerContextoPortfolioDaResposta(novoTexto));
               }
             } catch (e) {
               // Ignorar erros de parsing
@@ -361,10 +397,10 @@ const AlterarComIA = () => {
         }
       }
       
-      // Não salvar imediatamente - mostrar nova versão e aguardar aprovação
       if (novoTexto.trim()) {
+        const textoLimpo = removerContextoPortfolioDaResposta(novoTexto);
         setTextoAnterior(textoBase);
-        setDescricaoEditada(novoTexto);
+        setDescricaoEditada(textoLimpo);
         setAguardandoAprovacao(true);
         // Marcar uso gratuito utilizado para não premium (só pode usar 1 vez)
         if (user) {
@@ -417,13 +453,16 @@ const AlterarComIA = () => {
     const textoParaCopiar = descricaoEditada || projeto?.descricao || '';
     
     if (!textoParaCopiar.trim()) {
-      alert('Não há texto para copiar.');
+      toast.error('Não há texto para copiar.');
       return;
     }
 
     try {
       await navigator.clipboard.writeText(textoParaCopiar);
-      alert('Texto copiado para a área de transferência!');
+      toast.success('Texto copiado', {
+        description: 'O conteúdo foi copiado para a área de transferência.',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Erro ao copiar texto:', error);
       // Fallback para navegadores mais antigos
@@ -435,9 +474,12 @@ const AlterarComIA = () => {
       textarea.select();
       try {
         document.execCommand('copy');
-        alert('Texto copiado para a área de transferência!');
+        toast.success('Texto copiado', {
+          description: 'O conteúdo foi copiado para a área de transferência.',
+          duration: 3000,
+        });
       } catch (err) {
-        alert('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
+        toast.error('Erro ao copiar texto. Por favor, selecione o texto manualmente.');
       }
       document.body.removeChild(textarea);
     }

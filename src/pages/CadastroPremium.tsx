@@ -140,8 +140,9 @@ const CadastroPremium = () => {
             transactionId: sessionId,
           });
           
-          // Limpar parâmetros da URL para evitar reprocessamento
-          window.history.replaceState({}, '', '/cadastro-premium');
+          // Limpar parâmetros da URL e redirecionar para home com popup de sucesso
+          window.history.replaceState({}, '', '/');
+          navigate('/', { state: { showPremiumSuccess: true, planType } });
         } catch (error) {
           console.error('Erro ao processar sucesso do pagamento:', error);
         }
@@ -149,7 +150,7 @@ const CadastroPremium = () => {
       
       processPaymentSuccess();
     }
-  }, [searchParams, paymentProcessed]);
+  }, [searchParams, paymentProcessed, navigate]);
 
   const handlePlanSelection = async (planType: string) => {
     // Se for Premium, redirecionar para formulário de contato

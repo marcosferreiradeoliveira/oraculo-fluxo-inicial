@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { trackEditalViewed } from '@/lib/analytics';
 import { 
   Calendar, 
@@ -54,8 +56,16 @@ interface Edital {
 const DetalhesEdital = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [user] = useAuthState(auth);
   const [edital, setEdital] = useState<Edital | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Redirecionar para cadastro se não estiver logado (após carregar dados do edital)
+  useEffect(() => {
+    if (!loading && !user && id) {
+      navigate(`/cadastro?redirect=/edital/${id}`, { replace: true });
+    }
+  }, [user, loading, id, navigate]);
 
   useEffect(() => {
     const fetchEdital = async () => {
@@ -155,6 +165,11 @@ const DetalhesEdital = () => {
         </div>
       </div>
     );
+  }
+
+  // Se não estiver logado, não renderiza conteúdo (o useEffect já redireciona)
+  if (!user) {
+    return null;
   }
 
   if (!edital) {

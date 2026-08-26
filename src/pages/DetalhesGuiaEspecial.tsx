@@ -52,7 +52,16 @@ const DetalhesGuiaEspecial = () => {
   const [loadingStripe, setLoadingStripe] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
 
-  const GUIA_CHECKOUT_URL = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarCheckoutGuiaStripe';
+  // Texto do CTA principal: exibir "Garanta agora seu guia" (evitar versão longa "guia de prestação de contas")
+  const textoCtaPrincipal =
+    guia?.ctaTextoPrincipal?.toLowerCase().includes('prestação de contas')
+      ? 'Garanta agora seu guia'
+      : (guia?.ctaTextoPrincipal || 'Garanta agora seu guia');
+
+  // Em desenvolvimento usa proxy do Vite para evitar CORS (localhost → mesma origem)
+  const GUIA_CHECKOUT_URL = import.meta.env.DEV
+    ? '/api/checkout-guia-stripe'
+    : 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarCheckoutGuiaStripe';
   
   // Verificar se o pagamento foi concluído com sucesso
   const paymentSuccess = searchParams.get('payment') === 'success';
@@ -187,7 +196,7 @@ const DetalhesGuiaEspecial = () => {
   const handleGarantaAgora = async (ctaSlot: 'final_main' | 'final_micro') => {
     trackGuiaEspecialCtaClicked({
       cta_slot: ctaSlot,
-      cta_text: ctaSlot === 'final_main' ? (guia?.ctaTextoPrincipal || 'Garanta agora') : 'Comece agora • Acesso imediato',
+      cta_text: ctaSlot === 'final_main' ? textoCtaPrincipal : 'Comece agora • Acesso imediato',
       guia_id: guia?.id,
       guia_titulo: guia?.titulo,
       action: 'navigate_to_premium',
@@ -729,7 +738,7 @@ const DetalhesGuiaEspecial = () => {
                     ) : (
                       <>
                         <ExternalLink className="h-5 w-5" />
-                        {guia.ctaTextoPrincipal || 'Garanta agora'}
+                        {textoCtaPrincipal}
                       </>
                     )}
                   </Button>

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -39,6 +40,25 @@ const TIPO_MAP: Record<TextoTipo, string> = {
   resultados_esperados: 'resultados_esperados',
   cronograma: 'cronograma',
   orcamento: 'orcamento'
+};
+
+/** Remove da resposta qualquer bloco "CONTEXTO ADICIONAL / PORTFOLIO DO PROPONENTE" que a IA às vezes inclui. */
+const removerContextoPortfolioDaResposta = (texto: string): string => {
+  if (!texto || !texto.trim()) return texto;
+  const markers = [
+    /CONTEXTO ADICIONAL\s*[-–]?\s*PORTFOLIO DO PROPONENTE/i,
+    /PORTFOLIO DO PROPONENTE\s*\(APENAS PARA REFERÊNCIA/i,
+    /\[CONTEXTO INTERNO\s*[-–]?\s*NÃO FAZER PARTE/i,
+  ];
+  let out = texto;
+  for (const m of markers) {
+    const idx = out.search(m);
+    if (idx !== -1) {
+      out = out.slice(0, idx).trimEnd();
+      break;
+    }
+  }
+  return out.trim();
 };
 
 const GerarTextos = () => {
@@ -168,6 +188,9 @@ const GerarTextos = () => {
         // Set the project data
         setProjeto(projetoData);
         
+        const tiposPadrao = ['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento'];
+        let tiposBase: string[] = tiposPadrao;
+        
         // Buscar edital se o projeto tiver um edital_id
         if (projetoData.edital_id) {
           try {
@@ -184,35 +207,32 @@ const GerarTextos = () => {
               
               // Definir tipos de texto baseado no edital
               if (editalData.textos_exigidos && Array.isArray(editalData.textos_exigidos) && editalData.textos_exigidos.length > 0) {
+                tiposBase = editalData.textos_exigidos;
                 setTiposTextoDisponiveis(editalData.textos_exigidos);
-                // Selecionar o primeiro tipo por padrão
                 setTextoSelecionado(editalData.textos_exigidos[0]);
               } else {
-                // Fallback para tipos padrão se o edital não tiver textos_exigidos
-                setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+                setTiposTextoDisponiveis(tiposPadrao);
                 setTextoSelecionado('justificativa');
               }
             } else {
-              // Edital não encontrado, usar tipos padrão
-              setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+              setTiposTextoDisponiveis(tiposPadrao);
               setTextoSelecionado('justificativa');
             }
           } catch (error) {
             console.error('Erro ao buscar edital:', error);
-            // Em caso de erro, usar tipos padrão
-            setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+            setTiposTextoDisponiveis(tiposPadrao);
             setTextoSelecionado('justificativa');
           }
         } else {
-          // Projeto sem edital, usar tipos padrão
-          setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+          setTiposTextoDisponiveis(tiposPadrao);
           setTextoSelecionado('justificativa');
         }
         
-        // Carregar textos gerados se existirem
-        if (projetoData.textos_gerados) {
-          setTextos(projetoData.textos_gerados);
-        }
+        // Carregar textos gerados e restaurar categorias personalizadas (chaves que não são do edital)
+        const textosGerados = projetoData.textos_gerados || {};
+        setTextos(textosGerados);
+        const customKeys = Object.keys(textosGerados).filter((k) => !tiposBase.includes(k));
+        setCategoriasCustom(customKeys);
         
         setLoading(false);
         
@@ -225,6 +245,19 @@ const GerarTextos = () => {
     
     fetchProjeto();
   }, [id, navigate, user]);
+
+  // Analytics: etapa "Gerar Textos" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'gerar_textos',
+        planType: isPremium ? 'premium' : undefined,
+      });
+    }
+  }, [id, projeto, isPremium]);
 
   const salvarNoFirestore = async (tipo: TextoTipo, texto: string) => {
     if (!id) {
@@ -395,7 +428,12 @@ const GerarTextos = () => {
       console.log('[DEBUG] Preparando para enviar requisição...');
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
-      
+      trackTextGenerationStarted({
+        projectId: id!,
+        textType: tipoMapeado,
+        planType: isPremium ? 'premium' : undefined,
+      });
+
       console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
       console.log('[DEBUG] Request data keys:', Object.keys(requestData));
       
@@ -469,8 +507,20 @@ const GerarTextos = () => {
               return newTexts;
             });
             await salvarNoFirestore(tipo, fullTextData);
+            setTextoSelecionado(tipo);
             setGerando(null); // Clear loading state after successful update
+            trackTextGenerationCompleted({
+              projectId: id!,
+              textType: tipoMapeado,
+              durationSeconds: (Date.now() - startTime) / 1000,
+              textLength: fullTextData.length,
+              planType: isPremium ? 'premium' : undefined,
+            });
             await deduzirCreditoGerarTexto();
+            setTimeout(() => {
+              const el = document.getElementById('pedidos-alteracao-texto');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 400);
             return true; // Indica sucesso
           }
         } else {
@@ -568,8 +618,20 @@ const GerarTextos = () => {
             }
           }
           
+          setTextoSelecionado(tipo);
           setGerando(null);
+          trackTextGenerationCompleted({
+            projectId: id!,
+            textType: tipoMapeado,
+            durationSeconds: (Date.now() - startTime) / 1000,
+            textLength: fullText.length,
+            planType: isPremium ? 'premium' : undefined,
+          });
           await deduzirCreditoGerarTexto();
+          setTimeout(() => {
+            const el = document.getElementById('pedidos-alteracao-texto');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 400);
           return true;
           
         } catch (error) {
@@ -667,10 +729,13 @@ const GerarTextos = () => {
     if (!key || !textos[key]) return;
     try {
       await navigator.clipboard.writeText(textos[key]);
-      alert('Texto copiado para a área de transferência!');
+      toast.success('Texto copiado', {
+        description: 'O conteúdo foi copiado para a área de transferência.',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Erro ao copiar texto:', error);
-      alert('Erro ao copiar texto');
+      toast.error('Erro ao copiar texto');
     }
   };
 
@@ -957,37 +1022,27 @@ const GerarTextos = () => {
                           </div>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
 
-                <button
-                  type="button"
-                  onClick={() => setMostrarInputCategoria(true)}
-                  className="w-full p-4 rounded-xl border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5 text-oraculo-purple font-medium flex items-center justify-center gap-2"
-                >
-                  <FileText className="h-5 w-5" />
-                  + Categoria Personalizada
-                </button>
-              </div>
-
-              {/* Sugestão para alterar texto (aplica ao tipo focado / selecionado) */}
-              {textoSelecionado && textos[textoSelecionado] && (
-                <div className="p-4 border-t bg-gray-50">
-                  <div className="p-4 bg-white border rounded-lg">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      Dê uma sugestão para a IA alterar o texto &quot;{textoSelecionado.replace(/_/g, ' ')}&quot;
-                    </h3>
-                    <textarea
-                      className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[100px] text-gray-800 leading-relaxed resize-y mb-4"
-                      value={sugestaoTexto}
-                      onChange={(e) => setSugestaoTexto(e.target.value)}
-                      placeholder="Ex: Adicione mais detalhes sobre o cronograma..."
-                      disabled={aplicandoSugestao}
-                    />
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={async () => {
+                      {/* Pedidos de alteração — colado à caixa do texto deste tipo */}
+                      {textoSelecionado === tipo && textos[tipo] && (
+                        <div id="pedidos-alteracao-texto" className="mt-3 pt-3 border-t border-oraculo-purple/20 scroll-mt-4">
+                          <h3 className="text-base font-bold text-gray-900 mb-1">
+                            Pedidos de alteração de texto
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Descreva o que deseja alterar no texto &quot;{titulo}&quot; e clique em Aplicar.
+                          </p>
+                          <textarea
+                            className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-oraculo-purple focus:border-oraculo-purple transition min-h-[100px] text-gray-800 text-sm leading-relaxed resize-y mb-3"
+                            value={sugestaoTexto}
+                            onChange={(e) => setSugestaoTexto(e.target.value)}
+                            placeholder="Ex: Adicione mais detalhes / Torne mais objetivo / Inclua menção à acessibilidade..."
+                            disabled={aplicandoSugestao}
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
                           if (!sugestaoTexto.trim()) {
                             alert('Digite uma sugestão antes de aplicar.');
                             return;
@@ -1043,7 +1098,7 @@ const GerarTextos = () => {
                                     const parsed = JSON.parse(data);
                                     if (parsed.content) {
                                       novoTexto += parsed.content;
-                                      setTextos(prev => ({ ...prev, [textoSelecionado]: novoTexto }));
+                                      setTextos(prev => ({ ...prev, [textoSelecionado]: removerContextoPortfolioDaResposta(novoTexto) }));
                                     }
                                   } catch {
                                     // ignorar
@@ -1051,7 +1106,8 @@ const GerarTextos = () => {
                                 }
                               }
                             }
-                            if (id && novoTexto.trim()) await salvarNoFirestore(textoSelecionado as TextoTipo, novoTexto);
+                            const textoLimpo = removerContextoPortfolioDaResposta(novoTexto);
+                            if (id && textoLimpo.trim()) await salvarNoFirestore(textoSelecionado as TextoTipo, textoLimpo);
                             setSugestaoTexto('');
                           } catch (e) {
                             console.error('Erro ao processar sugestão:', e);
@@ -1071,11 +1127,23 @@ const GerarTextos = () => {
                         ) : (
                           'Aplicar Sugestão'
                         )}
-                      </Button>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarInputCategoria(true)}
+                  className="w-full p-4 rounded-xl border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5 text-oraculo-purple font-medium flex items-center justify-center gap-2"
+                >
+                  <FileText className="h-5 w-5" />
+                  + Categoria Personalizada
+                </button>
+              </div>
             </div>
             
             {/* Próximo passo: Criar Orçamento — responsivo */}
@@ -1112,14 +1180,28 @@ const GerarTextos = () => {
             </div>
             <div className="flex gap-3">
               <Button
-                onClick={() => {
-                  if (categoriaPersonalizada.trim()) {
-                    const novaCategoria = categoriaPersonalizada.trim();
-                    setCategoriasCustom([...categoriasCustom, novaCategoria]);
-                    setTextoSelecionado(novaCategoria);
-                    setTextos({ ...textos, [novaCategoria]: '' });
-                    setCategoriaPersonalizada('');
-                    setMostrarInputCategoria(false);
+                onClick={async () => {
+                  if (!categoriaPersonalizada.trim()) return;
+                  const novaCategoria = categoriaPersonalizada.trim();
+                  const novosTextos = { ...textos, [novaCategoria]: '' };
+                  setCategoriasCustom([...categoriasCustom, novaCategoria]);
+                  setTextoSelecionado(novaCategoria);
+                  setTextos(novosTextos);
+                  setCategoriaPersonalizada('');
+                  setMostrarInputCategoria(false);
+                  // Persistir no backend para a categoria aparecer ao recarregar
+                  if (id) {
+                    try {
+                      const db = getFirestore();
+                      const projetoRef = doc(db, 'projetos', id);
+                      await updateDoc(projetoRef, {
+                        textos_gerados: novosTextos,
+                        atualizado_em: serverTimestamp(),
+                      });
+                    } catch (err) {
+                      console.error('Erro ao salvar categoria personalizada:', err);
+                      toast.error('Categoria adicionada na tela, mas não foi possível salvar. Tente novamente.');
+                    }
                   }
                 }}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
