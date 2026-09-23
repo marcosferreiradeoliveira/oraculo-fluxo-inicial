@@ -1384,7 +1384,7 @@ exports.criarCheckoutPremium = onRequest(
           pending: process.env.MP_PENDING_URL || "https://oraculocultural.com.br/cadastro-premium?status=pending",
         },
         auto_return: "approved",
-        notification_url: process.env.WEBHOOK_URL || "https://us-central1-culturalapp-fb9b0.cloudfunctions.net/webhookMercadoPago",
+        notification_url: process.env.WEBHOOK_URL || "https://us-central1-oraculo-is.cloudfunctions.net/webhookMercadoPago",
         statement_descriptor: "ORACULO PREMIUM",
         external_reference: userId,
         binary_mode: false, // Permite pagamentos pendentes
@@ -1576,7 +1576,7 @@ exports.criarAssinaturaPremium = onRequest(
         payer: payerData,
         external_reference: userId,
         back_url: process.env.MP_SUCCESS_URL || 'https://oraculocultural.com.br/cadastro-premium?status=success',
-        notification_url: process.env.WEBHOOK_URL || 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/webhookMercadoPago'
+        notification_url: process.env.WEBHOOK_URL || 'https://us-central1-oraculo-is.cloudfunctions.net/webhookMercadoPago'
       };
       
       // Em modo sandbox, adicionar metadata para facilitar identificação

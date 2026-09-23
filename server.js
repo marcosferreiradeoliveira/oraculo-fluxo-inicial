@@ -24,7 +24,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
-    projectId: 'culturalapp-fb9b0'
+    projectId: process.env.FIREBASE_PROJECT_ID || 'oraculo-is'
   });
 }
 const db = admin.firestore();

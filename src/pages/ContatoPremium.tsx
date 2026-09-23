@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Crown, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-const ENVIAR_CONTATO_PREMIUM_URL = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/enviarContatoPremium';
+const ENVIAR_CONTATO_PREMIUM_URL = 'https://us-central1-oraculo-is.cloudfunctions.net/enviarContatoPremium';
 
 const ContatoPremium = () => {
   const navigate = useNavigate();

@@ -441,7 +441,7 @@ const GerarTextos = () => {
       let response;
       try {
         console.log('[DEBUG] Tentando fetch para Firebase Function...');
-        response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto', {
+        response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
@@ -1066,7 +1066,7 @@ const GerarTextos = () => {
                                 console.error('Erro ao buscar portfolio:', err);
                               }
                             }
-                            const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+                            const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
                             const response = await fetch(endpoint, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },

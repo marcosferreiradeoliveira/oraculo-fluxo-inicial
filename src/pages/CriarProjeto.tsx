@@ -11,15 +11,12 @@ import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trac
 import { Brain, Loader2, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
 
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 const MICROFONE_POPUP_KEY = 'criar-projeto-microfone-popup-visto';
 
-// Produção: sempre Cloud Functions. Dev: emulador só se VITE_FUNCTIONS_BASE_URL estiver definido
-const PRODUCTION_FUNCTIONS = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
-const FUNCTIONS_BASE = import.meta.env.DEV && import.meta.env.VITE_FUNCTIONS_BASE_URL
-  ? import.meta.env.VITE_FUNCTIONS_BASE_URL
-  : PRODUCTION_FUNCTIONS;
+const FUNCTIONS_BASE = getFunctionsBaseUrl();
 const AVALIAR_PROJETO_IA_URL = `${FUNCTIONS_BASE}/avaliarProjetoIA`;
 
 // Web Speech API (Chrome, Edge) - tipos não estão no DOM padrão

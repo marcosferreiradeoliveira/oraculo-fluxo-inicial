@@ -223,7 +223,7 @@ const PreencherAnexos = () => {
     setProgress('Processando PDF com IA...');
 
     try {
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/preencherAnexoPDF';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/preencherAnexoPDF';
       
       console.log('Enviando para processar:', {
         pdfUrl: fileUrl,

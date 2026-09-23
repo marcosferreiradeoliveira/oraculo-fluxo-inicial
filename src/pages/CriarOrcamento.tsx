@@ -437,7 +437,7 @@ const CriarOrcamento = () => {
         }
       }
 
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto';
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -1018,7 +1018,7 @@ const CriarOrcamento = () => {
         }
       }
 
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto';
       
       // Criar contexto do orçamento atual
       const orcamentoAtual = rubricas.map((r, idx) => 

@@ -165,7 +165,7 @@ async function handleAvaliar(req, res) {
 // Rota curta: VITE_FUNCTIONS_BASE_URL=http://127.0.0.1:5001 → /avaliarProjetoIA
 app.post("/avaliarProjetoIA", handleAvaliar);
 // Rota longa (compatível com URL do emulador)
-app.post("/culturalapp-fb9b0/us-central1/avaliarProjetoIA", handleAvaliar);
+app.post("/oraculo-is/us-central1/avaliarProjetoIA", handleAvaliar);
 
 app.listen(PORT, () => {
   const key = getOpenAIKey();

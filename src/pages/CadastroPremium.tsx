@@ -182,7 +182,7 @@ const CadastroPremium = () => {
       console.log('[CadastroPremium] Iniciando criação de checkout Stripe:', { planType, userEmail, userId });
       
       // Criar assinatura recorrente mensal no Stripe com o tipo de plano selecionado
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarAssinaturaPremiumStripe', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/criarAssinaturaPremiumStripe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

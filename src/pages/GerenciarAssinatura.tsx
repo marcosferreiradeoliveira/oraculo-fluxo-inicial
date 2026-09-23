@@ -127,7 +127,7 @@ const GerenciarAssinatura = () => {
     setSyncing(true);
     try {
       // Buscar assinaturas do Stripe para este usuário
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/sincronizarAssinaturaUsuario', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/sincronizarAssinaturaUsuario', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ const GerenciarAssinatura = () => {
 
   const carregarDadosAssinatura = async (subscriptionId: string) => {
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/buscarDetalhesAssinatura', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/buscarDetalhesAssinatura', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,7 +191,7 @@ const GerenciarAssinatura = () => {
   const carregarPagamentos = async (subscriptionId: string) => {
     setLoadingPayments(true);
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/listarPagamentosAssinatura', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/listarPagamentosAssinatura', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -222,7 +222,7 @@ const GerenciarAssinatura = () => {
 
     setCanceling(true);
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/cancelarAssinatura', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/cancelarAssinatura', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

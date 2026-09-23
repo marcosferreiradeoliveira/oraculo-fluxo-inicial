@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Brain, Loader2, Check, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
 
 const dicasProjetos = [
   "💡 Dica: Seja específico e detalhado na descrição do seu projeto. Quanto mais informações você fornecer, melhor será a avaliação.",
@@ -24,10 +25,7 @@ const dicasProjetos = [
   "✅ Dica: Certifique-se de que todos os documentos exigidos pelo edital estão completos e corretos antes do envio."
 ];
 
-const PRODUCTION_FUNCTIONS = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
-const FUNCTIONS_BASE = import.meta.env.DEV && import.meta.env.VITE_FUNCTIONS_BASE_URL
-  ? import.meta.env.VITE_FUNCTIONS_BASE_URL
-  : PRODUCTION_FUNCTIONS;
+const FUNCTIONS_BASE = getFunctionsBaseUrl();
 const AVALIAR_PROJETO_IA_URL = `${FUNCTIONS_BASE}/avaliarProjetoIA`;
 const ALTERAR_TEXTO_COM_IA_URL = `${FUNCTIONS_BASE}/alterarTextoComIA`;
 

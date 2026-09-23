@@ -84,7 +84,7 @@ export default function GerarTextosAvaliar() {
     };
 
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

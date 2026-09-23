@@ -467,7 +467,7 @@ const Projeto = () => {
         }
       }
       
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
       console.log('Enviando texto e sugestão para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -714,7 +714,7 @@ const Projeto = () => {
         }
       }
       
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
       console.log('Enviando texto e sugestão personalizada para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -987,7 +987,7 @@ const Projeto = () => {
       setStatusIA('Enviando para análise da IA...');
       setSubEtapasIA(['Aguardando resposta da IA...']);
       
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/avaliarProjetoIA';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/avaliarProjetoIA';
       const payload = {
         projetoId: id,
         textoProjeto: dadosConsolidados.resumo_projeto,

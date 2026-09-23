@@ -61,7 +61,7 @@ const DetalhesGuiaEspecial = () => {
   // Em desenvolvimento usa proxy do Vite para evitar CORS (localhost → mesma origem)
   const GUIA_CHECKOUT_URL = import.meta.env.DEV
     ? '/api/checkout-guia-stripe'
-    : 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarCheckoutGuiaStripe';
+    : 'https://us-central1-oraculo-is.cloudfunctions.net/criarCheckoutGuiaStripe';
   
   // Verificar se o pagamento foi concluído com sucesso
   const paymentSuccess = searchParams.get('payment') === 'success';

@@ -48,7 +48,7 @@ const Conta = () => {
       const userRef = doc(db, 'usuarios', userId);
       
       // Buscar planType da assinatura do Stripe via backend
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/buscarPlanTypeStripe', {
+      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/buscarPlanTypeStripe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

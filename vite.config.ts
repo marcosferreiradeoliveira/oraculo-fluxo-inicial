@@ -4,13 +4,14 @@ import path from "path";
 
 
 // https://vitejs.dev/config/
-const GUIA_CHECKOUT_FN = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
+const FIREBASE_PROJECT = process.env.VITE_PROJECT_ID || 'oraculo-is';
+const GUIA_CHECKOUT_FN = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net`;
 // Cronograma em dev: por padrão usa o emulador (evita 503 da função em produção).
 // Terminal 1: cd functions && npm run serve   Terminal 2: npm run dev
 // Para usar a função em produção em dev: VITE_CRONOGRAMA_USE_PROD=1 npm run dev
-const CRONOGRAMA_PROJECT = 'culturalapp-fb9b0';
+const CRONOGRAMA_PROJECT = FIREBASE_PROJECT;
 const CRONOGRAMA_REGION = 'us-central1';
-const CRONOGRAMA_PROD = 'https://gerarcronogramaia-v3odkawqzq-uc.a.run.app';
+const CRONOGRAMA_PROD = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net/gerarCronogramaIA`;
 const CRONOGRAMA_EMULATOR_BASE = 'http://127.0.0.1:5001';
 const useCronogramaProd = process.env.VITE_CRONOGRAMA_USE_PROD === '1';
 

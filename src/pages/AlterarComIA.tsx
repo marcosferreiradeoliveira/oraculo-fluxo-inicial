@@ -343,7 +343,7 @@ const AlterarComIA = () => {
         return;
       }
       
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
       
       console.log('Enviando texto e sugestão para o backend...');
       const response = await fetch(endpoint, {
