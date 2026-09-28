@@ -26,7 +26,7 @@ export function QuickAccessCards() {
             <div className="order-2 md:order-1 aspect-video w-full rounded-xl overflow-hidden shadow-lg bg-black">
               <iframe
                 src={YOUTUBE_EMBED_URL}
-                title="Oráculo Cultural"
+                title="Instituto dos Sonhos"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 className="w-full h-full min-h-[280px] md:min-h-[320px]"

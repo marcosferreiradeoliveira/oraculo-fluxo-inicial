@@ -52,78 +52,23 @@ const currentStep: number = 0; // Criar Projeto
 
 // Função para verificar limites de projetos por plano
 // Limite é global (não por ano). Apagar projetos não libera novas vagas; o contador nunca diminui.
-const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boolean; mensagem: string; projetosAtivos: number; limite: number; planType: string }> => {
+const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boolean; mensagem: string }> => {
   const db = getFirestore();
-  
   try {
     const userDocRef = doc(db, 'usuarios', userId);
     const userDoc = await getDoc(userDocRef);
-    
     if (!userDoc.exists()) {
       return {
         podeCriar: false,
         mensagem: 'Usuário não encontrado. Por favor, faça login novamente.',
-        projetosAtivos: 0,
-        limite: 0,
-        planType: 'basico'
       };
     }
-    
-    const userData = userDoc.data();
-    const isPremium = userData?.isPremium === true;
-    const planType = userData?.planType ?? 'free';
-    
-    if (isPremium) {
-      return {
-        podeCriar: true,
-        mensagem: '',
-        projetosAtivos: 0,
-        limite: Infinity,
-        planType: planType || 'premium'
-      };
-    }
-    
-    let limiteProjetos: number;
-    switch ((planType || 'free').toString().toLowerCase()) {
-      case 'premium':
-        limiteProjetos = Infinity;
-        break;
-      case 'essencial':
-        limiteProjetos = 10;
-        break;
-      case 'basico':
-        limiteProjetos = 3;
-        break;
-      case 'free':
-      default:
-        limiteProjetos = Infinity;
-        break;
-    }
-    
-    const projetosCriados = Math.max(0, Number(userData?.projetos_criados_count ?? 0));
-    const podeCriar = projetosCriados < limiteProjetos;
-    
-    let mensagem = '';
-    if (!podeCriar && (planType === 'essencial' || planType === 'basico')) {
-      const nomePlano = planType === 'essencial' ? 'Essencial' : 'Básico';
-      mensagem = `Você atingiu o limite de ${limiteProjetos} projetos do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
-    }
-    
-    return {
-      podeCriar,
-      mensagem,
-      projetosAtivos: projetosCriados,
-      limite: limiteProjetos,
-      planType
-    };
+    return { podeCriar: true, mensagem: '' };
   } catch (error) {
     console.error('Erro ao verificar limite de projetos:', error);
     return {
       podeCriar: false,
       mensagem: 'Erro ao verificar limite de projetos. Tente novamente.',
-      projetosAtivos: 0,
-      limite: 0,
-      planType: 'basico'
     };
   }
 };
@@ -188,7 +133,6 @@ const CriarProjeto = () => {
     'Salvando projeto',
   ]);
   const [etapaAtualIA, setEtapaAtualIA] = useState<number>(0);
-  const [limiteProjetos, setLimiteProjetos] = useState<{ projetosAtivos: number; limite: number; planType: string } | null>(null);
   const [checkingLimit, setCheckingLimit] = useState(true);
   const [searchParams] = useSearchParams();
   const editalIdParam = searchParams.get('edital');
@@ -275,11 +219,9 @@ const CriarProjeto = () => {
       const userRef = doc(db, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       const userData = userSnap.exists() ? userSnap.data() : {};
-      const planType = userData?.planType || 'free';
       
       trackAnalysisStarted({
         projectId: projetoIdParam,
-        planType: planType,
         isFirstAnalysis: true,
       });
     } catch (err) {
@@ -451,27 +393,14 @@ const CriarProjeto = () => {
                     data_atualizacao: serverTimestamp()
                   });
                   
-                  // Deduzir 5 créditos para usuário não premium (avaliação = 5 créditos)
-                  try {
-                    const userRef = doc(db, 'usuarios', user.uid);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-                      await updateDoc(userRef, { creditos: increment(-5) });
-                    }
-                  } catch (err) {
-                    console.error('Erro ao descontar créditos:', err);
-                  }
-                  
                   // Track analysis completed
                   try {
                     const userRef = doc(db, 'usuarios', user.uid);
                     const userSnap = await getDoc(userRef);
                     const userData = userSnap.exists() ? userSnap.data() : {};
-                    const planType = userData?.planType || 'free';
                     
                     trackAnalysisCompleted({
                       projectId: projetoIdParam,
-                      planType: planType,
                     });
                   } catch (err) {
                     console.error('Erro ao trackear conclusão da análise:', err);
@@ -506,11 +435,9 @@ const CriarProjeto = () => {
           const userRef = doc(db, 'usuarios', user.uid);
           const userSnap = await getDoc(userRef);
           const userData = userSnap.exists() ? userSnap.data() : {};
-          const planType = userData?.planType || 'free';
           
           trackAnalysisFailed({
             projectId: projetoIdParam,
-            planType: planType,
             error: e.message || 'Erro desconhecido',
           });
         } catch (err) {
@@ -590,20 +517,6 @@ const CriarProjeto = () => {
     
     (async () => {
       try {
-        const res = await verificarLimiteProjetos(user.uid);
-        if (!res.podeCriar) {
-          navigate('/cadastro-premium?motivo=limite_projetos');
-          return;
-        }
-        if (res.limite === Infinity || (res.planType !== 'basico' && res.planType !== 'essencial')) {
-          setLimiteProjetos(null);
-        } else {
-          setLimiteProjetos({
-            projetosAtivos: res.projetosAtivos,
-            limite: res.limite,
-            planType: res.planType
-          });
-        }
         setCheckingLimit(false);
       } catch (e) {
         console.error('Erro ao verificar limite de projetos:', e);
@@ -1166,35 +1079,6 @@ const CriarProjeto = () => {
             <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
               <div className="p-4 md:p-8 min-w-0">
                 {/* Indicador de limite de projetos */}
-                {limiteProjetos && (
-                  <div className={`mb-6 p-4 rounded-lg border-2 ${
-                    limiteProjetos.projetosAtivos >= limiteProjetos.limite
-                      ? 'bg-red-50 border-red-200'
-                      : limiteProjetos.projetosAtivos >= limiteProjetos.limite * 0.8
-                      ? 'bg-yellow-50 border-yellow-200'
-                      : 'bg-blue-50 border-blue-200'
-                  }`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700">
-                          Projetos criados: <span className="font-bold">{limiteProjetos.projetosAtivos}/{limiteProjetos.limite}</span>
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Plano {limiteProjetos.planType === 'essencial' ? 'Essencial' : 'Básico'} – Limite de {limiteProjetos.limite} projetos. Apagar não libera novas vagas.
-                        </p>
-                      </div>
-                      {limiteProjetos.projetosAtivos >= limiteProjetos.limite && (
-                        <Link
-                          to="/cadastro-premium"
-                          className="text-sm font-semibold text-oraculo-blue hover:text-oraculo-purple underline"
-                        >
-                          Fazer upgrade
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
                 <form onSubmit={handleSubmit} className="space-y-5 min-w-0">
                   <div className="min-w-0">
                     <label className="block text-sm font-medium mb-1 text-gray-700">Nome do projeto</label>
@@ -1288,7 +1172,7 @@ const CriarProjeto = () => {
                       className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition disabled:opacity-70"
                       disabled={loading || uploading || (showUploadEdital && !novoEdital.nome)}
                     >
-                      {loading || uploading ? 'Salvando...' : <>Avaliar com IA <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span></>}
+                      {loading || uploading ? 'Salvando...' : 'Avaliar com IA'}
                     </button>
                   </div>
                 </form>

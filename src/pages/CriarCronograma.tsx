@@ -76,8 +76,6 @@ const CriarCronograma = () => {
   const [etapasAnteriores, setEtapasAnteriores] = useState<EtapaCronograma[]>([]);
   const [duracaoProjetoMeses, setDuracaoProjetoMeses] = useState<number | ''>('');
   const [expandedEtapaId, setExpandedEtapaId] = useState<string | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
 
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 5;
@@ -90,30 +88,10 @@ const CriarCronograma = () => {
       trackProjectStepViewed({
         projectId: id,
         step: 'criar_cronograma',
-        planType: isPremium ? 'premium' : undefined,
-      });
+        });
     }
-  }, [id, projeto, isPremium]);
+  }, [id, projeto]);
 
-  // Carregar premium e créditos (sem plano: 3 créditos para gerar cronograma)
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) return;
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
-      } catch (e) {
-        console.error('Erro ao verificar acesso:', e);
-      }
-    };
-    checkAccess();
-  }, [user]);
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -181,20 +159,13 @@ const CriarCronograma = () => {
   /** Lista de etapas ordenada só para exibição: pré → produção → pós → divulgação (concomitantes mantidas) */
   const etapasOrdenadas = useMemo(() => ordenarEtapasPorFase(etapas), [etapas]);
 
-  const CREDITOS_CRONOGRAMA = 3;
-
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
-    if (!isPremium && (creditos ?? 0) < CREDITOS_CRONOGRAMA) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
     setGerandoCronograma(true);
     const startTime = Date.now();
     trackTextGenerationStarted({
       projectId: id,
       textType: 'cronograma',
-      planType: isPremium ? 'premium' : undefined,
     });
     try {
       const duracaoMeses = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : undefined;
@@ -228,18 +199,7 @@ const CriarCronograma = () => {
         textType: 'cronograma',
         durationSeconds: (Date.now() - startTime) / 1000,
         textLength: etapasGeradas.length,
-        planType: isPremium ? 'premium' : undefined,
-      });
-      if (!isPremium) {
-        try {
-          const db = getFirestore();
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_CRONOGRAMA) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_CRONOGRAMA));
-        } catch (e) {
-          console.error('Erro ao descontar créditos cronograma:', e);
-        }
-      }
+        });
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
@@ -581,7 +541,6 @@ const CriarCronograma = () => {
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
                           Criar com IA
-                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>

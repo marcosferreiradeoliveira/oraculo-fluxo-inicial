@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, getDocs, doc, updateDoc, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Loader2, Crown, Search, UserX, Mail, Shield } from 'lucide-react';
+import { Loader2, Search, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ADMIN_EMAIL = 'marcosferreira@mobcontent.com.br';
@@ -17,16 +16,10 @@ interface Usuario {
   uid: string;
   email: string;
   nome_completo?: string;
-  isPremium: boolean;
-  planType?: string;
-  premiumStatus?: string;
-  premiumActivatedAt?: any;
   lastLoginAt?: any;
   createdAt?: any;
   data_cadastro?: any;
   role?: string;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
 }
 
 const Admin = () => {
@@ -35,7 +28,6 @@ const Admin = () => {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -80,16 +72,10 @@ const Admin = () => {
             uid: docSnap.id,
             email: data.email || '',
             nome_completo: data.nome_completo || '',
-            isPremium: data.isPremium === true,
-            planType: data.planType || '',
-            premiumStatus: data.premiumStatus || '',
-            premiumActivatedAt: data.premiumActivatedAt,
             lastLoginAt: data.lastLoginAt,
             createdAt: data.createdAt || data.data_cadastro,
             data_cadastro: data.data_cadastro,
             role: data.role || '',
-            stripeCustomerId: data.stripeCustomerId || '',
-            stripeSubscriptionId: data.stripeSubscriptionId || '',
           });
         });
         
@@ -106,99 +92,6 @@ const Admin = () => {
       fetchUsuarios();
     }
   }, [isAuthorized]);
-
-  const tornarPremium = async (usuario: Usuario) => {
-    if (!user || user.email !== ADMIN_EMAIL) {
-      toast.error('Acesso negado');
-      return;
-    }
-
-    if (!confirm(`Tornar ${usuario.email} premium sem pagamento?`)) {
-      return;
-    }
-
-    setUpdatingUserId(usuario.uid);
-    try {
-      const db = getFirestore();
-      const userRef = doc(db, 'usuarios', usuario.uid);
-      
-      const now = new Date();
-      const timestamp = now; // Firestore aceita Date diretamente
-      
-      await updateDoc(userRef, {
-        isPremium: true,
-        planType: 'basico', // ou 'premium' conforme necessário
-        premiumStatus: 'active',
-        premiumActivatedAt: timestamp,
-        lastSubscriptionUpdate: timestamp,
-        lastPaymentDate: timestamp, // Data do último "pagamento" (manual)
-        cancelAtPeriodEnd: false,
-        // Manter campos existentes se houver
-        // Não remover stripeCustomerId e stripeSubscriptionId se existirem
-      });
-
-      // Atualizar estado local
-      setUsuarios(prev => prev.map(u => 
-        u.uid === usuario.uid 
-          ? {
-              ...u,
-              isPremium: true,
-              planType: 'basico',
-              premiumStatus: 'active',
-              premiumActivatedAt: timestamp,
-            }
-          : u
-      ));
-
-      toast.success(`${usuario.email} agora é premium!`);
-    } catch (error) {
-      console.error('Erro ao tornar premium:', error);
-      toast.error('Erro ao atualizar usuário');
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
-
-  const removerPremium = async (usuario: Usuario) => {
-    if (!user || user.email !== ADMIN_EMAIL) {
-      toast.error('Acesso negado');
-      return;
-    }
-
-    if (!confirm(`Remover premium de ${usuario.email}?`)) {
-      return;
-    }
-
-    setUpdatingUserId(usuario.uid);
-    try {
-      const db = getFirestore();
-      const userRef = doc(db, 'usuarios', usuario.uid);
-      
-      await updateDoc(userRef, {
-        isPremium: false,
-        premiumStatus: 'inactive',
-        cancelAtPeriodEnd: false,
-      });
-
-      // Atualizar estado local
-      setUsuarios(prev => prev.map(u => 
-        u.uid === usuario.uid 
-          ? {
-              ...u,
-              isPremium: false,
-              premiumStatus: 'inactive',
-            }
-          : u
-      ));
-
-      toast.success(`Premium removido de ${usuario.email}`);
-    } catch (error) {
-      console.error('Erro ao remover premium:', error);
-      toast.error('Erro ao atualizar usuário');
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
 
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
@@ -245,7 +138,7 @@ const Admin = () => {
                 <Shield className="h-8 w-8 text-oraculo-blue" />
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Painel Administrativo</h1>
               </div>
-              <p className="text-gray-600">Gerenciar usuários e atribuir premium</p>
+              <p className="text-gray-600">Visualizar usuários cadastrados na plataforma</p>
             </div>
 
             <Card className="mb-6">
@@ -283,11 +176,9 @@ const Admin = () => {
                         <tr className="border-b border-gray-200">
                           <th className="text-left p-3 font-semibold text-gray-700">Email</th>
                           <th className="text-left p-3 font-semibold text-gray-700">Nome</th>
-                          <th className="text-left p-3 font-semibold text-gray-700">Status</th>
-                          <th className="text-left p-3 font-semibold text-gray-700">Plano</th>
+                          <th className="text-left p-3 font-semibold text-gray-700">Função</th>
                           <th className="text-left p-3 font-semibold text-gray-700">Cadastro</th>
                           <th className="text-left p-3 font-semibold text-gray-700">Último Login</th>
-                          <th className="text-left p-3 font-semibold text-gray-700">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -300,64 +191,12 @@ const Admin = () => {
                               </div>
                             </td>
                             <td className="p-3">{usuario.nome_completo || '-'}</td>
-                            <td className="p-3">
-                              {usuario.isPremium ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">
-                                  <Crown className="h-3 w-3" />
-                                  Premium
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-800 text-xs font-medium">
-                                  <UserX className="h-3 w-3" />
-                                  Free
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <span className="text-gray-700">{usuario.planType || '-'}</span>
-                            </td>
+                            <td className="p-3 text-gray-700">{usuario.role || '-'}</td>
                             <td className="p-3 text-gray-600 text-xs">
                               {formatDate(usuario.createdAt || usuario.data_cadastro)}
                             </td>
                             <td className="p-3 text-gray-600 text-xs">
                               {formatDate(usuario.lastLoginAt)}
-                            </td>
-                            <td className="p-3">
-                              <div className="flex gap-2">
-                                {usuario.isPremium ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => removerPremium(usuario)}
-                                    disabled={updatingUserId === usuario.uid}
-                                  >
-                                    {updatingUserId === usuario.uid ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <UserX className="h-4 w-4 mr-1" />
-                                        Remover Premium
-                                      </>
-                                    )}
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => tornarPremium(usuario)}
-                                    disabled={updatingUserId === usuario.uid}
-                                    className="bg-oraculo-blue hover:bg-oraculo-blue/90"
-                                  >
-                                    {updatingUserId === usuario.uid ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <Crown className="h-4 w-4 mr-1" />
-                                        Tornar Premium
-                                      </>
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
                             </td>
                           </tr>
                         ))}

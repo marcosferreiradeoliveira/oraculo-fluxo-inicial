@@ -256,8 +256,6 @@ const Projeto = () => {
   const [textoAnterior, setTextoAnterior] = useState<string>(''); // Armazena o texto antes de aplicar sugestão
   const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
   const [mostrarSucesso, setMostrarSucesso] = useState(false);
@@ -270,25 +268,6 @@ const Projeto = () => {
   const [user] = useAuthState(auth);
   const navigate = useNavigate();
 
-  // Check premium status
-  useEffect(() => {
-    const checkPremiumStatus = async () => {
-      if (!user) return;
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setIsPremium(userData.isPremium === true);
-          setCreditos(typeof userData.creditos === 'number' ? userData.creditos : 0);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
-      }
-    };
-    checkPremiumStatus();
-  }, [user]);
 
   // Alternar dicas a cada 5 segundos quando estiver analisando
   useEffect(() => {
@@ -301,19 +280,9 @@ const Projeto = () => {
     return () => clearInterval(interval);
   }, [analisando, mostrarAnalise, dicasProjetos.length]);
 
-  // Acesso: premium sempre liberado; sem plano usa créditos (avaliação = 5 créditos)
-  const CREDITOS_ANALISE = 5;
-  const checkPremiumAccess = () => {
-    if (isPremium) return true;
-    if ((creditos ?? 0) < CREDITOS_ANALISE) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return false;
-    }
-    return true;
-  };
 
   useEffect(() => {
-    document.title = 'Oráculo Cultural';
+    document.title = 'Instituto dos Sonhos';
   }, []);
 
   useEffect(() => {
@@ -404,13 +373,11 @@ const Projeto = () => {
             const userRef = doc(db, 'usuarios', user.uid);
             const userSnap = await getDoc(userRef);
             const userData = userSnap.exists() ? userSnap.data() : {};
-            const planType = userData?.planType || 'free';
             
             trackProjectViewed({
               projectId: id,
               hasAnalysis: !!data.analise_ia,
               hasTexts: !!data.textos,
-              planType: planType,
             });
           }
         }
@@ -434,7 +401,6 @@ const Projeto = () => {
 
   // Handler for approving a suggestion
   const handleAprovar = async (idx: number) => {
-    if (!checkPremiumAccess()) return;
     
     const textoBase = descricaoEditada || projeto?.descricao || '';
     if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
@@ -563,13 +529,11 @@ const Projeto = () => {
         const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
         const userData = userSnap.exists() ? userSnap.data() : {};
-        const planType = userData?.planType || 'free';
         
         trackSuggestionApplied({
           projectId: id,
           suggestionIndex: -1, // Indica sugestão personalizada
           suggestionText: 'Sugestão personalizada aprovada',
-          planType: planType,
         });
       }
       
@@ -680,7 +644,6 @@ const Projeto = () => {
 
   // Handler para aplicar sugestão personalizada do usuário
   const handleAplicarSugestaoPersonalizada = async () => {
-    if (!checkPremiumAccess()) return;
     
     if (!sugestaoPersonalizada.trim()) {
       alert('Por favor, digite uma sugestão antes de aplicar.');
@@ -914,7 +877,6 @@ const Projeto = () => {
 
   // Função para analisar com IA
   const analisarComIA = async () => {
-    if (!checkPremiumAccess()) return;
 
     // Track analysis started
     if (id && user) {
@@ -922,14 +884,12 @@ const Projeto = () => {
       const userRef = doc(db, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       const userData = userSnap.exists() ? userSnap.data() : {};
-      const planType = userData?.planType || 'free';
       const projetoSnap = await getDoc(doc(db, 'projetos', id));
       const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
       const isFirstAnalysis = !projetoData?.analise_ia;
       
       trackAnalysisStarted({
         projectId: id,
-        planType: planType,
         isFirstAnalysis: isFirstAnalysis,
       });
     }
@@ -1109,19 +1069,6 @@ const Projeto = () => {
 
         await updateDoc(ref, updateData);
 
-        if (user) {
-          try {
-            const userRef = doc(db, 'usuarios', user.uid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-              await updateDoc(userRef, { creditos: increment(-CREDITOS_ANALISE) });
-              setCreditos((c) => Math.max(0, c - CREDITOS_ANALISE));
-            }
-          } catch (e) {
-            console.error('Erro ao descontar créditos:', e);
-          }
-        }
-
         setStreamingAnaliseContent('');
         setProjeto((prev: any) => ({ ...prev, analise_ia: analiseIA, primeira_analise_completa: updateData.primeira_analise_completa ?? prev?.primeira_analise_completa }));
         const matches = extrairSugestoes(analiseIA);
@@ -1139,12 +1086,10 @@ const Projeto = () => {
         const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
         const userData = userSnap.exists() ? userSnap.data() : {};
-        const planType = userData?.planType || 'free';
         
         trackAnalysisFailed({
           projectId: id,
           error: e.message || 'Erro desconhecido',
-          planType: planType,
         });
       }
       
@@ -1501,8 +1446,6 @@ const Projeto = () => {
               <div className="flex items-center gap-2 md:justify-between mb-2 overflow-x-auto pb-2 md:pb-0 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.map((step, index) => {
                   const podeNavegar = index <= etapaAtual || (index === 3 && projeto?.analise_ia);
-                  const creditosStep: Record<number, number> = { 1: 5, 3: 1, 4: 3, 5: 3 };
-                  const cred = creditosStep[index];
                   return (
                     <div key={index} className="flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0">
                       <button 
@@ -1529,7 +1472,6 @@ const Projeto = () => {
                         }`}
                       >
                         {step}
-                        {typeof cred === 'number' && <span className="block text-[10px] text-gray-500 font-normal">{cred} {cred === 1 ? 'crédito' : 'créditos'}</span>}
                       </button>
                     </div>
                   );
@@ -2325,16 +2267,14 @@ const Projeto = () => {
                               </Button>
                               <Button
                                 onClick={() => {
-                                  if (!checkPremiumAccess()) return;
-                                  analisarComIA();
+                                                                analisarComIA();
                                 }}
                                 disabled={analisando}
                                 variant="outline"
                                 className="border-oraculo-purple text-oraculo-purple hover:bg-oraculo-purple/10 px-5 py-2.5"
                               >
                                 {analisando ? 'Avaliando...' : 'Avaliar de novo com IA'}
-                                <span className="ml-1.5 opacity-80 text-xs">(5 créditos)</span>
-                              </Button>
+                                                              </Button>
                             </div>
                         </div>
                       )}
@@ -2358,8 +2298,7 @@ const Projeto = () => {
                     >
                       <Brain className="h-8 w-8" />
                       {analisando ? 'Analisando...' : 'Analisar com IA'}
-                      <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span>
-                    </Button>
+                                          </Button>
                     {analisando && (
                       <div className="mt-4 bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
                         {statusIA || 'Iniciando análise...'}

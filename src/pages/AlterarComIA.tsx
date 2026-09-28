@@ -173,56 +173,16 @@ const AlterarComIA = () => {
   const [aprovacoes, setAprovacoes] = useState<boolean[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
   const [textoAnterior, setTextoAnterior] = useState<string>(''); // Armazena o texto antes de aplicar sugestão
   const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
 
   useEffect(() => {
-    document.title = 'Alterar com IA - Oráculo Cultural';
+    document.title = 'Alterar com IA - Instituto dos Sonhos';
   }, []);
 
-  // Verificar acesso: premium sempre liberado; não premium só na 1ª vez (uso gratuito)
   useEffect(() => {
-    const checkPremiumAndRedirect = async () => {
-      if (!user) {
-        navigate('/');
-        return;
-      }
-      
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const isPremiumStatus = userData.isPremium === true;
-          const usoGratuitoUtilizado = userData.usoGratuitoUtilizado === true;
-          setIsPremium(isPremiumStatus);
-          if (!isPremiumStatus && usoGratuitoUtilizado) {
-            navigate('/cadastro-premium');
-            return;
-          }
-        } else {
-          navigate('/cadastro-premium');
-          return;
-        }
-      } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
-        navigate('/cadastro-premium');
-      }
-    };
-    
-    checkPremiumAndRedirect();
+    if (!user) navigate('/');
   }, [user, navigate]);
-
-  // Acesso: premium sempre liberado; não premium só na 1ª vez
-  const checkPremiumAccess = () => {
-    if (isPremium) return true;
-    // usoGratuitoUtilizado não está em state aqui; checamos no useEffect ao carregar
-    // Se passou do useEffect, está liberado; ao usar vamos marcar no user
-    return true;
-  };
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -300,10 +260,9 @@ const AlterarComIA = () => {
       trackProjectStepViewed({
         projectId: id,
         step: 'alterar_com_ia',
-        planType: isPremium ? 'premium' : undefined,
       });
     }
-  }, [id, projeto, isPremium]);
+  }, [id, projeto]);
 
   useEffect(() => {
     if (analise) {
@@ -318,11 +277,6 @@ const AlterarComIA = () => {
   }, [analise]);
 
   const handleAprovar = async (idx: number) => {
-    // Verificar se o usuário é premium
-    if (!checkPremiumAccess()) {
-      return;
-    }
-    
     // Marca sugestão como aprovada
     const novasAprovacoes = [...aprovacoes];
     novasAprovacoes[idx] = true;
@@ -402,19 +356,6 @@ const AlterarComIA = () => {
         setTextoAnterior(textoBase);
         setDescricaoEditada(textoLimpo);
         setAguardandoAprovacao(true);
-        // Marcar uso gratuito utilizado para não premium (só pode usar 1 vez)
-        if (user) {
-          try {
-            const db = getFirestore();
-            const userRef = doc(db, 'usuarios', user.uid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-              await updateDoc(userRef, { usoGratuitoUtilizado: true });
-            }
-          } catch (e) {
-            console.error('Erro ao marcar uso gratuito:', e);
-          }
-        }
       }
       
       setGerando(false);
@@ -504,11 +445,6 @@ const AlterarComIA = () => {
   };
 
   const handleSalvar = async () => {
-    // Verificar se o usuário é premium
-    if (!checkPremiumAccess()) {
-      return;
-    }
-    
     if (!id) return;
     setSalvando(true);
     try {

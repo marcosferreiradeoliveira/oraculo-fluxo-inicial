@@ -1165,8 +1165,6 @@ const AvaliarProjeto = () => {
                     {steps.map((step, index) => {
                       const etapaAtualAnalise = 2; // Alterar com IA = step atual quando está na tela de análise
                       const podeNavegar = index <= etapaAtualAnalise || (index === 3 && analiseConteudo); // 0, 1, 2 sempre; 3 (Gerar Textos) se tiver análise
-                      const creditosStep: Record<number, number> = { 1: 5, 3: 1, 4: 3, 5: 3 };
-                      const cred = creditosStep[index];
                       return (
                         <div key={index} className="flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0">
                           <button 
@@ -1193,7 +1191,6 @@ const AvaliarProjeto = () => {
                             }`}
                           >
                             {step}
-                            {typeof cred === 'number' && <span className="block text-[10px] text-gray-500 font-normal">{cred} {cred === 1 ? 'crédito' : 'créditos'}</span>}
                           </button>
                         </div>
                       );

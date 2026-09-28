@@ -25,9 +25,9 @@ const Suporte = () => {
       categoria: "IA"
     },
     {
-      pergunta: "Posso cancelar minha assinatura a qualquer momento?",
-      resposta: "Sim, você pode cancelar sua assinatura a qualquer momento através da área de conta...",
-      categoria: "Assinatura"
+      pergunta: "Como entro em contato com o suporte?",
+      resposta: "Use o formulário desta página ou o botão de WhatsApp no canto da tela. Nossa equipe responde em horário comercial.",
+      categoria: "Conta"
     },
     {
       pergunta: "Os guias são atualizados regularmente?",

@@ -3,7 +3,7 @@ import { MessageCircle, X } from 'lucide-react';
 import { trackWhatsAppClicked } from '@/lib/analytics';
 
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '5521999999999';
-const WHATSAPP_MESSAGE = encodeURIComponent('Olá! Vim pelo site do Oráculo Cultural e gostaria de tirar uma dúvida.');
+const WHATSAPP_MESSAGE = encodeURIComponent('Olá! Vim pelo Instituto dos Sonhos e gostaria de tirar uma dúvida.');
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`;
 
 const POPUP_DELAY_MS = 20000; // 20 segundos

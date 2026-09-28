@@ -250,9 +250,9 @@ const Biblioteca = () => {
       <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
         <DialogContent className="max-w-xs text-center">
           <DialogHeader>
-            <DialogTitle>Crie sua conta</DialogTitle>
+            <DialogTitle>Faça login</DialogTitle>
             <DialogDescription>
-              Para baixar os guias do Oráculo Cultural, é preciso se cadastrar ou fazer login.
+              Para baixar os guias do Instituto dos Sonhos, é preciso fazer login.
             </DialogDescription>
           </DialogHeader>
           <Button className="mt-4 w-full bg-oraculo-blue text-white" onClick={() => {

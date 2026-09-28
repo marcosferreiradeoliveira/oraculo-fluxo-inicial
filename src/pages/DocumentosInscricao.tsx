@@ -38,11 +38,6 @@ const DocumentosInscricao = () => {
   const [edital, setEdital] = useState<EditalDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  const [creditos, setCreditos] = useState<number>(0);
-  const [isPremium, setIsPremium] = useState(false);
-
-  const CREDITOS_ANEXO = 2;
-
   const documentacaoExigida: string[] = edital?.documentacao_exigida
     ? edital.documentacao_exigida.map((item) =>
         typeof item === 'string' ? item : (item as { nome: string; fase?: string }).nome || String(item)
@@ -59,10 +54,9 @@ const DocumentosInscricao = () => {
       trackProjectStepViewed({
         projectId: id,
         step: 'documentos_inscricao',
-        planType: isPremium ? 'premium' : undefined,
       });
     }
-  }, [id, projeto, isPremium]);
+  }, [id, projeto]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -89,13 +83,6 @@ const DocumentosInscricao = () => {
           }
         }
 
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
         toast.error('Erro ao carregar dados');
@@ -108,10 +95,6 @@ const DocumentosInscricao = () => {
 
   const handleUpload = async (index: number, file: File) => {
     if (!id || !user || !projeto) return;
-    if (!isPremium && (creditos ?? 0) < CREDITOS_ANEXO) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
     setUploadingIndex(index);
     try {
       const storage = getStorage();
@@ -133,16 +116,6 @@ const DocumentosInscricao = () => {
         documentos_inscricao: novosDocumentos,
       });
       setProjeto((prev) => (prev ? { ...prev, documentos_inscricao: novosDocumentos } : null));
-
-      if (!isPremium) {
-        try {
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_ANEXO) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_ANEXO));
-        } catch (e) {
-          console.error('Erro ao descontar créditos anexo:', e);
-        }
-      }
 
       toast.success('Documento enviado com sucesso.');
     } catch (error) {

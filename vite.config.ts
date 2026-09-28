@@ -5,7 +5,6 @@ import path from "path";
 
 // https://vitejs.dev/config/
 const FIREBASE_PROJECT = process.env.VITE_PROJECT_ID || 'oraculo-is';
-const GUIA_CHECKOUT_FN = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net`;
 // Cronograma em dev: por padrão usa o emulador (evita 503 da função em produção).
 // Terminal 1: cd functions && npm run serve   Terminal 2: npm run dev
 // Para usar a função em produção em dev: VITE_CRONOGRAMA_USE_PROD=1 npm run dev
@@ -20,11 +19,6 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
-      '/api/checkout-guia-stripe': {
-        target: GUIA_CHECKOUT_FN,
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/checkout-guia-stripe/, '/criarCheckoutGuiaStripe'),
-      },
       '/api/gerarCronogramaIA': {
         target: useCronogramaProd ? CRONOGRAMA_PROD : CRONOGRAMA_EMULATOR_BASE,
         changeOrigin: true,

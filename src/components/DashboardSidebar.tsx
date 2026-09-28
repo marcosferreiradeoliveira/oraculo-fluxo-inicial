@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   Plus,
-  TrendingUp,
   PlayCircle,
   ExternalLink,
   Calendar,
@@ -39,7 +38,6 @@ const menuItems: MenuItem[] = [
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
-  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp, menuItem: 'inteligencia_mercado', outline: true },
 ];
 
 export function DashboardSidebar() {
@@ -119,21 +117,21 @@ export function DashboardSidebar() {
       {/* Menu lateral */}
       <div 
         ref={menuRef}
-        className={`fixed md:static z-30 w-64 min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed md:static z-30 w-64 min-h-screen bg-gradient-to-b from-[#071F4E] via-[#0A3A5C] to-[#1B4C41] text-white flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
         {/* Logo/Brand Section */}
-        <div className="p-6 border-b border-purple-800/30">
+        <div className="p-6 border-b border-white/10">
           <div className="flex items-center space-x-3">
             <img 
               src={logo} 
-              alt="Oráculo Cultural" 
-              className="w-10 h-10 object-contain"
+              alt="Instituto dos Sonhos" 
+              className="w-12 h-12 object-contain bg-white/95 rounded-full p-0.5"
             />
             <div>
-              <h1 className="text-xl font-bold">Oráculo</h1>
-              <p className="text-sm text-purple-300">Cultural</p>
+              <h1 className="text-lg font-display font-bold leading-tight">Instituto</h1>
+              <p className="text-sm text-[#FFCB05]">dos Sonhos</p>
             </div>
           </div>
         </div>
@@ -151,15 +149,15 @@ export function DashboardSidebar() {
                     onClick={() => trackMenuIntent({ menu_item: item.menuItem, destination: item.url, cta_type: 'external_link' })}
                     className={`flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
                       item.outline 
-                        ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20' 
-                        : 'hover:bg-purple-800/30'
+                        ? 'border-2 border-[#FFCB05]/40 hover:border-[#FFCB05] hover:bg-white/10' 
+                        : 'hover:bg-white/10'
                     } hover:translate-x-1`}
                   >
                     <div className="flex items-center space-x-3">
                       <item.icon className="h-5 w-5" />
                       <span className="font-medium">{item.title}</span>
                     </div>
-                    <ExternalLink className="h-4 w-4 text-purple-300" />
+                    <ExternalLink className="h-4 w-4 text-[#FFCB05]/80" />
                   </a>
                 ) : (
                   <NavLink
@@ -170,8 +168,8 @@ export function DashboardSidebar() {
                         isActive
                           ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
                           : item.outline
-                          ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20'
-                          : 'hover:bg-purple-800/30'
+                          ? 'border-2 border-[#FFCB05]/40 hover:border-[#FFCB05] hover:bg-white/10'
+                          : 'hover:bg-white/10'
                       } hover:translate-x-1`
                     }
                   >
@@ -187,11 +185,11 @@ export function DashboardSidebar() {
         </nav>
 
         {/* Logout ao pé do menu — visível em todas as telas */}
-        <div className="px-4 pb-3 border-t border-purple-800/30">
+        <div className="px-4 pb-3 border-t border-white/10">
           <button
             type="button"
             onClick={() => signOut(auth)}
-            className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-red-600/90 hover:bg-red-600 border border-red-500/50 font-medium transition-colors"
+            className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-[#ED1C24]/90 hover:bg-[#ED1C24] border border-[#ED1C24]/50 font-medium transition-colors"
           >
             <LogOut className="h-5 w-5" />
             Sair da conta
@@ -199,9 +197,9 @@ export function DashboardSidebar() {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-purple-800/30">
-          <div className="text-center text-sm text-purple-300">
-            <p> 2026 Oráculo Cultural</p>
+        <div className="p-4 border-t border-white/10">
+          <div className="text-center text-sm text-white/60">
+            <p>© 2026 Instituto dos Sonhos</p>
           </div>
         </div>
       </div>

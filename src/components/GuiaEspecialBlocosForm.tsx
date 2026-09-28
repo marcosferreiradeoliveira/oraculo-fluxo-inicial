@@ -429,7 +429,7 @@ export function GuiaEspecialBlocosForm({ value, onChange }: GuiaEspecialBlocosFo
                 <Textarea
                   value={formatLines(value.microcopySeguranca)}
                   onChange={(e) => onChange(update(value, 'microcopySeguranca', parseLines(e.target.value)))}
-                  placeholder="Ex: Pagamento seguro, Sem assinatura — um por linha"
+                  placeholder="Ex: Download direto, Acesso imediato — um por linha"
                   rows={3}
                 />
               </div>

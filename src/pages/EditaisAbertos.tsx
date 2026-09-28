@@ -2,17 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, deleteDoc, addDoc, Timestamp, getDoc, getFirestore } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, getDoc, getFirestore } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { toast } from 'sonner';
-import emailImage from '@/assets/email.png';
 
 interface Edital {
   id: string;
@@ -42,10 +40,6 @@ const EditaisAbertos = () => {
   const [loading, setLoading] = useState(true);
   const [user] = useAuthState(auth);
   const navigate = useNavigate();
-  const [emailNewsletter, setEmailNewsletter] = useState('');
-  const [salvandoEmail, setSalvandoEmail] = useState(false);
-  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
-
   useEffect(() => {
     const fetchEditais = async () => {
       try {
@@ -146,33 +140,11 @@ const EditaisAbertos = () => {
       const userRef = doc(firestore, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const isPremium = userData.isPremium === true;
-        
-        if (!isPremium) {
-          // Mostrar dialog de premium
-          setShowPremiumDialog(true);
-          return;
-        }
-      } else {
-        // Se o usuário não tem documento, não é premium
-        setShowPremiumDialog(true);
-        return;
-      }
-      
-      // Se chegou aqui, é premium - abrir link
       window.open('https://extratordeeditais.web.app/', '_blank');
     } catch (error) {
-      console.error('Erro ao verificar status premium:', error);
-      // Em caso de erro, mostrar dialog também para segurança
-      setShowPremiumDialog(true);
+      console.error('Erro ao abrir extrator de editais:', error);
+      toast.error('Não foi possível abrir o extrator. Tente novamente.');
     }
-  };
-
-  const handleGoToPricing = () => {
-    setShowPremiumDialog(false);
-    navigate('/cadastro-premium');
   };
 
   return (
@@ -362,141 +334,10 @@ const EditaisAbertos = () => {
               </div>
             </div>
 
-            {/* Formulário de cadastro de email para receber editais */}
-            <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
-              <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
-                <div className="flex-1 w-full md:w-auto">
-                  <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
-                    Receba em seu email os últimos editais
-                  </h3>
-                  <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-4">
-                    Todo o conteúdo é destrinchado por nossa inteligência artificial, facilitando sua compreensão e aumentando suas chances de aprovação
-                  </p>
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (!emailNewsletter.trim()) {
-                        toast.error('Por favor, insira um email válido');
-                        return;
-                      }
-                      
-                      // Validar formato de email
-                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                      if (!emailRegex.test(emailNewsletter.trim())) {
-                        toast.error('Por favor, insira um email válido');
-                        return;
-                      }
-                      
-                      setSalvandoEmail(true);
-                      try {
-                        // Salvar email no Firestore
-                        await addDoc(collection(db, 'newsletter_emails'), {
-                          email: emailNewsletter.trim(),
-                          userId: user?.uid || null,
-                          criadoEm: Timestamp.now(),
-                          origem: 'editais_abertos'
-                        });
-                        
-                        // Adicionar email ao Brevo
-                        try {
-                          console.log('[Newsletter] Chamando função Brevo para:', emailNewsletter.trim());
-                          const response = await fetch('https://adicionarcontatobrevo-v3odkawqzq-uc.a.run.app', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              email: emailNewsletter.trim(),
-                              nome: user?.displayName || null,
-                              listId: 15
-                            })
-                          });
-                          
-                          console.log('[Newsletter] Resposta do Brevo - Status:', response.status);
-                          const result = await response.json();
-                          console.log('[Newsletter] Resposta do Brevo - Body:', result);
-                          
-                          if (!response.ok) {
-                            console.error('[Newsletter] Erro ao adicionar ao Brevo:', result);
-                            // Não bloquear o fluxo se o Brevo falhar, mas logar o erro
-                          } else {
-                            console.log('[Newsletter] Email adicionado ao Brevo com sucesso');
-                          }
-                        } catch (brevoError: any) {
-                          console.error('[Newsletter] Erro ao chamar função Brevo:', brevoError);
-                          console.error('[Newsletter] Detalhes do erro:', brevoError.message, brevoError.stack);
-                          // Não bloquear o fluxo se o Brevo falhar
-                        }
-                        
-                        toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
-                        setEmailNewsletter('');
-                      } catch (error) {
-                        console.error('Erro ao salvar email:', error);
-                        toast.error('Erro ao cadastrar email. Tente novamente.');
-                      } finally {
-                        setSalvandoEmail(false);
-                      }
-                    }}
-                    className="flex flex-col gap-2 max-w-md"
-                  >
-                    <Input
-                      type="email"
-                      placeholder="Seu melhor email"
-                      value={emailNewsletter}
-                      onChange={(e) => setEmailNewsletter(e.target.value)}
-                      className="text-sm bg-white border-gray-200"
-                      disabled={salvandoEmail}
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
-                      disabled={salvandoEmail}
-                    >
-                      {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
-                    </Button>
-                  </form>
-                </div>
-                <div className="flex-shrink-0">
-                  <img 
-                    src={emailImage} 
-                    alt="Editais culturais" 
-                    className="w-32 h-32 md:w-48 md:h-48 object-contain rounded-lg"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         </main>
       </div>
 
-      {/* Dialog para usuário não premium */}
-      <Dialog open={showPremiumDialog} onOpenChange={setShowPremiumDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Recurso Exclusivo</DialogTitle>
-            <DialogDescription>
-              Este recurso é exclusivo para assinantes da plataforma.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 mt-4">
-            <p className="text-gray-700">
-              Para cadastrar editais, você precisa ser um assinante premium. Assine agora e tenha acesso a todos os recursos da plataforma!
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowPremiumDialog(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90" 
-                onClick={handleGoToPricing}
-              >
-                Ver Planos
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

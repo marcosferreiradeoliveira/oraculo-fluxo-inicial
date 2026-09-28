@@ -195,8 +195,6 @@ const CriarOrcamento = () => {
   const [sugestoesAlteracoes, setSugestoesAlteracoes] = useState<string>('');
   const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
   const [rateLimitModal, setRateLimitModal] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
   const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 4;
 
@@ -208,30 +206,10 @@ const CriarOrcamento = () => {
       trackProjectStepViewed({
         projectId: id,
         step: 'criar_orcamento',
-        planType: isPremium ? 'premium' : undefined,
-      });
+        });
     }
-  }, [id, projeto, isPremium]);
+  }, [id, projeto]);
 
-  // Carregar premium e créditos (sem plano: 3 créditos para salvar orçamento)
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) return;
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
-      } catch (e) {
-        console.error('Erro ao verificar acesso:', e);
-      }
-    };
-    checkAccess();
-  }, [user]);
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -399,10 +377,6 @@ const CriarOrcamento = () => {
       return;
     }
 
-    if (!isPremium && (creditos ?? 0) < CREDITOS_ORCAMENTO) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
 
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
@@ -412,7 +386,6 @@ const CriarOrcamento = () => {
     trackTextGenerationStarted({
       projectId: id!,
       textType: 'orcamento',
-      planType: isPremium ? 'premium' : undefined,
     });
 
     let gerouComSucesso = false;
@@ -708,18 +681,7 @@ const CriarOrcamento = () => {
           projectId: id!,
           textType: 'orcamento',
           durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
-          planType: isPremium ? 'premium' : undefined,
-        });
-      }
-      if (gerouComSucesso && user && !isPremium) {
-        try {
-          const db = getFirestore();
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_ORCAMENTO) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_ORCAMENTO));
-        } catch (e) {
-          console.error('Erro ao descontar créditos orçamento:', e);
-        }
+            });
       }
       setGerandoOrcamento(false);
     }
@@ -1301,9 +1263,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
     }
   };
 
-  const CREDITOS_ORCAMENTO = 3;
-
-  // Salvar orçamento (não desconta créditos; a geração já descontou)
+  // Salvar orçamento
   const salvarOrcamento = async () => {
     if (!id) return;
 
@@ -1605,7 +1565,6 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         <>
                           <Sparkles className="mr-2 h-4 w-4" />
                           Gerar Orçamento
-                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>

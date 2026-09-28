@@ -113,7 +113,7 @@ const ConfirmarEmail = () => {
             {/* Coluna do Conteúdo */}
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-                Bem-vindo ao Oráculo Cultural!
+                Bem-vindo ao Instituto dos Sonhos!
               </h1>
               <p className="text-lg text-gray-700 mb-6">
                 Estamos felizes em tê-lo conosco. Aqui você pode:
@@ -155,7 +155,7 @@ const ConfirmarEmail = () => {
                     <span className="text-oraculo-blue font-bold">4</span>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Acessar inteligência de mercado</h3>
+                    <h3 className="font-semibold text-gray-900 mb-1">Acessar editais e conteúdos</h3>
                     <p className="text-gray-600 text-sm">Fique por dentro de editais, podcasts, guias e muito mais</p>
                   </div>
                 </div>

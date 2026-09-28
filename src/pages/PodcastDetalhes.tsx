@@ -24,9 +24,7 @@ const PodcastDetalhes = () => {
   const [duration, setDuration] = useState(0);
   const [user] = useAuthState(auth);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
   const [podcastsBaixados, setPodcastsBaixados] = useState<string[]>([]);
 
   useEffect(() => {
@@ -43,24 +41,19 @@ const PodcastDetalhes = () => {
   }, [id]);
 
   useEffect(() => {
-    const checkPremiumStatus = async () => {
+    const loadUserDownloads = async () => {
       if (!user) return;
       try {
         const userRef = doc(db, 'usuarios', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setIsPremium(userData.isPremium === true);
-          setPodcastsBaixados(userData.podcastsBaixados || []);
+          setPodcastsBaixados(userSnap.data().podcastsBaixados || []);
         }
       } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
+        console.error('Erro ao carregar downloads do usuário:', error);
       }
     };
-    
-    if (user) {
-      checkPremiumStatus();
-    }
+    if (user) loadUserDownloads();
   }, [user]);
 
   useEffect(() => {
@@ -116,19 +109,8 @@ const PodcastDetalhes = () => {
       const userSnap = await getDoc(userRef);
       
       let currentDownloads = [...podcastsBaixados];
-      let isUserPremium = isPremium;
-      
       if (userSnap.exists()) {
-        const userData = userSnap.data();
-        isUserPremium = userData.isPremium === true;
-        currentDownloads = userData.podcastsBaixados || [];
-      }
-
-      // Check download limit for non-premium users
-      if (!isUserPremium && currentDownloads.length >= 2 && !currentDownloads.includes(id!)) {
-        e.preventDefault();
-        setShowUpgradeModal(true);
-        return;
+        currentDownloads = userSnap.data().podcastsBaixados || [];
       }
 
       // Register the download if not already registered
@@ -277,9 +259,9 @@ const PodcastDetalhes = () => {
         <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
           <DialogContent className="max-w-xs text-center">
             <DialogHeader>
-              <DialogTitle>Crie sua conta</DialogTitle>
+              <DialogTitle>Faça login</DialogTitle>
               <DialogDescription>
-                Para ter acesso ao conteúdo completo do Oráculo Cultural, é preciso se cadastrar.
+                Para ter acesso ao conteúdo completo do Instituto dos Sonhos, é preciso fazer login.
               </DialogDescription>
             </DialogHeader>
             <Button 
@@ -289,39 +271,11 @@ const PodcastDetalhes = () => {
                 navigate('/cadastro');
               }}
             >
-              Criar conta
+              Entrar
             </Button>
           </DialogContent>
         </Dialog>
 
-        {/* Upgrade Required Modal */}
-        <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
-          <DialogContent className="max-w-xs text-center">
-            <DialogHeader>
-              <DialogTitle>Limite de downloads atingido</DialogTitle>
-              <DialogDescription>
-                Você atingiu o limite de 2 downloads com a conta gratuita. Faça upgrade para Premium para baixar podcasts e ebooks ilimitados.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-2 mt-4">
-              <Button 
-                className="bg-oraculo-gold text-white hover:bg-oraculo-gold/90"
-                onClick={() => {
-                  setShowUpgradeModal(false);
-                  navigate('/cadastro-premium');
-                }}
-              >
-                Fazer upgrade para Premium
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={() => setShowUpgradeModal(false)}
-              >
-                Continuar com conta gratuita
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

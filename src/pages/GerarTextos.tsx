@@ -84,8 +84,6 @@ const GerarTextos = () => {
   const [mostrarModalRubricas, setMostrarModalRubricas] = useState(false);
   const [sugestaoTexto, setSugestaoTexto] = useState<string>('');
   const [aplicandoSugestao, setAplicandoSugestao] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
   const isMounted = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -132,29 +130,6 @@ const GerarTextos = () => {
       setMostrarCaixaTexto(true);
     }
   }, [textoSelecionado, gerando]);
-  // Carregar premium e créditos do usuário (sem plano: 1 crédito por geração de texto)
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) {
-        navigate('/');
-        return;
-      }
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setIsPremium(userData.isPremium === true);
-          setCreditos(typeof userData.creditos === 'number' ? userData.creditos : 0);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar acesso:', error);
-        navigate('/');
-      }
-    };
-    checkAccess();
-  }, [user, navigate]);
 
   // Buscar projeto ao carregar o componente
   useEffect(() => {
@@ -254,10 +229,9 @@ const GerarTextos = () => {
       trackProjectStepViewed({
         projectId: id,
         step: 'gerar_textos',
-        planType: isPremium ? 'premium' : undefined,
       });
     }
-  }, [id, projeto, isPremium]);
+  }, [id, projeto]);
 
   const salvarNoFirestore = async (tipo: TextoTipo, texto: string) => {
     if (!id) {
@@ -431,7 +405,6 @@ const GerarTextos = () => {
       trackTextGenerationStarted({
         projectId: id!,
         textType: tipoMapeado,
-        planType: isPremium ? 'premium' : undefined,
       });
 
       console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
@@ -514,9 +487,7 @@ const GerarTextos = () => {
               textType: tipoMapeado,
               durationSeconds: (Date.now() - startTime) / 1000,
               textLength: fullTextData.length,
-              planType: isPremium ? 'premium' : undefined,
-            });
-            await deduzirCreditoGerarTexto();
+                  });
             setTimeout(() => {
               const el = document.getElementById('pedidos-alteracao-texto');
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -625,9 +596,7 @@ const GerarTextos = () => {
             textType: tipoMapeado,
             durationSeconds: (Date.now() - startTime) / 1000,
             textLength: fullText.length,
-            planType: isPremium ? 'premium' : undefined,
-          });
-          await deduzirCreditoGerarTexto();
+              });
           setTimeout(() => {
             const el = document.getElementById('pedidos-alteracao-texto');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -683,29 +652,10 @@ const GerarTextos = () => {
     }
   };
 
-  const deduzirCreditoGerarTexto = async () => {
-    if (!user) return;
-    try {
-      const db = getFirestore();
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-        await updateDoc(userRef, { creditos: increment(-1) });
-        setCreditos((c) => Math.max(0, c - 1));
-      }
-    } catch (e) {
-      console.error('Erro ao descontar crédito:', e);
-    }
-  };
-
   const handleGerarTexto = async (tipo: string) => {
     if (!tipo) return;
     if (gerando) return;
 
-    if (!isPremium && (creditos ?? 0) < 1) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
 
     setMostrarCaixaTexto(true);
     setGerando(tipo);
@@ -930,7 +880,7 @@ const GerarTextos = () => {
             <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
               <div className="p-4 border-b min-w-0">
                 <h2 className="text-lg font-semibold text-gray-800">Gerar Textos</h2>
-                <p className="text-sm text-gray-500 mt-1 break-words">Para cada tipo, use o botão para gerar com IA (1 crédito por texto) ou escreva na caixa.</p>
+                <p className="text-sm text-gray-500 mt-1 break-words">Para cada tipo, use o botão para gerar com IA ou escreva na caixa.</p>
               </div>
 
               <div className="p-4 space-y-8">
@@ -965,7 +915,7 @@ const GerarTextos = () => {
                               Gerando...
                             </>
                           ) : (
-                            <>Criar Texto <span className="opacity-90 font-normal text-sm">(1 crédito)</span></>
+                            <>Criar Texto</>
                           )}
                         </Button>
                         {isOrcamento && textos[tipo] && rubricas.length > 0 && (

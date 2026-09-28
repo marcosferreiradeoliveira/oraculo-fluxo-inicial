@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ExternalLink, Sparkles, Edit, Play, Download, Loader2, CheckCircle } from 'lucide-react';
+import { ExternalLink, Sparkles, Edit, Play, Download, CheckCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { trackGuiaEspecialCtaClicked, trackGuiaEspecialPaymentSuccess, trackGuiaEspecialPdfDownloaded, trackGuiaEspecialViewed } from '@/lib/analytics';
+import { trackGuiaEspecialPdfDownloaded, trackGuiaEspecialViewed } from '@/lib/analytics';
 import type { GuiaEspecialCampos } from '@/types/guia-especial';
 
 declare global {
@@ -43,68 +43,12 @@ function arr(x: string[] | undefined): string[] {
 const DetalhesGuiaEspecial = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [guia, setGuia] = useState<Guia | null>(null);
   const [loading, setLoading] = useState(true);
   const [user] = useAuthState(auth);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [loadingStripe, setLoadingStripe] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
-
-  // Texto do CTA principal: exibir "Garanta agora seu guia" (evitar versão longa "guia de prestação de contas")
-  const textoCtaPrincipal =
-    guia?.ctaTextoPrincipal?.toLowerCase().includes('prestação de contas')
-      ? 'Garanta agora seu guia'
-      : (guia?.ctaTextoPrincipal || 'Garanta agora seu guia');
-
-  // Em desenvolvimento usa proxy do Vite para evitar CORS (localhost → mesma origem)
-  const GUIA_CHECKOUT_URL = import.meta.env.DEV
-    ? '/api/checkout-guia-stripe'
-    : 'https://us-central1-oraculo-is.cloudfunctions.net/criarCheckoutGuiaStripe';
-  
-  // Verificar se o pagamento foi concluído com sucesso
-  const paymentSuccess = searchParams.get('payment') === 'success';
-  const sessionId = searchParams.get('session_id') || undefined;
-
-  // Debug: verificar se paymentSuccess está sendo detectado
-  useEffect(() => {
-    if (paymentSuccess) {
-      console.log('[DetalhesGuiaEspecial] Pagamento sucesso detectado:', {
-        paymentSuccess,
-        sessionId,
-        guiaId: guia?.id,
-        guiaTitulo: guia?.titulo,
-        pdfUrl: guia?.pdfUrl,
-      });
-    }
-  }, [paymentSuccess, sessionId, guia?.id, guia?.titulo, guia?.pdfUrl]);
-
-  // Tracking de sucesso de pagamento (apenas uma vez quando a página carrega)
-  useEffect(() => {
-    if (paymentSuccess && guia?.id) {
-      const valorPago = guia.valorPromocional ?? guia.valorOriginal ?? 0;
-      trackGuiaEspecialPaymentSuccess({
-        guia_id: guia.id,
-        guia_titulo: guia.titulo,
-        valor_pago: valorPago,
-        session_id: sessionId,
-        user_id: user?.uid,
-        is_guest: !user,
-      });
-
-      // Facebook / Meta Pixel: conversão de venda para Facebook Ads
-      if (typeof window !== 'undefined' && window.fbq) {
-        window.fbq('track', 'Purchase', {
-          value: valorPago,
-          currency: 'BRL',
-          content_name: guia.titulo || 'Guia Especial',
-          content_type: 'product',
-          content_ids: [guia.id],
-        });
-      }
-    }
-  }, [paymentSuccess, guia?.id, guia?.titulo, guia?.valorPromocional, guia?.valorOriginal, sessionId, user]);
 
   // Evento Mixpanel (e Firebase/GTM): chegada na página do guia especial
   useEffect(() => {
@@ -157,11 +101,11 @@ const DetalhesGuiaEspecial = () => {
           setGuia(data);
         } else {
           // Se não encontrar, redirecionar para página de guias
-          navigate('/inteligencia-mercado');
+          navigate('/biblioteca');
         }
       } catch (error) {
         console.error('Erro ao buscar guia:', error);
-        navigate('/inteligencia-mercado');
+        navigate('/biblioteca');
       } finally {
         setLoading(false);
       }
@@ -193,47 +137,17 @@ const DetalhesGuiaEspecial = () => {
     ctaRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleGarantaAgora = async (ctaSlot: 'final_main' | 'final_micro') => {
-    trackGuiaEspecialCtaClicked({
-      cta_slot: ctaSlot,
-      cta_text: ctaSlot === 'final_main' ? textoCtaPrincipal : 'Comece agora • Acesso imediato',
-      guia_id: guia?.id,
-      guia_titulo: guia?.titulo,
-      action: 'navigate_to_premium',
-    });
-
-    if (!guia?.id) return;
-
-    const payload = {
-      guiaId: guia.id,
-      ...(user
-        ? { userId: user.uid, email: user.email || userEmail || '' }
-        : { userId: 'guest', email: '' }),
-    };
-
-    setLoadingStripe(true);
-    try {
-      const res = await fetch(GUIA_CHECKOUT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.details || err.error || `Erro ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-        return;
-      }
-      throw new Error('Link de pagamento não retornado');
-    } catch (e) {
-      setLoadingStripe(false);
-      alert(`Erro ao redirecionar para o pagamento: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
+  const handleDownloadPdf = () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
     }
+    if (!guia?.pdfUrl) return;
+    trackGuiaEspecialPdfDownloaded({
+      guia_id: guia.id,
+      guia_titulo: guia.titulo,
+    });
+    window.open(guia.pdfUrl, '_blank');
   };
 
   if (loading) {
@@ -263,7 +177,7 @@ const DetalhesGuiaEspecial = () => {
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg">Guia não encontrado</p>
               <Button 
-                onClick={() => navigate('/inteligencia-mercado')}
+                onClick={() => navigate('/biblioteca')}
                 className="mt-4"
               >
                 Voltar para Guias
@@ -294,54 +208,6 @@ const DetalhesGuiaEspecial = () => {
                   Editar Guia
                 </Button>
               </div>
-            )}
-
-            {/* Banner de Sucesso após Pagamento */}
-            {paymentSuccess && (
-              <Card className="mb-6 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-lg">
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                        <CheckCircle className="h-8 w-8 text-white" />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-                        Pagamento confirmado! 🎉
-                      </h2>
-                      <p className="text-gray-700 mb-4">
-                        Obrigado pela sua compra! {guia?.pdfUrl ? 'Seu guia especial está pronto para download.' : 'Estamos processando seu pedido.'}
-                      </p>
-                      {guia?.pdfUrl ? (
-                        <Button
-                          onClick={() => {
-                            trackGuiaEspecialPdfDownloaded({
-                              guia_id: guia.id,
-                              guia_titulo: guia.titulo,
-                              session_id: sessionId,
-                            });
-                            window.open(guia.pdfUrl, '_blank');
-                          }}
-                          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90 text-white px-6 py-3 text-base font-semibold flex items-center gap-2"
-                        >
-                          <Download className="h-5 w-5" />
-                          Baixar PDF do Guia
-                        </Button>
-                      ) : (
-                        <div className="space-y-2">
-                          <p className="text-amber-700 text-sm font-medium">
-                            ⚠️ O PDF do guia ainda não está disponível.
-                          </p>
-                          <p className="text-gray-600 text-sm">
-                            Entre em contato com o suporte através do email <strong>suporte@oraculocultural.com.br</strong> ou pelo WhatsApp para receber seu guia.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             )}
 
             {/* Card Principal */}
@@ -684,24 +550,6 @@ const DetalhesGuiaEspecial = () => {
                   {guia.textoAncoragemValor && (
                     <p className="text-center text-oraculo-purple font-medium mb-4">{guia.textoAncoragemValor}</p>
                   )}
-                  {/* Exibição de Preço */}
-                  {guia.valorOriginal && guia.valorPromocional && (
-                    <div className="text-center mb-6">
-                      <div className="flex items-center justify-center gap-3 mb-2">
-                        <span className="text-2xl md:text-3xl text-gray-400 line-through">
-                          R$ {guia.valorOriginal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-3xl md:text-4xl font-bold text-oraculo-purple">
-                          R$ {guia.valorPromocional.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      {guia.valorOriginal > guia.valorPromocional && (
-                        <p className="text-sm text-gray-600">
-                          Economia de R$ {(guia.valorOriginal - guia.valorPromocional).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      )}
-                    </div>
-                  )}
                   {arr(guia.badgeRiscoBaixo).length > 0 && (
                     <div className="flex flex-wrap justify-center gap-2 mb-6">
                       {arr(guia.badgeRiscoBaixo).map((b, i) => (
@@ -724,35 +572,20 @@ const DetalhesGuiaEspecial = () => {
                       </p>
                     )}
                   </div>
-                  <Button
-                    onClick={() => handleGarantaAgora('final_main')}
-                    disabled={loadingStripe}
-                    className="w-full md:w-auto mx-auto flex items-center justify-center gap-2 bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-8 py-6 text-lg font-semibold disabled:opacity-70"
-                    size="lg"
-                  >
-                    {loadingStripe ? (
-                      <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Redirecionando ao pagamento...
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="h-5 w-5" />
-                        {textoCtaPrincipal}
-                      </>
-                    )}
-                  </Button>
-                  {/* Micro-CTA repetido (converte mais, especialmente em mobile) */}
-                  <div className="mt-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleGarantaAgora('final_micro')}
-                      disabled={loadingStripe}
-                      className="text-oraculo-purple font-semibold text-sm hover:underline focus:outline-none focus:ring-2 focus:ring-oraculo-purple focus:ring-offset-2 rounded px-2 py-1 disabled:opacity-60 disabled:pointer-events-none"
+                  {guia.pdfUrl ? (
+                    <Button
+                      onClick={handleDownloadPdf}
+                      className="w-full md:w-auto mx-auto flex items-center justify-center gap-2 bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-8 py-6 text-lg font-semibold"
+                      size="lg"
                     >
-                      Comece agora • Acesso imediato
-                    </button>
-                  </div>
+                      <Download className="h-5 w-5" />
+                      Baixar PDF do guia
+                    </Button>
+                  ) : (
+                    <p className="text-center text-gray-600 text-sm">
+                      O PDF deste guia ainda não está disponível. Volte em breve ou fale com o suporte.
+                    </p>
+                  )}
                   {arr(guia.microcopySeguranca).length > 0 && (
                     <div className="flex flex-wrap justify-center gap-4 mt-4 text-gray-500 text-xs">
                       {arr(guia.microcopySeguranca).map((m, i) => (
@@ -773,7 +606,7 @@ const DetalhesGuiaEspecial = () => {
           <DialogHeader>
             <DialogTitle>Acesso Restrito</DialogTitle>
             <DialogDescription>
-              Para acessar este guia especial, é necessário fazer login ou criar uma conta.
+              Para acessar este guia especial, é necessário fazer login.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 mt-4">
@@ -784,7 +617,7 @@ const DetalhesGuiaEspecial = () => {
                 navigate(guia?.id ? `/cadastro?redirect=/guia-especial/${guia.id}` : '/cadastro');
               }}
             >
-              Criar Conta / Entrar
+              Entrar
             </Button>
             <Button 
               variant="outline"

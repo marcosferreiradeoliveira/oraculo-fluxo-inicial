@@ -98,7 +98,7 @@ const Podcast = () => {
             <div className="mb-8">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                 <Headphones className="h-8 w-8 text-oraculo-blue" />
-                Podcast Oráculo Cultural
+                Podcast Instituto dos Sonhos
               </h1>
               <p className="text-gray-600 text-sm md:text-base">
                 Acompanhe nossos episódios e fique por dentro das novidades do mundo cultural.
@@ -204,7 +204,7 @@ const Podcast = () => {
                               </a>
                             </div>
                             {!user && (
-                              <span className="text-oraculo-blue font-medium text-sm mt-2">Acesse todos os conteúdos e ferramentas do Oráculo Cultural criando sua conta</span>
+                              <span className="text-oraculo-blue font-medium text-sm mt-2">Acesse todos os conteúdos e ferramentas do Instituto dos Sonhos fazendo login</span>
                             )}
                           </div>
                         )}
@@ -272,9 +272,9 @@ const Podcast = () => {
       <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
         <DialogContent className="max-w-xs text-center">
           <DialogHeader>
-            <DialogTitle>Crie sua conta</DialogTitle>
+            <DialogTitle>Faça login</DialogTitle>
             <DialogDescription>
-              Para ter acesso ao conteúdo completo do Oráculo Cultural, é preciso se cadastrar.
+              Para ter acesso ao conteúdo completo do Instituto dos Sonhos, é preciso fazer login.
             </DialogDescription>
           </DialogHeader>
           <Button className="mt-4 w-full bg-oraculo-blue text-white" onClick={() => {

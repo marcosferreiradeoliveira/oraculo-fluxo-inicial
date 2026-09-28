@@ -31,7 +31,7 @@ const trackEvent = (eventName: string, eventParams: Record<string, any> = {}) =>
         event: eventName,
         ...eventParams,
         page_path: window.location.pathname + window.location.search,
-        page_title: document.title || 'Oráculo Cultural',
+        page_title: document.title || 'Instituto dos Sonhos',
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -45,7 +45,7 @@ const trackEvent = (eventName: string, eventParams: Record<string, any> = {}) =>
       window.mixpanel.track(eventName, {
         ...eventParams,
         page_path: window.location.pathname + window.location.search,
-        page_title: document.title || 'Oráculo Cultural',
+        page_title: document.title || 'Instituto dos Sonhos',
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -255,83 +255,6 @@ export const trackProjectStepViewed = (params: {
   });
 };
 
-// ==========================================
-// EVENTOS DE ASSINATURA/PREMIUM
-// ==========================================
-
-/**
- * Página de planos visualizada
- */
-export const trackPricingViewed = (params: {
-  source?: string; // 'upgrade_prompt', 'menu', 'home', etc
-  currentPlan?: string;
-}) => {
-  trackEvent('pricing_viewed', {
-    source: params.source,
-    current_plan: params.currentPlan,
-  });
-};
-
-/**
- * Início do processo de assinatura
- */
-export const trackSubscriptionStarted = (params: {
-  planType: string;
-  isAnnual?: boolean;
-  planPrice?: number;
-  source?: string;
-}) => {
-  trackEvent('subscription_started', {
-    plan_type: params.planType,
-    is_annual: params.isAnnual,
-    plan_price: params.planPrice,
-    source: params.source,
-  });
-};
-
-/**
- * Assinatura concluída (conversão)
- * 🔴 CRÍTICO: Receita direta
- */
-export const trackSubscriptionCompleted = (params: {
-  planType: string;
-  isAnnual?: boolean;
-  planPrice?: number;
-  transactionId?: string;
-}) => {
-  // Evento original
-  trackEvent('subscription_completed', {
-    plan_type: params.planType,
-    is_annual: params.isAnnual,
-    plan_price: params.planPrice,
-    transaction_id: params.transactionId,
-    value: params.planPrice, // Para análise de receita
-    currency: 'BRL',
-  });
-  
-  // Evento crítico renomeado conforme especificação
-  trackEvent('premium_pagamento_sucesso', {
-    tipo_plano: params.planType,
-    valor_plano: params.planPrice,
-    duracao_plano: params.isAnnual ? 'anual' : 'mensal',
-    transaction_id: params.transactionId,
-    value: params.planPrice,
-    currency: 'BRL',
-  });
-};
-
-/**
- * Cancelamento de assinatura
- */
-export const trackSubscriptionCancelled = (params: {
-  planType: string;
-  reason?: string;
-}) => {
-  trackEvent('subscription_cancelled', {
-    plan_type: params.planType,
-    reason: params.reason,
-  });
-};
 
 // ==========================================
 // EVENTOS DE PORTFOLIO
@@ -372,32 +295,6 @@ export const trackPortfolioExtractionCompleted = (params: {
   });
 };
 
-// ==========================================
-// EVENTOS DE NEWSLETTER/MARKETING
-// ==========================================
-
-/**
- * Inscrição na newsletter
- * 🟠 ALTA: Lista de emails
- */
-export const trackNewsletterSubscribed = (params: {
-  source: string; // 'home', 'editais_abertos_page', etc
-  email?: string;
-  isLoggedIn?: boolean;
-}) => {
-  // Evento original
-  trackEvent('newsletter_subscribed', {
-    source: params.source,
-    is_logged_in: params.isLoggedIn,
-  });
-  
-  // Evento de alta prioridade renomeado conforme especificação
-  trackEvent('email_edital_cadastro', {
-    origem_conversao: params.source,
-    is_logged_in: params.isLoggedIn,
-    // email: masked (não enviar email completo por privacidade)
-  });
-};
 
 // ==========================================
 // EVENTOS DE NAVEGAÇÃO
@@ -474,7 +371,6 @@ const MENU_INTENT_MAP: Record<string, string> = {
   perfil: 'intent_view_perfil',
   suporte: 'intent_view_support',
   prestacao_contas: 'intent_external_prestacao',
-  inteligencia_mercado: 'intent_view_inteligencia',
   login: 'intent_login',
 };
 
@@ -623,7 +519,7 @@ export const trackGuiaEspecialCtaClicked = (params: {
   cta_text: string;
   guia_id?: string;
   guia_titulo?: string;
-  action: 'scroll_to_price' | 'navigate_to_premium';
+  action: 'scroll_to_price' | 'navigate_to_cta';
 }) => {
   // Determinar o nome do evento baseado no tipo de CTA
   const isFinalCta = params.cta_slot === 'final_main' || params.cta_slot === 'final_micro';
@@ -774,8 +670,6 @@ export const trackLogout = () => {
 export const identifyMixpanelUser = (userId: string, userProperties?: {
   email?: string;
   name?: string;
-  planType?: string;
-  isPremium?: boolean;
   [key: string]: any;
 }) => {
   if (typeof window !== 'undefined' && window.mixpanel) {
@@ -788,8 +682,6 @@ export const identifyMixpanelUser = (userId: string, userProperties?: {
         window.mixpanel.people.set({
           $email: userProperties.email,
           $name: userProperties.name,
-          planType: userProperties.planType,
-          isPremium: userProperties.isPremium,
           ...userProperties,
         });
       }

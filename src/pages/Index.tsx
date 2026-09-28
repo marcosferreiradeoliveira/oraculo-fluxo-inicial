@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { FeaturedGuides } from '@/components/FeaturedGuides';
-import { RecentContent } from '@/components/RecentContent';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, limit, where, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp, getFirestore } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones, Sparkles, PlusCircle, FolderOpen, CheckCircle2 } from 'lucide-react';
+import { Calendar, DollarSign, Sparkles, PlusCircle, FolderOpen, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { trackNewsletterSubscribed, trackCtaVerComoFunciona, trackSignUp } from '@/lib/analytics';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { trackCtaVerComoFunciona, trackSignUp } from '@/lib/analytics';
 import analisarImage from '@/assets/Analisar.jpeg';
 
 // Função para capitalizar apenas a primeira letra do título
@@ -28,26 +23,15 @@ const capitalizarTitulo = (titulo: string): string => {
 const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [guias, setGuias] = useState<any[]>([]);
-  const [loadingGuias, setLoadingGuias] = useState(true);
-  const [podcasts, setPodcasts] = useState<any[]>([]);
-  const [loadingPodcasts, setLoadingPodcasts] = useState(true);
   const [editais, setEditais] = useState<any[]>([]);
   const [loadingEditais, setLoadingEditais] = useState(true);
   const [user] = useAuthState(auth);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [redirectPremium, setRedirectPremium] = useState(false);
-  const [emailNewsletter, setEmailNewsletter] = useState('');
-  const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [projetos, setProjetos] = useState<any[]>([]);
   const [loadingProjetos, setLoadingProjetos] = useState(false);
-  const [userPlanType, setUserPlanType] = useState<string | null>(null);
-
   // Buscar projetos do usuário quando logado
   useEffect(() => {
     if (!user?.uid) {
       setProjetos([]);
-      setUserPlanType(null);
       return;
     }
     setLoadingProjetos(true);
@@ -68,26 +52,6 @@ const Index = () => {
       })
       .finally(() => setLoadingProjetos(false));
   }, [user?.uid]);
-
-  // Buscar planType do usuário quando necessário (para popup de sucesso)
-  useEffect(() => {
-    if (!user?.uid || !location.state?.showPremiumSuccess) return;
-    // Se já veio no state, usar ele; senão buscar do Firestore
-    if (location.state?.planType) {
-      setUserPlanType(location.state.planType);
-    } else {
-      getDoc(doc(db, 'usuarios', user.uid))
-        .then((userSnap) => {
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            setUserPlanType(data.planType || null);
-          }
-        })
-        .catch((err) => {
-          console.error('Erro ao buscar planType:', err);
-        });
-    }
-  }, [user?.uid, location.state?.showPremiumSuccess, location.state?.planType]);
 
   // Scroll para a seção de editais quando a URL tiver #editais-abertos
   useEffect(() => {
@@ -116,63 +80,7 @@ const Index = () => {
     }
   }, [location.state?.showCadastroSuccess]);
 
-  useEffect(() => {
-    const fetchGuias = async () => {
-      setLoadingGuias(true);
-      try {
-        // Busca apenas 2 guias
-        let snapshot;
-        try {
-          const qGuias = query(collection(db, 'guias'), orderBy('criadoEm', 'desc'), limit(10));
-          snapshot = await getDocs(qGuias);
-        } catch (orderError) {
-          console.log('Erro ao ordenar, buscando sem ordenação:', orderError);
-          const qGuias = query(collection(db, 'guias'), limit(10));
-          snapshot = await getDocs(qGuias);
-        }
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Ordenar: especiais primeiro, depois os normais, e pegar apenas 2
-        const guiasEspeciais = data.filter((g: any) => g.especial === true);
-        const guiasNormais = data.filter((g: any) => !g.especial || g.especial === false);
-        const guiasOrdenados = [...guiasEspeciais, ...guiasNormais].slice(0, 2);
-        
-        setGuias(guiasOrdenados);
-      } catch (e) {
-        console.error('Erro ao buscar guias:', e);
-        setGuias([]);
-      } finally {
-        setLoadingGuias(false);
-      }
-    };
-    fetchGuias();
-  }, []);
 
-  useEffect(() => {
-    const fetchPodcasts = async () => {
-      setLoadingPodcasts(true);
-      try {
-        // Busca apenas 2 podcasts
-        let snapshot;
-        try {
-          const qPodcasts = query(collection(db, 'podcast_episodios'), orderBy('criadoEm', 'desc'), limit(2));
-          snapshot = await getDocs(qPodcasts);
-        } catch (orderError) {
-          console.log('Erro ao ordenar, buscando sem ordenação:', orderError);
-          const qPodcasts = query(collection(db, 'podcast_episodios'), limit(2));
-          snapshot = await getDocs(qPodcasts);
-        }
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setPodcasts(data);
-      } catch (e) {
-        console.error('Erro ao buscar podcasts:', e);
-        setPodcasts([]);
-      } finally {
-        setLoadingPodcasts(false);
-      }
-    };
-    fetchPodcasts();
-  }, []);
 
   useEffect(() => {
     const fetchEditais = async () => {
@@ -238,42 +146,6 @@ const Index = () => {
     fetchEditais();
   }, []);
 
-  const handleDownloadGuia = async (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, guiaId: string, pdfUrl: string) => {
-    if (!user) {
-      e.preventDefault();
-      setShowAuthModal(true);
-      return;
-    }
-    try {
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      let guiasBaixados: string[] = [];
-      let isPremium = false;
-      if (userSnap.exists()) {
-        const data = userSnap.data();
-        guiasBaixados = data.guiasBaixados || [];
-        isPremium = data.isPremium || false;
-      }
-      // Se não for premium e já baixou 1 guia diferente
-      if (!isPremium && guiasBaixados.length >= 1 && !guiasBaixados.includes(guiaId)) {
-        e.preventDefault();
-        setRedirectPremium(true);
-        return;
-      }
-      // Registra o guia baixado
-      if (!guiasBaixados.includes(guiaId)) {
-        if (userSnap.exists()) {
-          await updateDoc(userRef, { guiasBaixados: arrayUnion(guiaId) });
-        } else {
-          await setDoc(userRef, { guiasBaixados: [guiaId] });
-        }
-      }
-      // Permite o download
-    } catch (err) {
-      e.preventDefault();
-      alert('Erro ao registrar download do guia. Tente novamente.');
-    }
-  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -491,263 +363,12 @@ const Index = () => {
                 Ver Mais Editais
               </Button>
               
-              {/* Formulário de cadastro de email para receber editais */}
-              <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
-                <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
-                  <div className="flex-1 w-full md:w-auto">
-                    <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
-                      Receba em seu email os últimos editais
-                    </h3>
-                    <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-4">
-                      Todo o conteúdo é destrinchado por nossa inteligência artificial, facilitando sua compreensão e aumentando suas chances de aprovação
-                    </p>
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!emailNewsletter.trim()) {
-                          toast.error('Por favor, insira um email válido');
-                          return;
-                        }
-                        
-                        // Validar formato de email
-                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                        if (!emailRegex.test(emailNewsletter.trim())) {
-                          toast.error('Por favor, insira um email válido');
-                          return;
-                        }
-                        
-                        setSalvandoEmail(true);
-                        try {
-                          // Salvar email no Firestore
-                          await addDoc(collection(db, 'newsletter_emails'), {
-                            email: emailNewsletter.trim(),
-                            userId: user?.uid || null,
-                            criadoEm: Timestamp.now(),
-                            origem: 'home_editais_abertos'
-                          });
-                          
-                          // Adicionar email ao Brevo
-                          try {
-                            console.log('[Newsletter] Chamando função Brevo para:', emailNewsletter.trim());
-                            const response = await fetch('https://adicionarcontatobrevo-v3odkawqzq-uc.a.run.app', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({
-                                email: emailNewsletter.trim(),
-                                nome: user?.displayName || null,
-                                listId: 15
-                              })
-                            });
-                            
-                            console.log('[Newsletter] Resposta do Brevo - Status:', response.status);
-                            const result = await response.json();
-                            console.log('[Newsletter] Resposta do Brevo - Body:', result);
-                            
-                            if (!response.ok) {
-                              console.error('[Newsletter] Erro ao adicionar ao Brevo:', result);
-                              // Não bloquear o fluxo se o Brevo falhar, mas logar o erro
-                            } else {
-                              console.log('[Newsletter] Email adicionado ao Brevo com sucesso');
-                            }
-                          } catch (brevoError: any) {
-                            console.error('[Newsletter] Erro ao chamar função Brevo:', brevoError);
-                            console.error('[Newsletter] Detalhes do erro:', brevoError.message, brevoError.stack);
-                            // Não bloquear o fluxo se o Brevo falhar
-                          }
-                          
-                          // Track newsletter subscription
-                          trackNewsletterSubscribed({
-                            source: 'home_editais_abertos',
-                            isLoggedIn: !!user,
-                          });
-                          
-                          toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
-                          setEmailNewsletter('');
-                        } catch (error) {
-                          console.error('Erro ao salvar email:', error);
-                          toast.error('Erro ao cadastrar email. Tente novamente.');
-                        } finally {
-                          setSalvandoEmail(false);
-                        }
-                      }}
-                      className="flex flex-col gap-2 max-w-md"
-                    >
-                      <Input
-                        type="email"
-                        placeholder="Seu melhor email"
-                        value={emailNewsletter}
-                        onChange={(e) => setEmailNewsletter(e.target.value)}
-                        className="text-sm bg-white border-gray-200"
-                        disabled={salvandoEmail}
-                        required
-                      />
-                      <Button
-                        type="submit"
-                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
-                        disabled={salvandoEmail}
-                      >
-                        {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
-                      </Button>
-                    </form>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* Inteligência de Mercado */}
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <TrendingUp className="h-6 w-6 text-oraculo-blue" />
-                  Inteligência de Mercado
-                </h2>
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate('/inteligencia-mercado')}
-                  className="hidden md:flex"
-                >
-                  Ver Mais
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {loadingGuias || loadingPodcasts ? (
-                  <div className="text-center text-gray-500 py-12 col-span-4">Carregando conteúdos...</div>
-                ) : guias.length === 0 && podcasts.length === 0 ? (
-                  <div className="text-center text-gray-500 py-12 col-span-4">Nenhum conteúdo disponível ainda.</div>
-                ) : (
-                  <>
-                    {/* Guias */}
-                    {guias.map((guia, index) => {
-                      // Verificação mais robusta para isEspecial (pode vir como true, "true", 1, etc)
-                    const isEspecial = Boolean(guia.especial) && (guia.especial === true || String(guia.especial).toLowerCase() === 'true' || Number(guia.especial) === 1);
-                      return (
-                      <Card key={`guia-${guia.id || index}`} className="hover:shadow-lg transition-all hover:-translate-y-1">
-                        <div className="aspect-video relative overflow-hidden rounded-t-lg">
-                          <img 
-                            src={guia.imgUrl} 
-                            alt={guia.titulo}
-                            className="w-full h-full object-cover"
-                          />
-                          {isEspecial ? (
-                            <Badge className="absolute top-2 right-2 bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white">
-                              <FileText className="h-3 w-3 mr-1" />
-                              ESPECIAL
-                            </Badge>
-                          ) : (
-                            <Badge className="absolute top-2 right-2 bg-blue-600 text-white">
-                              <FileText className="h-3 w-3 mr-1" />
-                              Guia
-                            </Badge>
-                          )}
-                        </div>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
-                            {guia.titulo}
-                          </CardTitle>
-                          <div
-                            className="text-sm text-muted-foreground overflow-hidden break-words max-h-[4.5rem] [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug"
-                            dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
-                          />
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <Button 
-                            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              // Guias especiais podem ser acessados sem login
-                              if (isEspecial) {
-                                navigate(`/guia-especial/${guia.id}`);
-                                return;
-                              }
-                              
-                              // Guias normais precisam de login
-                              if (!user) {
-                                setShowAuthModal(true);
-                                return;
-                              }
-                              
-                              if (guia.pdfUrl) {
-                                window.open(guia.pdfUrl, '_blank');
-                                handleDownloadGuia(e as any, guia.id, guia.pdfUrl);
-                              }
-                            }}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            {isEspecial ? 'Ver Detalhes' : 'Baixar Guia'}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                    })}
 
-                    {/* Podcasts */}
-                    {podcasts.map((ep, index) => (
-                      <Card key={`podcast-${ep.id || index}`} className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer" onClick={() => navigate(`/podcast/${ep.id}`)}>
-                        <div className="aspect-video relative overflow-hidden rounded-t-lg">
-                          {ep.capaUrl && (
-                            <img 
-                              src={ep.capaUrl}
-                              alt={ep.titulo}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                          <Badge className="absolute top-2 right-2 bg-purple-600 text-white">
-                            <Headphones className="h-3 w-3 mr-1" />
-                            Podcast
-                          </Badge>
-                        </div>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
-                            {ep.titulo}
-                          </CardTitle>
-                          <CardDescription className="line-clamp-2">
-                            {ep.descricao}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <Button 
-                            className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90"
-                          >
-                            <Play className="h-4 w-4 mr-2" />
-                            Ouvir Episódio
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </>
-                )}
-              </div>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/inteligencia-mercado')}
-                className="w-full mt-6 md:hidden"
-              >
-                Ver Mais Conteúdos
-              </Button>
-            </div>
-
-           
           </div>
         </main>
       </div>
-      <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
-        <DialogContent className="max-w-xs text-center">
-          <DialogHeader>
-            <DialogTitle>Crie sua conta</DialogTitle>
-            <DialogDescription>
-              Para acessar este conteúdo, é preciso se cadastrar ou fazer login.
-            </DialogDescription>
-          </DialogHeader>
-          <Button className="mt-4 w-full bg-oraculo-blue text-white" onClick={() => {
-            setShowAuthModal(false);
-            navigate('/cadastro');
-          }}>
-            OK
-          </Button>
-        </DialogContent>
-      </Dialog>
       {/* Overlay: Conta criada com sucesso — exibido sobre a home ao concluir cadastro */}
       <Dialog
         open={location.state?.showCadastroSuccess === true}
@@ -763,7 +384,7 @@ const Index = () => {
             </DialogHeader>
             <div className="my-4 p-5 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20">
               <p className="text-base text-gray-800 font-medium leading-relaxed">
-                Parabéns, você ganhou 15 créditos gratuitamente para testar a plataforma!
+                Sua conta foi criada. Você já pode começar a usar a plataforma!
               </p>
             </div>
             <Button
@@ -776,47 +397,6 @@ const Index = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Overlay: Plano Premium ativado — exibido após pagamento bem-sucedido */}
-      <Dialog
-        open={location.state?.showPremiumSuccess === true}
-        onOpenChange={(open) => { if (!open) navigate('/', { replace: true, state: {} }); }}
-      >
-        <DialogContent className="max-w-md text-center border-2 border-oraculo-blue/20 shadow-xl">
-          <div className="flex flex-col items-center py-2">
-            <div className="w-14 h-14 bg-gradient-to-r from-oraculo-gold to-oraculo-magenta rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-8 w-8 text-white" />
-            </div>
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                Parabéns! Agora você é do plano {(() => {
-                  const planType = location.state?.planType || userPlanType || 'Premium';
-                  const planNames: Record<string, string> = {
-                    basico: 'Básico',
-                    essencial: 'Essencial',
-                    premium: 'Premium',
-                  };
-                  return planNames[planType.toLowerCase()] || planType;
-                })()}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="my-4 p-5 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20">
-              <p className="text-base text-gray-800 font-medium leading-relaxed">
-                Seu pagamento foi confirmado e você já tem acesso a todos os recursos do plano!
-              </p>
-            </div>
-            <Button
-              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white font-semibold"
-              onClick={() => navigate('/', { replace: true, state: {} })}
-            >
-              Começar a usar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Redirecionamento para premium */}
-      {redirectPremium && (
-        navigate('/cadastro-premium'), null
-      )}
     </div>
   );
 };

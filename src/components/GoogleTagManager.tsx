@@ -90,7 +90,7 @@ export const GoogleTagManagerRouteTracker = () => {
       if (window.dataLayer) {
         const pageLocation = window.location.href;
         const pagePath = location.pathname + location.search;
-        const pageTitle = document.title || 'Oráculo Cultural';
+        const pageTitle = document.title || 'Instituto dos Sonhos';
 
         // Push page_view event to dataLayer (GA4 format)
         window.dataLayer.push({

@@ -23,7 +23,6 @@ const CadastrarGuia = () => {
   const [valorPromocional, setValorPromocional] = useState('');
   const [valorOriginalOverride, setValorOriginalOverride] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [stripeProductId, setStripeProductId] = useState('');
   const [blocos, setBlocos] = useState<Partial<GuiaEspecialCampos>>({});
   const [uploading, setUploading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -111,7 +110,6 @@ const CadastrarGuia = () => {
           : NaN;
         dadosGuia.valorOriginal = !isNaN(ancora) && ancora > 0 ? ancora : valorPromo * 1.5;
         if (youtubeUrl.trim()) dadosGuia.youtubeUrl = youtubeUrl.trim();
-        if (stripeProductId.trim()) dadosGuia.stripeProductId = stripeProductId.trim();
         // Blocos 1–7 (conversão) — não sobrescrever valorOriginal/valorPromocional
         Object.entries(blocos).forEach(([k, v]) => {
           if (k === 'valorOriginal' || k === 'valorPromocional') return;
@@ -247,20 +245,6 @@ const CadastrarGuia = () => {
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         URL completa do vídeo do YouTube (será exibido na página de detalhes)
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Stripe Product ID <span className="text-gray-400 text-xs">(opcional)</span>
-                      </label>
-                      <Input 
-                        type="text" 
-                        value={stripeProductId} 
-                        onChange={e => setStripeProductId(e.target.value)} 
-                        placeholder="prod_xxxxxxxxxxxxx"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Se informado, será usado o Product ID do Stripe para criar o checkout. Caso contrário, será criado dinamicamente.
                       </p>
                     </div>
                     <GuiaEspecialBlocosForm value={blocos} onChange={setBlocos} />

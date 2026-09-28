@@ -16,14 +16,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import OpenAI from 'openai';
+import { geminiChatCompletion } from '@/lib/gemini';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Remover qualquer configuração do workerSrc para o CDN
 // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { useAuthState } from 'react-firebase-hooks/auth';
-import emailImage from '@/assets/email.png';
 
 interface DadosExtraidos {
   data_encerramento?: string | null;
@@ -70,8 +69,6 @@ const OraculoAI = () => {
   const [resumoEdital, setResumoEdital] = useState<any | null>(null);
   const [user] = useAuthState(auth);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [emailNewsletter, setEmailNewsletter] = useState('');
-  const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [mostrarModalApagar, setMostrarModalApagar] = useState(false);
   const [projetoParaApagar, setProjetoParaApagar] = useState<string | null>(null);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
@@ -217,19 +214,17 @@ const OraculoAI = () => {
       setEtapaLog(log => [...log, "Extraindo campos do edital com IA..."]);
       // Novo prompt detalhado conforme instruções do usuário
       const prompt = `Extraia do texto do edital abaixo apenas as seguintes informações cruciais, no formato JSON com as chaves: nome, escopo, criterios, categorias, data_encerramento, textos_exigidos (array), valor_maximo_premiacao.\n\nRegras para extração:\n- O campo 'data_encerramento' geralmente está no artigo ou seção chamada 'Inscrição', mas também pode aparecer como 'Período de inscrições', 'Prazo para inscrição', 'Datas importantes', 'Cronograma', ou menções a datas finais para envio de propostas.\n- Os 'criterios' geralmente estão em 'Critérios de avaliação', mas também podem aparecer como 'Avaliação', 'Julgamento', 'Parâmetros de avaliação', 'Pontuação', ou tabelas/listas de critérios.\n- O 'valor_maximo_premiacao' geralmente está em 'Recursos Financeiros', mas pode aparecer como 'Valor total disponível', 'Valor máximo por projeto', 'Premiação', 'Recursos destinados', 'Montante', ou menções a valores em reais (R$).\n- O campo 'nome' não pode ser 'Edital de chamada pública' ou similar, mas sim o nome subsequente, mais específico.\n- Para 'textos_exigidos', coloque automaticamente: Resumo, Objetivos, Justificativa, Plano de Divulgação, Plano de Acessibilidade, Plano de Democratização do Acesso, Medidas de Sustentabilidade.\n- Se algum campo não for encontrado, retorne uma string vazia.\n\nExemplo de saída:\n{\n  "nome": "Prêmio Cultura Viva 2024",\n  "escopo": "Fomento a projetos culturais de impacto social",\n  "criterios": "Adequação ao tema, relevância social, viabilidade técnica, originalidade",\n  "categorias": "Artes Visuais, Música, Teatro",\n  "data_encerramento": "15/08/2024",\n  "textos_exigidos": ["Resumo", "Objetivos", "Justificativa", "Plano de Divulgação", "Plano de Acessibilidade", "Plano de Democratização do Acesso", "Medidas de Sustentabilidade"],\n  "valor_maximo_premiacao": "R$ 100.000,00"\n}\n\nTexto do edital:\n${textoExtraido}`;
-      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY, dangerouslyAllowBrowser: true });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+      const respostaIA = await geminiChatCompletion({
         messages: [
-          { role: 'system', content: 'Você é um especialista em editais culturais.' },
+          { role: 'system', content: 'Você é um especialista em editais culturais. Retorne apenas JSON válido.' },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 1200,
+        maxTokens: 1200,
         temperature: 0.2,
       });
       let dadosExtraidos: DadosExtraidos = {};
       try {
-        dadosExtraidos = JSON.parse(completion.choices[0].message?.content || '{}');
+        dadosExtraidos = JSON.parse(respostaIA.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim() || '{}');
       } catch {
         dadosExtraidos = { erro: 'Não foi possível extrair os dados.' };
       }
@@ -388,110 +383,6 @@ const OraculoAI = () => {
               </div>
             </div>
 
-            {/* Formulário de cadastro de email para receber editais */}
-            <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
-                <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
-                  <div className="flex-1 w-full md:w-auto">
-                    <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
-                      Receba em seu email os últimos editais
-                    </h3>
-                    <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-4">
-                      Todo o conteúdo é destrinchado por nossa inteligência artificial, facilitando sua compreensão e aumentando suas chances de aprovação
-                    </p>
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!emailNewsletter.trim()) {
-                          toast.error('Por favor, insira um email válido');
-                          return;
-                        }
-                        
-                        // Validar formato de email
-                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                        if (!emailRegex.test(emailNewsletter.trim())) {
-                          toast.error('Por favor, insira um email válido');
-                          return;
-                        }
-                        
-                        setSalvandoEmail(true);
-                        try {
-                          // Salvar email no Firestore
-                          await addDoc(collection(db, 'newsletter_emails'), {
-                            email: emailNewsletter.trim(),
-                            userId: user?.uid || null,
-                            criadoEm: Timestamp.now(),
-                            origem: 'editais_abertos'
-                          });
-                          
-                          // Adicionar email ao Brevo
-                          try {
-                            console.log('[Newsletter] Chamando função Brevo para:', emailNewsletter.trim());
-                            const response = await fetch('https://adicionarcontatobrevo-v3odkawqzq-uc.a.run.app', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({
-                                email: emailNewsletter.trim(),
-                                nome: user?.displayName || null,
-                                listId: 15
-                              })
-                            });
-                            
-                            console.log('[Newsletter] Resposta do Brevo - Status:', response.status);
-                            const result = await response.json();
-                            console.log('[Newsletter] Resposta do Brevo - Body:', result);
-                            
-                            if (!response.ok) {
-                              console.error('[Newsletter] Erro ao adicionar ao Brevo:', result);
-                              // Não bloquear o fluxo se o Brevo falhar, mas logar o erro
-                            } else {
-                              console.log('[Newsletter] Email adicionado ao Brevo com sucesso');
-                            }
-                          } catch (brevoError: any) {
-                            console.error('[Newsletter] Erro ao chamar função Brevo:', brevoError);
-                            console.error('[Newsletter] Detalhes do erro:', brevoError.message, brevoError.stack);
-                            // Não bloquear o fluxo se o Brevo falhar
-                          }
-                          
-                          toast.success('Email cadastrado com sucesso! Você receberá os editais mais recentes.');
-                          setEmailNewsletter('');
-                        } catch (error) {
-                          console.error('Erro ao salvar email:', error);
-                          toast.error('Erro ao cadastrar email. Tente novamente.');
-                        } finally {
-                          setSalvandoEmail(false);
-                        }
-                      }}
-                      className="flex flex-col gap-2 max-w-md"
-                    >
-<Input
-                      type="email"
-                      placeholder="Seu melhor email"
-                      value={emailNewsletter}
-                      onChange={(e) => setEmailNewsletter(e.target.value)}
-                      className="text-sm bg-white border-gray-200"
-                      disabled={salvandoEmail}
-                      required
-                    />
-                      <Button
-                        type="submit"
-                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
-                        disabled={salvandoEmail}
-                      >
-                        {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
-                      </Button>
-                    </form>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <img 
-                      src={emailImage} 
-                      alt="Editais culturais" 
-                      className="w-32 h-32 md:w-48 md:h-48 object-contain rounded-lg"
-                    />
-                  </div>
-                </div>
-            </div>
 
             {/* Exibir resumo do edital extraído diretamente na página, fora do Dialog */}
             {resumoEdital && (
@@ -563,7 +454,7 @@ const OraculoAI = () => {
       <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
         <DialogContent className="max-w-xs text-center">
           <DialogHeader>
-            <DialogTitle>Crie sua conta</DialogTitle>
+            <DialogTitle>Faça login</DialogTitle>
             <DialogDescription>
               Para criar um novo projeto, é preciso estar logado.
             </DialogDescription>

@@ -19,6 +19,10 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				sans: ['"Source Sans 3"', 'Avenir Next', 'Avenir', 'Segoe UI', 'sans-serif'],
+				display: ['"Playfair Display"', 'Georgia', 'Times New Roman', 'serif'],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -63,14 +67,14 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// Oráculo Cultural brand colors
+				// Instituto dos Sonhos — mantém tokens oraculo.* para não quebrar classes existentes
 				oraculo: {
-					blue: '#2563eb',
-					purple: '#7c3aed',
-					magenta: '#ec4899',
-					gold: '#f59e0b',
-					'dark-blue': '#1e40af',
-					'light-purple': '#a855f7'
+					blue: '#0088CB',       // azul institucional
+					purple: '#1B4C41',     // verde floresta (substitui roxo)
+					magenta: '#ED1C24',    // vermelho marca
+					gold: '#FFCB05',       // amarelo marca
+					'dark-blue': '#071F4E', // navy
+					'light-purple': '#83A8F0' // azul claro
 				}
 			},
 			borderRadius: {

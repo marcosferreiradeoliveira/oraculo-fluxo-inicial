@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Plus, Trash2, Edit, Image as ImageIcon, FileText, Calendar as CalendarIcon, Brain, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import OpenAI from 'openai';
+import { geminiChatCompletion } from '@/lib/gemini';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -142,8 +142,7 @@ const Portfolio = () => {
             .join(' ') + '\n';
         }
       } else if (clippingFile.type.startsWith('image/')) {
-        // Para imagens, usar OCR via OpenAI Vision (não implementado ainda)
-        // Por enquanto, pedir para o usuário preencher manualmente
+        // Para imagens, preencha os campos manualmente ou converta para PDF
         toast.info('Para imagens, preencha os campos manualmente ou converta para PDF');
         setExtracting(false);
         return;
@@ -154,11 +153,6 @@ const Portfolio = () => {
       }
 
       // Usar IA para extrair ano e descrição
-      const openai = new OpenAI({ 
-        apiKey: import.meta.env.VITE_OPENAI_API_KEY, 
-        dangerouslyAllowBrowser: true 
-      });
-
       const prompt = `Extraia do texto abaixo as seguintes informações sobre o portfólio/projeto:
 
 1. Ano: O ano do projeto/portfólio (ex: 2024, 2023)
@@ -177,17 +171,14 @@ Formato esperado:
   "descricao": "Descrição dos projetos e realizações..."
 }`;
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+      const resposta = await geminiChatCompletion({
         messages: [
-          { role: 'system', content: 'Você é um especialista em análise de portfólios culturais.' },
+          { role: 'system', content: 'Você é um especialista em análise de portfólios culturais. Retorne apenas JSON válido.' },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 500,
+        maxTokens: 500,
         temperature: 0.3,
       });
-
-      const resposta = completion.choices[0].message?.content || '{}';
       const dadosExtraidos = JSON.parse(resposta.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
 
       if (dadosExtraidos.ano) {
