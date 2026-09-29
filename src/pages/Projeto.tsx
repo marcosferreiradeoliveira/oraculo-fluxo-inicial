@@ -19,6 +19,7 @@ import {
   trackAnalysisFailed,
   trackSuggestionApplied
 } from '@/lib/analytics';
+import { canAccessProjectStepIndex, starterPaywallUrl, type UserPlanFields } from '@/lib/starterPlan';
 
 const steps = [
   'Criar Projeto',
@@ -237,6 +238,7 @@ const Projeto = () => {
   const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false); // Indica se há mudança aguardando aprovação
   const [isPremium, setIsPremium] = useState(false);
   const [creditos, setCreditos] = useState<number>(0);
+  const [userPlan, setUserPlan] = useState<UserPlanFields | null>(null);
   const [mostrarAlterarIA, setMostrarAlterarIA] = useState(false);
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
   const [mostrarSucesso, setMostrarSucesso] = useState(false);
@@ -261,6 +263,10 @@ const Projeto = () => {
           const userData = userSnap.data();
           setIsPremium(userData.isPremium === true);
           setCreditos(typeof userData.creditos === 'number' ? userData.creditos : 0);
+          setUserPlan({
+            isPremium: userData.isPremium === true,
+            planType: userData.planType ?? 'free',
+          });
         }
       } catch (error) {
         console.error('Erro ao verificar status premium:', error);
@@ -1138,6 +1144,10 @@ const Projeto = () => {
 
   // Function to handle step navigation
   const navigateToStep = (stepIndex: number) => {
+    if (!canAccessProjectStepIndex(stepIndex, userPlan)) {
+      navigate(starterPaywallUrl('starter_modulo2'));
+      return;
+    }
     // Permitir navegação para "Gerar Textos" se já existe análise
     // Permitir navegação se for para o passo atual ou anterior
     // Permitir navegação para próximo passo em casos específicos
@@ -1479,7 +1489,10 @@ const Projeto = () => {
             <div className="mb-6 md:mb-8 overflow-hidden">
               <div className="flex items-center gap-2 md:justify-between mb-2 overflow-x-auto pb-2 md:pb-0 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.map((step, index) => {
-                  const podeNavegar = index <= etapaAtual || (index === 3 && projeto?.analise_ia);
+                  const stepAllowed = canAccessProjectStepIndex(index, userPlan);
+                  const podeNavegar =
+                    stepAllowed &&
+                    (index <= etapaAtual || (index === 3 && projeto?.analise_ia));
                   const creditosStep: Record<number, number> = { 1: 5, 3: 1, 4: 3, 5: 3 };
                   const cred = creditosStep[index];
                   return (
@@ -1508,7 +1521,12 @@ const Projeto = () => {
                         }`}
                       >
                         {step}
-                        {typeof cred === 'number' && <span className="block text-[10px] text-gray-500 font-normal">{cred} {cred === 1 ? 'crédito' : 'créditos'}</span>}
+                        {typeof cred === 'number' && stepAllowed && (
+                          <span className="block text-[10px] text-gray-500 font-normal">{cred} {cred === 1 ? 'crédito' : 'créditos'}</span>
+                        )}
+                        {!stepAllowed && (
+                          <span className="block text-[10px] text-oraculo-purple font-normal">Plano pago</span>
+                        )}
                       </button>
                     </div>
                   );

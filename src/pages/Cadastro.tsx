@@ -239,6 +239,7 @@ const Cadastro = () => {
           empresa: empresaTrimmed || '',
           equipeBio: '',
           isPremium: false,
+          planType: 'free',
           lastLoginAt: timestamp,
           nome_completo: nomeCompletoTrimmed,
           origem: 'captacao',

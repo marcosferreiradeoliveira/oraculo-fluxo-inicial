@@ -8,7 +8,6 @@ declare global {
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { EnvDebug } from "./components/EnvDebug";
 import GoogleTagManager, { GoogleTagManagerRouteTracker } from "./components/GoogleTagManager";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -48,6 +47,9 @@ import ConfirmarEmail from './pages/ConfirmarEmail';
 import EditaisAbertos from './pages/EditaisAbertos';
 import Portfolio from './pages/Portfolio';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { StarterPlanGuard } from './components/StarterPlanGuard';
+import AvaliarProjeto from './pages/AvaliarProjeto';
+import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
 
 const queryClient = new QueryClient();
 
@@ -79,7 +81,6 @@ const App = () => (
       <GoogleTagManager />
       <Toaster />
       <Sonner />
-      <EnvDebug />
       <BrowserRouter>
         <AnalyticsListener />
         <GoogleTagManagerRouteTracker />
@@ -95,6 +96,8 @@ const App = () => (
           <Route path="/podcast" element={<Podcast />} />
           <Route path="/inteligencia-mercado" element={<InteligenciaMercado />} />
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
+          <Route path="/avaliar-projeto" element={<AvaliarProjeto />} />
+          <Route path="/avaliar-projeto/gerar-textos" element={<GerarTextosAvaliar />} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />
@@ -105,12 +108,12 @@ const App = () => (
           <Route path="/criar-projeto" element={<ProtectedRoute><CriarProjeto /></ProtectedRoute>} />
           {/* Rotas específicas de projeto devem vir antes da rota genérica /projeto/:id */}
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
-          <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><GerarTextos /></ProtectedRoute>} />
-          <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><CriarOrcamento /></ProtectedRoute>} />
-          <Route path="/projeto/:id/criar-cronograma" element={<ProtectedRoute><CriarCronograma /></ProtectedRoute>} />
-          <Route path="/projeto/:id/documentos-inscricao" element={<ProtectedRoute><DocumentosInscricao /></ProtectedRoute>} />
-          <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><PreencherAnexos /></ProtectedRoute>} />
-          <Route path="/projeto/:id/resumo" element={<ProtectedRoute><ResumoProjeto /></ProtectedRoute>} />
+          <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><StarterPlanGuard><GerarTextos /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><StarterPlanGuard><CriarOrcamento /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/criar-cronograma" element={<ProtectedRoute><StarterPlanGuard><CriarCronograma /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/documentos-inscricao" element={<ProtectedRoute><StarterPlanGuard><DocumentosInscricao /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><StarterPlanGuard><PreencherAnexos /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/resumo" element={<ProtectedRoute><StarterPlanGuard><ResumoProjeto /></StarterPlanGuard></ProtectedRoute>} />
           <Route path="/projeto/:id" element={<ProtectedRoute><Projeto /></ProtectedRoute>} />
           <Route path="/editar-edital/:id" element={<ProtectedRoute><EditarEdital /></ProtectedRoute>} />
           <Route path="/edital/:id" element={<DetalhesEdital />} />

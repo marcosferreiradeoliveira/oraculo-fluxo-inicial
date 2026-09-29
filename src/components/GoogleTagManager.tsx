@@ -106,8 +106,6 @@ export const GoogleTagManagerRouteTracker = () => {
           virtualPageURL: pagePath,
           virtualPageTitle: pageTitle,
         });
-
-        console.log('[GTM] Page view tracked:', pagePath);
       }
     };
 

@@ -2,49 +2,430 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /usuarios/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Permitir leitura pública de guias
-    match /guias/{guiaId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Permitir leitura pública de podcasts
-    match /podcasts/{podcastId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Permitir leitura pública de episódios de podcast (incluindo queries/listagem)
-    match /podcast_episodios/{episodioId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Permitir leitura pública de editais
-    match /editais/{editalId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Projetos continuam privados (apenas para o usuário logado)
-    match /projetos/{projetoId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.user_id;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.user_id;
-    }
-    
-    // Portfólios privados (apenas para o usuário logado)
-    match /portfolios/{portfolioId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+
+    // ─── Helpers ───────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
     }
 
-    // Travas de rate limit (cooldown análise/geração) — só as Cloud Functions (Admin SDK) escrevem
+    function isAdmin() {
+      return isAuth() && request.auth.token.email in [
+        'marcosferreira@mobcontent.com.br',
+        'mobcontent.mda@gmail.com'
+      ];
+    }
+
+    function empresaIdFromPath(path) {
+      return path.size() >= 2 && path[0] == 'empresas' ? path[1] : '';
+    }
+
+    function membroDoc(empresaId) {
+      return get(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(request.auth.uid));
+    }
+
+    function isMembroAtivo(empresaId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(request.auth.uid))
+        && membroDoc(empresaId).data.status == 'active';
+    }
+
+    function isOwnerEmpresa(empresaId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/empresas/$(empresaId))
+        && get(/databases/$(database)/documents/empresas/$(empresaId)).data.ownerUid == request.auth.uid;
+    }
+
+    function assignedProjects(empresaId) {
+      return membroDoc(empresaId).data.get('assignedProjects', []);
+    }
+
+    function canAccessProject(empresaId, projectId) {
+      return isAdmin()
+        || isOwnerEmpresa(empresaId)
+        || (isMembroAtivo(empresaId) && (
+             membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro']
+             || projectId in assignedProjects(empresaId)
+           ));
+    }
+
+    function projectEmpresaId(projectId) {
+      return get(/databases/$(database)/documents/production_projects/$(projectId)).data.empresaId;
+    }
+
+    function canAccessProjectById(projectId) {
+      return exists(/databases/$(database)/documents/production_projects/$(projectId))
+        && projectEmpresaId(projectId) != null
+        && canAccessProject(projectEmpresaId(projectId), projectId);
+    }
+
+    /** Super admin / gestor da empresa — convites e gestão de equipe (não só o ownerUid). */
+    function canManageEmpresaTeam(empresaId) {
+      return isAdmin()
+        || isOwnerEmpresa(empresaId)
+        || (isMembroAtivo(empresaId)
+            && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro']);
+    }
+
+    function isOwnerUpdatingTeamMember(targetUserId) {
+      let me = get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+      let empresaId = me.get('defaultEmpresaId', '');
+      return empresaId != ''
+        && isOwnerEmpresa(empresaId)
+        && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(targetUserId));
+    }
+
+    /** Gestor da empresa atualizando doc de um membro da mesma empresa. */
+    function isManagerUpdatingTeamMember(targetUserId) {
+      let me = get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+      let empresaId = me.get('defaultEmpresaId', '');
+      return empresaId != ''
+        && canManageEmpresaTeam(empresaId)
+        && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(targetUserId));
+    }
+
+    function isOwnMembershipDoc() {
+      return isAuth()
+        && resource != null
+        && resource.data.uid == request.auth.uid
+        && resource.data.status == 'active';
+    }
+
+    function usuarioEmpresaIds() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('empresaIds', []);
+    }
+
+    /** Bootstrap: usuário cria o próprio doc em membros (Ema central ou já listado em empresaIds). */
+    function canSelfBootstrapMembro(empresaId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.keys().hasAll(['uid', 'email', 'role', 'status'])
+        && request.resource.data.email is string
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && (
+          empresaId == '299gnMFuDGcHr1V0Xjq1hRUBw483'
+          || empresaId in usuarioEmpresaIds()
+        );
+    }
+
+    // ─── Usuários ──────────────────────────────────────────────────────────
+
+    match /usuarios/{userId} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
+      allow create: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
+      allow update: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
+      allow delete: if isAdmin();
+    }
+
+    // ─── Empresas ──────────────────────────────────────────────────────────
+
+    match /empresas/{empresaId} {
+      allow read: if isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId) || isAdmin();
+      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwnerEmpresa(empresaId) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /membros/{membroId} {
+        allow read: if isAdmin()
+          || isOwnerEmpresa(empresaId)
+          || (isAuth() && membroId == request.auth.uid)
+          || isMembroAtivo(empresaId);
+
+        // Owner / admin / self-bootstrap (Ema ou empresaIds no usuário)
+        allow create: if isAdmin()
+          || isOwnerEmpresa(empresaId)
+          || (isAuth()
+              && membroId == request.auth.uid
+              && request.auth.uid == get(/databases/$(database)/documents/empresas/$(empresaId)).data.ownerUid)
+          || (membroId == request.auth.uid && canSelfBootstrapMembro(empresaId));
+
+        allow update: if canManageEmpresaTeam(empresaId);
+        allow delete: if canManageEmpresaTeam(empresaId);
+      }
+
+      match /convites/{conviteId} {
+        allow read: if canManageEmpresaTeam(empresaId)
+          || (isAuth() && resource.data.email.lower() == request.auth.token.email.lower());
+        allow create: if canManageEmpresaTeam(empresaId);
+        allow update: if canManageEmpresaTeam(empresaId)
+          || (isAuth()
+              && resource.data.email.lower() == request.auth.token.email.lower()
+              && request.resource.data.status == 'accepted');
+        allow delete: if canManageEmpresaTeam(empresaId);
+      }
+
+      // Integrações (Omie etc.) — somente Cloud Functions (Admin SDK)
+      match /integracoes/{integrationId} {
+        allow read, write: if false;
+      }
+
+      // Fornecedores Omie (CNPJ → codigo_cliente_omie) — leitura para membros; escrita só Admin SDK
+      match /omie_fornecedores/{cnpjId} {
+        allow read: if isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    // Collection group: busca de convites por e-mail (login / aceite)
+    // Query: where email == X && status == 'pending' — regra deve espelhar os filtros
+    match /{path=**}/convites/{conviteId} {
+      allow read: if isAdmin()
+        || (isAuth()
+            && resource != null
+            && request.auth.token.email.lower() == resource.data.email.lower()
+            && resource.data.status == 'pending')
+        || (isAuth()
+            && resource != null
+            && isOwnerEmpresa(empresaIdFromPath(path)));
+    }
+
+    // Collection group: busca de membership por uid
+    // Query: where uid == auth.uid && status == 'active' — usar resource.data.uid (não só doc id)
+    match /{path=**}/membros/{membroId} {
+      allow read: if isAdmin()
+        || isOwnMembershipDoc()
+        || (isAuth() && membroId == request.auth.uid)
+        || (isAuth()
+            && resource != null
+            && isOwnerEmpresa(empresaIdFromPath(path)))
+        || (isAuth()
+            && resource != null
+            && isMembroAtivo(empresaIdFromPath(path)));
+    }
+
+    // ─── Projetos ──────────────────────────────────────────────────────────
+
+    match /production_projects/{projectId} {
+      // userId == auth.uid permite query legado de migração (patchProjectsEmpresaId)
+      // Membro ativo da empresa: lista/lê todos os projetos da empresa (query por empresaId)
+      allow read: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null
+            && isMembroAtivo(resource.data.empresaId))
+        || (resource.data.empresaId != null
+            && canAccessProject(resource.data.empresaId, projectId))
+      );
+
+      allow create: if isAuth()
+        && request.resource.data.empresaId != null
+        && (isMembroAtivo(request.resource.data.empresaId)
+            || isOwnerEmpresa(request.resource.data.empresaId));
+
+      allow update: if isAuth() && (
+        isAdmin()
+        || (resource.data.empresaId != null && isOwnerEmpresa(resource.data.empresaId))
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null
+            && canAccessProject(resource.data.empresaId, projectId))
+      );
+
+      allow delete: if isAuth()
+        && resource.data.empresaId != null
+        && (
+          isAdmin()
+          || isOwnerEmpresa(resource.data.empresaId)
+          || (isMembroAtivo(resource.data.empresaId)
+              && membroDoc(resource.data.empresaId).data.role == 'super_admin')
+        );
+    }
+
+    // ─── Banco híbrido de anexos Omie (NF / comprovante / unknown) ─────────
+    match /omie_anexos/{anexoId} {
+      allow read: if isAuth() && (
+        isAdmin()
+        || (resource.data.projectId != null
+            && canAccessProjectById(resource.data.projectId))
+      );
+      // Escrita só via Cloud Functions (Admin SDK)
+      allow write: if false;
+    }
+
+    // ─── Notas fiscais ─────────────────────────────────────────────────────
+
+    match /nf_analyses/{analysisId} {
+      allow read: if isAuth() && (
+        isAdmin()
+        || (resource.data.projectId != null && canAccessProjectById(resource.data.projectId))
+        || resource.data.userId == request.auth.uid
+      );
+
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.projectId != null
+            && exists(/databases/$(database)/documents/production_projects/$(resource.data.projectId))
+            && isOwnerEmpresa(
+                 get(/databases/$(database)/documents/production_projects/$(resource.data.projectId)).data.empresaId
+               ))
+        || (resource.data.projectId != null
+            && exists(/databases/$(database)/documents/production_projects/$(resource.data.projectId))
+            && canManageEmpresaTeam(
+                 get(/databases/$(database)/documents/production_projects/$(resource.data.projectId)).data.empresaId
+               ))
+      );
+    }
+
+    // ─── Assinaturas e pagamentos ──────────────────────────────────────────
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false; // Cloud Functions / webhooks
+    }
+
+    match /stripe_sessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+    // ─── LGPD / consentimento ──────────────────────────────────────────────
+
+    match /terms_acceptance/{docId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /user_consents/{docId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /data_export_logs/{docId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /deleted_accounts/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    function canViewEmpresaAudit(empresaId) {
+      return isMembroAtivo(empresaId)
+        && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro', 'analista_compliance'];
+    }
+
+    // ─── Auditoria ─────────────────────────────────────────────────────────
+
+    match /audit_logs/{logId} {
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid
+        || isAdmin()
+        || (resource.data.keys().hasAny(['empresaId'])
+            && resource.data.empresaId is string
+            && canViewEmpresaAudit(resource.data.empresaId))
+      );
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid
+        && (
+          !('empresaId' in request.resource.data)
+          || request.resource.data.empresaId == null
+          || isMembroAtivo(request.resource.data.empresaId)
+          || isOwnerEmpresa(request.resource.data.empresaId)
+          || isAdmin()
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── Locks (somente backend) ─────────────────────────────────────────────
+
     match /locks/{lockId} {
       allow read, write: if false;
+    }
+
+    // ─── Coleções legadas / conteúdo público ───────────────────────────────
+
+    match /expenses/{id} {
+      allow read, write: if isAuth();
+    }
+
+    match /rubrics/{id} {
+      allow read, write: if isAuth();
+    }
+
+    match /users/{id} {
+      allow read, write: if isAuth();
+    }
+
+    match /project_users/{id} {
+      allow read, write: if isAuth();
+    }
+
+    match /guias/{id} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /analyses/{id} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /podcasts/{id} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /podcast_episodios/{id} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /editais/{editalId} {
+      // Oráculo Cultural — editais abertos visíveis para todos (get, list e queries sem login)
+      allow get, list: if true;
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // Newsletter "Receba editais por email" — qualquer visitante pode se cadastrar
+    match /newsletter_emails/{docId} {
+      allow create: if request.resource.data.email is string
+        && request.resource.data.email.size() >= 5
+        && request.resource.data.keys().hasAll(['email', 'criadoEm']);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Oráculo Cultural — apps legados no mesmo projeto Firebase
+    match /projetos/{projetoId} {
+      allow read: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
+    }
+
+    match /portfolios/{portfolioId} {
+      allow read: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+
+
+    // Critérios do analisador de NF (iframe) — CRUD do próprio userId
+    // vxmEHDQer4tNk11XEKeg = critério padrão compartilhado (leitura para todos)
+    match /user_analysis_criteria/{id} {
+      allow read: if isAuth()
+        && (id == 'vxmEHDQer4tNk11XEKeg' || resource.data.userId == request.auth.uid);
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && (!('userId' in request.resource.data)
+            || request.resource.data.userId == request.auth.uid);
     }
   }
 }

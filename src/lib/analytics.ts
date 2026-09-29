@@ -375,11 +375,17 @@ export const trackNewsletterSubscribed = (params: {
     is_logged_in: params.isLoggedIn,
   });
   
-  // Evento de alta prioridade renomeado conforme especificação
   trackEvent('email_edital_cadastro', {
     origem_conversao: params.source,
     is_logged_in: params.isLoggedIn,
     // email: masked (não enviar email completo por privacidade)
+  });
+};
+
+/** CTA demo na home — simulador Módulo 1 */
+export const trackCtaVerComoFunciona = () => {
+  trackEvent('cta_ver_como_funciona', {
+    source: 'home',
   });
 };
 

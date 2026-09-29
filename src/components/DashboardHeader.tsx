@@ -8,10 +8,12 @@ import { getFirestore, doc, getDoc, updateDoc, onSnapshot } from 'firebase/fires
 import { Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { identifyMixpanelUser, trackIntentLogin } from '@/lib/analytics';
+import { isStarterPlan } from '@/lib/starterPlan';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [isStarter, setIsStarter] = useState(false);
   const [creditos, setCreditos] = useState<number | null>(null);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function DashboardHeader() {
           console.log('Boolean(isPremium):', Boolean(userData.isPremium));
           
           setIsPremium(userData.isPremium === true);
+          setIsStarter(isStarterPlan(userData));
           setCreditos(typeof userData.creditos === 'number' ? userData.creditos : (userData.creditos ?? 0));
           
           // Identificar usuário no Mixpanel
@@ -118,6 +121,7 @@ export function DashboardHeader() {
       if (snap.exists()) {
         const d = snap.data();
         setIsPremium(d?.isPremium === true);
+        setIsStarter(isStarterPlan(d));
         setCreditos(typeof d?.creditos === 'number' ? d.creditos : (d?.creditos ?? 0));
       }
     });
@@ -143,8 +147,11 @@ export function DashboardHeader() {
                     <div className="flex items-center flex-wrap gap-2 justify-end">
                       <span className="truncate" title={nomeUsuario ? `Olá, ${nomeUsuario}` : 'Olá, usuário'}>Olá{nomeUsuario ? `, ${nomeUsuario}` : ', usuário'}</span>
                       {isPremium && <span className="px-2 py-0.5 text-xs font-bold text-white bg-yellow-500 rounded-full flex-shrink-0">PREMIUM</span>}
+                      {isStarter && !isPremium && (
+                        <span className="px-2 py-0.5 text-xs font-bold text-oraculo-blue bg-oraculo-blue/10 rounded-full flex-shrink-0">STARTER</span>
+                      )}
                       {!isPremium && creditos !== null && (
-                        <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full flex-shrink-0" title="Créditos para avaliação, textos, orçamento e cronograma">
+                        <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full flex-shrink-0" title="Créditos do Módulo 1 (avaliação com IA)">
                           <Coins className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
                           <span className="hidden sm:inline">{creditos} {creditos === 1 ? 'crédito' : 'créditos'}</span>
                           <span className="sm:hidden">{creditos}</span>

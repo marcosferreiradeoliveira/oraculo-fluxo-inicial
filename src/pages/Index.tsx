@@ -15,7 +15,8 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { trackNewsletterSubscribed } from '@/lib/analytics';
+import { trackNewsletterSubscribed, trackCtaVerComoFunciona } from '@/lib/analytics';
+import analisarImage from '@/assets/Analisar.jpeg';
 
 // Função para capitalizar apenas a primeira letra do título
 const capitalizarTitulo = (titulo: string): string => {
@@ -147,6 +148,17 @@ const Index = () => {
                 dataEncerramento = new Date(edital.dataEncerramento);
               }
             }
+
+            // Fallback: deadline (mesma lógica de EditaisAbertos)
+            if ((!dataEncerramento || (dataEncerramento && dataEncerramento <= now)) && edital.deadline) {
+              if (edital.deadline && typeof edital.deadline === 'object' && 'toDate' in edital.deadline) {
+                dataEncerramento = edital.deadline.toDate();
+              } else if (edital.deadline && typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
+                dataEncerramento = new Date(edital.deadline.seconds * 1000);
+              } else if (typeof edital.deadline === 'string') {
+                dataEncerramento = new Date(edital.deadline);
+              }
+            }
             
             // Se ainda não tem data válida, retorna false
             if (!dataEncerramento || isNaN(dataEncerramento.getTime())) {
@@ -219,6 +231,41 @@ const Index = () => {
         {/* Main Content */}
         <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
+            {/* Demo — Módulo 1 (simulador parcial), sem login */}
+            <div className="mb-10 rounded-2xl overflow-hidden bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple shadow-xl border-2 border-oraculo-purple/30">
+              <div className="flex flex-col lg:flex-row lg:items-stretch">
+                <div className="flex-1 p-6 md:p-8 flex flex-col justify-center">
+                  <h2 className="text-xl md:text-2xl font-bold text-white mb-3">
+                    Veja como um projeto é avaliado antes de enviar o seu
+                  </h2>
+                  <p className="text-white/95 text-sm md:text-base leading-relaxed mb-6 max-w-xl">
+                    Em menos de 2 minutos, veja uma avaliação real feita pela IA especializada em editais culturais — projeto de exemplo, sem cadastro.
+                  </p>
+                  <Button
+                    size="lg"
+                    onClick={() => {
+                      trackCtaVerComoFunciona();
+                      navigate('/avaliar-projeto?iniciar=1');
+                    }}
+                    className="w-full md:w-auto bg-[#FFCB05] hover:bg-[#e6b800] text-[#1A1A1A] font-bold text-base md:text-lg px-8 py-6 shadow-lg border-0"
+                  >
+                    <Sparkles className="h-5 w-5 mr-2" />
+                    Ver como funciona na prática
+                  </Button>
+                  <p className="text-white/80 text-xs md:text-sm mt-3">
+                    Depois você poderá avaliar seu próprio projeto no plano Starter (15 créditos grátis no cadastro).
+                  </p>
+                </div>
+                <div className="lg:w-2/5 min-h-[200px] lg:min-h-0 relative hidden sm:block">
+                  <img
+                    src={analisarImage}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* CTA: Comece por aqui */}
             <div className="mb-10 rounded-2xl bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple p-6 md:p-8 shadow-xl border-2 border-oraculo-purple/30">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">

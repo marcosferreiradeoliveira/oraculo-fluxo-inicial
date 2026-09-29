@@ -36,6 +36,7 @@ const CadastroPremium = () => {
   }, [searchParams]);
 
   const motivoCreditosInsuficientes = searchParams.get('motivo') === 'creditos_insuficientes';
+  const motivoStarterModulo2 = searchParams.get('motivo') === 'starter_modulo2';
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -290,6 +291,14 @@ const CadastroPremium = () => {
               <div className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-900">
                 <p className="text-sm md:text-base font-medium">
                   Você não tem créditos suficientes para esta ação. Assine um plano para uso ilimitado.
+                </p>
+              </div>
+            )}
+            {motivoStarterModulo2 && (
+              <div className="mb-6 p-4 rounded-xl bg-oraculo-blue/5 border-2 border-oraculo-blue/30 text-gray-900">
+                <p className="text-sm md:text-base font-medium">
+                  O plano <strong>Starter (gratuito)</strong> inclui o <strong>Módulo 1 — simulador de avaliação</strong> (criar projeto, avaliar e ajustar com IA usando seus 15 créditos).
+                  Textos, orçamento, cronograma e documentos fazem parte do Módulo 2 — disponível nos planos pagos.
                 </p>
               </div>
             )}

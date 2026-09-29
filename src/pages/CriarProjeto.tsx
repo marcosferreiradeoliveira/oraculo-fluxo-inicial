@@ -94,7 +94,7 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
         break;
       case 'free':
       default:
-        limiteProjetos = Infinity;
+        limiteProjetos = 1;
         break;
     }
     
@@ -102,9 +102,10 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
     const podeCriar = projetosCriados < limiteProjetos;
     
     let mensagem = '';
-    if (!podeCriar && (planType === 'essencial' || planType === 'basico')) {
-      const nomePlano = planType === 'essencial' ? 'Essencial' : 'Básico';
-      mensagem = `Você atingiu o limite de ${limiteProjetos} projetos do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
+    if (!podeCriar && (planType === 'essencial' || planType === 'basico' || planType === 'free')) {
+      const nomePlano =
+        planType === 'essencial' ? 'Essencial' : planType === 'basico' ? 'Básico' : 'Starter (gratuito)';
+      mensagem = `Você atingiu o limite de ${limiteProjetos} projeto${limiteProjetos === 1 ? '' : 's'} do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
     }
     
     return {
