@@ -11,7 +11,7 @@ export const MODULO_PRESTACAO_URL =
 /** Gerenciador de projetos (Instituto dos Sonhos). */
 export const MODULO_GERENCIADOR_PROJETOS_URL =
   (import.meta.env.VITE_MODULO_GERENCIADOR_PROJETOS_URL as string | undefined)?.trim() ||
-  'https://gerenciadeprojeto-is.web.app/login';
+  'https://gerenciadeprojeto.web.app/';
 
 export function openModuloExterno(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer');
