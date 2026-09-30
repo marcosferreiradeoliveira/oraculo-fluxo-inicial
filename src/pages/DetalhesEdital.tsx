@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -8,6 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trackEditalViewed } from '@/lib/analytics';
+import {
+  generateUniqueLandingSlug,
+  getEditalLandingPublicUrl,
+  isLandingSlugValid,
+  normalizeLandingSlug,
+} from '@/lib/editalLandingFirestore';
+import { toast } from 'sonner';
 import { 
   Calendar, 
   DollarSign, 
@@ -20,7 +27,11 @@ import {
   History,
   Award,
   Plus,
-  Download
+  Download,
+  Link2,
+  Copy,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
 
 interface Edital {
@@ -49,6 +60,8 @@ interface Edital {
   nomeArquivo?: string;
   pdf_url?: string;
   link_edital?: string;
+  landing_slug?: string;
+  landing_ativa?: boolean;
 }
 
 const DetalhesEdital = () => {
@@ -56,6 +69,7 @@ const DetalhesEdital = () => {
   const navigate = useNavigate();
   const [edital, setEdital] = useState<Edital | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gerandoLanding, setGerandoLanding] = useState(false);
 
   useEffect(() => {
     const fetchEdital = async () => {
@@ -138,6 +152,42 @@ const DetalhesEdital = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     return diffDays;
+  };
+
+  const landingAtiva = edital?.landing_ativa !== false;
+  const landingSlug =
+    typeof edital?.landing_slug === 'string' && isLandingSlugValid(normalizeLandingSlug(edital.landing_slug))
+      ? normalizeLandingSlug(edital.landing_slug)
+      : null;
+  const landingUrl = landingSlug && landingAtiva ? getEditalLandingPublicUrl(landingSlug) : null;
+
+  const copiarLinkLanding = async () => {
+    if (!landingUrl) return;
+    try {
+      await navigator.clipboard.writeText(landingUrl);
+      toast.success('Link da landing copiado');
+    } catch {
+      toast.error('Não foi possível copiar o link');
+    }
+  };
+
+  const gerarLinkLanding = async () => {
+    if (!id || !edital?.nome) return;
+    setGerandoLanding(true);
+    try {
+      const slug = await generateUniqueLandingSlug(edital.nome);
+      await updateDoc(doc(db, 'editais', id), {
+        landing_slug: slug,
+        landing_ativa: true,
+      });
+      setEdital((prev) => (prev ? { ...prev, landing_slug: slug, landing_ativa: true } : prev));
+      toast.success('Link da landing gerado');
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao gerar link da landing');
+    } finally {
+      setGerandoLanding(false);
+    }
   };
 
   if (loading) {
@@ -296,6 +346,61 @@ const DetalhesEdital = () => {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mb-8 border-oraculo-purple/20 bg-gradient-to-br from-oraculo-purple/5 to-oraculo-blue/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sparkles className="h-5 w-5 text-oraculo-purple" />
+                Landing de campanha (simulação de nota)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {landingUrl ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Compartilhe este link fora do portal — página dedicada ao edital, sem menu de editais abertos.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                    <code className="flex-1 text-sm bg-white border rounded-lg px-3 py-2 break-all text-oraculo-blue">
+                      {landingUrl}
+                    </code>
+                    <div className="flex gap-2 shrink-0">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkLanding()}>
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copiar
+                      </Button>
+                      <Button type="button" size="sm" asChild>
+                        <a href={landingUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Abrir
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Link2 className="h-3.5 w-3.5" />
+                    Slug: <span className="font-mono">{landingSlug}</span>
+                    {!landingAtiva ? ' · landing desativada' : null}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Ainda não há link público de landing para este edital. Gere um slug a partir do nome (ex.:{' '}
+                    <span className="font-mono text-xs">meu-edital-2026</span>).
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={gerandoLanding}
+                    onClick={() => void gerarLinkLanding()}
+                  >
+                    {gerandoLanding ? 'Gerando…' : 'Gerar link da landing'}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Escopo */}
           {edital.escopo && (

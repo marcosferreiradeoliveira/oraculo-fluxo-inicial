@@ -46,6 +46,8 @@ import InteligenciaMercado from './pages/InteligenciaMercado';
 import ConfirmarEmail from './pages/ConfirmarEmail';
 import EditaisAbertos from './pages/EditaisAbertos';
 import Portfolio from './pages/Portfolio';
+import ExtratorEditaisPage from './pages/ExtratorEditaisPage';
+import EditalLandingPage from './pages/EditalLandingPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { StarterPlanGuard } from './components/StarterPlanGuard';
 import AvaliarProjeto from './pages/AvaliarProjeto';
@@ -98,6 +100,7 @@ const App = () => (
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
           <Route path="/avaliar-projeto" element={<AvaliarProjeto />} />
           <Route path="/avaliar-projeto/gerar-textos" element={<GerarTextosAvaliar />} />
+          <Route path="/gerenciar-editais" element={<ProtectedRoute><ExtratorEditaisPage /></ProtectedRoute>} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />
@@ -123,6 +126,7 @@ const App = () => (
           <Route path="/cadastrar-guia" element={<ProtectedRoute><CadastrarGuia /></ProtectedRoute>} />
           <Route path="/editar-guia/:id" element={<ProtectedRoute><EditarGuia /></ProtectedRoute>} />
           <Route path="/guia-especial/:id" element={<DetalhesGuiaEspecial />} />
+          <Route path="/:editalSlug" element={<EditalLandingPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

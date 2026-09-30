@@ -138,6 +138,7 @@ const EditaisAbertos = () => {
 
   const handleCadastrarEdital = async () => {
     if (!user) {
+      navigate('/cadastro?redirect=/gerenciar-editais');
       return;
     }
 
@@ -145,27 +146,23 @@ const EditaisAbertos = () => {
       const firestore = getFirestore();
       const userRef = doc(firestore, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
-      
+
       if (userSnap.exists()) {
         const userData = userSnap.data();
         const isPremium = userData.isPremium === true;
-        
+
         if (!isPremium) {
-          // Mostrar dialog de premium
           setShowPremiumDialog(true);
           return;
         }
       } else {
-        // Se o usuário não tem documento, não é premium
         setShowPremiumDialog(true);
         return;
       }
-      
-      // Se chegou aqui, é premium - abrir link
-      window.open('https://extratordeeditais.web.app/', '_blank');
+
+      navigate('/gerenciar-editais');
     } catch (error) {
       console.error('Erro ao verificar status premium:', error);
-      // Em caso de erro, mostrar dialog também para segurança
       setShowPremiumDialog(true);
     }
   };

@@ -1160,7 +1160,7 @@ const CriarProjeto = () => {
                       <label className="block text-sm font-medium text-gray-700">Edital associado</label>
                       <button
                         type="button"
-                        onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
+                        onClick={() => navigate('/gerenciar-editais')}
                         className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium self-start"
                       >
                         Cadastrar novo edital

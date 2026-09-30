@@ -17,11 +17,14 @@ import {
   PlayCircle,
   ExternalLink,
   Calendar,
-  LogOut
+  LogOut,
+  FolderKanban,
+  FileText,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
 import { trackMenuIntent } from '@/lib/analytics';
+import { MODULO_GERENCIADOR_PROJETOS_URL, MODULO_PRESTACAO_URL } from '@/lib/modulosExternos';
 
 type MenuItem = {
   title: string;
@@ -36,10 +39,32 @@ const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
+  { title: 'Importar editais', url: '/gerenciar-editais', icon: FileText, menuItem: 'gerenciar_editais' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
-  { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
-  { title: 'Inteligência de Mercado', url: '/inteligencia-mercado', icon: TrendingUp, menuItem: 'inteligencia_mercado', outline: true },
+  {
+    title: 'Gerenciador de Projetos',
+    url: MODULO_GERENCIADOR_PROJETOS_URL,
+    icon: FolderKanban,
+    menuItem: 'gerenciador_projetos',
+    external: true,
+    outline: true,
+  },
+  {
+    title: 'Prestação de Contas',
+    url: MODULO_PRESTACAO_URL,
+    icon: PlayCircle,
+    menuItem: 'prestacao_contas',
+    external: true,
+    outline: true,
+  },
+  {
+    title: 'Inteligência de Mercado',
+    url: '/inteligencia-mercado',
+    icon: TrendingUp,
+    menuItem: 'inteligencia_mercado',
+    outline: true,
+  },
 ];
 
 export function DashboardSidebar() {

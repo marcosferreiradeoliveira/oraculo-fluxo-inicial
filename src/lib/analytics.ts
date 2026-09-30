@@ -453,6 +453,8 @@ const MENU_INTENT_MAP: Record<string, string> = {
   suporte: 'intent_view_support',
   prestacao_contas: 'intent_external_prestacao',
   inteligencia_mercado: 'intent_view_inteligencia',
+  gerenciador_projetos: 'intent_external_gerenciador_projetos',
+  gerenciar_editais: 'intent_view_gerenciar_editais',
   login: 'intent_login',
 };
 
