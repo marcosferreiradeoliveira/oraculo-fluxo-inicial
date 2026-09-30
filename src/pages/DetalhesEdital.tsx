@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trackEditalViewed } from '@/lib/analytics';
 import {
-  generateUniqueLandingSlug,
+  ensureEditalLandingFields,
   getEditalLandingPublicUrl,
   isLandingSlugValid,
   normalizeLandingSlug,
@@ -32,6 +33,8 @@ import {
   Copy,
   ExternalLink,
   Sparkles,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 interface Edital {
@@ -64,9 +67,14 @@ interface Edital {
   landing_ativa?: boolean;
 }
 
+const ADMIN_EDITAL_UID = 'sCacAc0ShPfafYjpy0t4pBp77Tb2';
+
 const DetalhesEdital = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [user] = useAuthState(auth);
+  const [canManageEdital, setCanManageEdital] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [edital, setEdital] = useState<Edital | null>(null);
   const [loading, setLoading] = useState(true);
   const [gerandoLanding, setGerandoLanding] = useState(false);
@@ -120,6 +128,77 @@ const DetalhesEdital = () => {
     fetchEdital();
   }, [id]);
 
+  useEffect(() => {
+    if (!user) {
+      setCanManageEdital(false);
+      return;
+    }
+    if (user.uid === ADMIN_EDITAL_UID) {
+      setCanManageEdital(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
+        const isPremium = userSnap.exists() && userSnap.data()?.isPremium === true;
+        if (!cancelled) setCanManageEdital(isPremium);
+      } catch {
+        if (!cancelled) setCanManageEdital(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!id || !edital?.nome || loading || !canManageEdital) return;
+    if (
+      typeof edital.landing_slug === 'string' &&
+      isLandingSlugValid(normalizeLandingSlug(edital.landing_slug))
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setGerandoLanding(true);
+    ensureEditalLandingFields(id, edital.nome, edital.landing_slug)
+      .then((slug) => {
+        if (cancelled) return;
+        setEdital((prev) => (prev ? { ...prev, landing_slug: slug, landing_ativa: true } : prev));
+      })
+      .catch((e) => {
+        console.error(e);
+        if (!cancelled) toast.error('Não foi possível gerar a landing automaticamente');
+      })
+      .finally(() => {
+        if (!cancelled) setGerandoLanding(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, edital?.nome, edital?.landing_slug, loading, canManageEdital]);
+
+  const handleExcluirEdital = async () => {
+    if (!id) return;
+    if (!window.confirm('Tem certeza que deseja apagar este edital? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+    setExcluindo(true);
+    try {
+      await deleteDoc(doc(db, 'editais', id));
+      toast.success('Edital apagado');
+      navigate('/editais-abertos');
+    } catch (error) {
+      console.error('Erro ao apagar edital:', error);
+      toast.error('Erro ao apagar edital. Tente novamente.');
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
   const formatDate = (dateField: any) => {
     if (!dateField) return 'Não informado';
     
@@ -168,25 +247,6 @@ const DetalhesEdital = () => {
       toast.success('Link da landing copiado');
     } catch {
       toast.error('Não foi possível copiar o link');
-    }
-  };
-
-  const gerarLinkLanding = async () => {
-    if (!id || !edital?.nome) return;
-    setGerandoLanding(true);
-    try {
-      const slug = await generateUniqueLandingSlug(edital.nome);
-      await updateDoc(doc(db, 'editais', id), {
-        landing_slug: slug,
-        landing_ativa: true,
-      });
-      setEdital((prev) => (prev ? { ...prev, landing_slug: slug, landing_ativa: true } : prev));
-      toast.success('Link da landing gerado');
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao gerar link da landing');
-    } finally {
-      setGerandoLanding(false);
     }
   };
 
@@ -271,14 +331,41 @@ const DetalhesEdital = () => {
             </div>
 
             {/* Botão Formatar Projeto — destaque no topo */}
+            <div className="mt-6 flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center">
             <Button 
               size="lg"
               onClick={() => navigate(`/criar-projeto?edital=${id}`)}
-              className="mt-6 w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
+              className="w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
             >
               <Plus className="h-6 w-6" />
               Formatar para este edital
             </Button>
+            {canManageEdital && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto border-oraculo-blue text-oraculo-blue hover:bg-oraculo-blue/10"
+                  onClick={() => navigate(`/editar-edital/${id}`)}
+                >
+                  <Pencil className="h-5 w-5 mr-2" />
+                  Editar edital
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={handleExcluirEdital}
+                  disabled={excluindo}
+                >
+                  <Trash2 className="h-5 w-5 mr-2" />
+                  {excluindo ? 'Apagando…' : 'Apagar edital'}
+                </Button>
+              </>
+            )}
+            </div>
           </div>
 
           {/* Key Information Cards */}
@@ -386,17 +473,16 @@ const DetalhesEdital = () => {
               ) : (
                 <>
                   <p className="text-sm text-gray-600">
-                    Ainda não há link público de landing para este edital. Gere um slug a partir do nome (ex.:{' '}
-                    <span className="font-mono text-xs">meu-edital-2026</span>).
+                    {gerandoLanding
+                      ? 'Gerando link da landing de campanha a partir do nome do edital…'
+                      : 'A landing pública é criada automaticamente ao importar o edital. Se o link não aparecer, recarregue a página ou edite o edital.'}
                   </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={gerandoLanding}
-                    onClick={() => void gerarLinkLanding()}
-                  >
-                    {gerandoLanding ? 'Gerando…' : 'Gerar link da landing'}
-                  </Button>
+                  {gerandoLanding ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-oraculo-purple" />
+                      Aguarde…
+                    </div>
+                  ) : null}
                 </>
               )}
             </CardContent>

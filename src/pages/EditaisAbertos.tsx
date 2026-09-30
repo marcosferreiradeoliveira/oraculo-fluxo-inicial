@@ -181,33 +181,27 @@ const EditaisAbertos = () => {
         
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                <Calendar className="h-8 w-8 text-oraculo-magenta" />
-                Editais Abertos
-              </h1>
-              <p className="text-gray-600 text-sm md:text-base">
-                Explore todos os editais culturais em aberto e encontre oportunidades para seus projetos.
-              </p>
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                  <Calendar className="h-8 w-8 text-oraculo-magenta" />
+                  Editais Abertos
+                </h1>
+                <p className="text-gray-600 text-sm md:text-base">
+                  Explore todos os editais culturais em aberto e encontre oportunidades para seus projetos.
+                </p>
+              </div>
+              {user && (
+                <Button
+                  className="shrink-0 bg-oraculo-blue text-white"
+                  onClick={handleCadastrarEdital}
+                >
+                  Cadastrar Edital
+                </Button>
+              )}
             </div>
 
-            {/* Seção Editais Abertos */}
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Calendar className="h-6 w-6 text-oraculo-magenta" />
-                  Todos os Editais
-                </h2>
-                {user && (
-                  <Button 
-                    className="ml-2 bg-oraculo-blue text-white" 
-                    onClick={handleCadastrarEdital}
-                  >
-                    Cadastrar Edital
-                  </Button>
-                )}
-              </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {loading ? (
                   <div className="flex items-center justify-center p-4 col-span-full">

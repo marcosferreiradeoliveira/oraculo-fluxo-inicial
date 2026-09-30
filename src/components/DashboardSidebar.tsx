@@ -19,7 +19,6 @@ import {
   Calendar,
   LogOut,
   FolderKanban,
-  FileText,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +38,6 @@ const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
-  { title: 'Importar editais', url: '/gerenciar-editais', icon: FileText, menuItem: 'gerenciar_editais' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   {

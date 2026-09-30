@@ -8,6 +8,15 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
 import { Link } from 'react-router-dom';
 import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trackAnalysisFailed } from '@/lib/analytics';
+import {
+  buildCadastroRedirectToCriarProjeto,
+  clearCriarProjetoDraft,
+  readCriarProjetoDraft,
+  readLandingNomeProjeto,
+  saveCriarProjetoDraft,
+} from '@/lib/landingToCriarProjeto';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { toast } from 'sonner';
 import { Brain, Loader2, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -183,6 +192,8 @@ const CriarProjeto = () => {
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [user] = useAuthState(auth);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [etapasIA] = useState([
     'Salvando projeto',
   ]);
@@ -191,7 +202,37 @@ const CriarProjeto = () => {
   const [checkingLimit, setCheckingLimit] = useState(true);
   const [searchParams] = useSearchParams();
   const editalIdParam = searchParams.get('edital');
-  
+
+  // Restaura rascunho local ou pré-preenchimento da landing (?nome=)
+  useEffect(() => {
+    const fromLandingFlow = searchParams.get('origem') === 'landing';
+    const draft = fromLandingFlow ? null : readCriarProjetoDraft();
+    if (draft && (draft.nome || draft.descricao || draft.editalAssociado)) {
+      setNome(draft.nome);
+      setDescricao(draft.descricao);
+      if (draft.editalAssociado) setEditalAssociado(draft.editalAssociado);
+      setDraftHydrated(true);
+      return;
+    }
+    const fromUrl = searchParams.get('nome')?.trim();
+    const fromLanding = readLandingNomeProjeto();
+    const initialNome = fromUrl || fromLanding;
+    if (initialNome) setNome(initialNome);
+    setDraftHydrated(true);
+  }, [searchParams]);
+
+  // Persiste rascunho no navegador enquanto o visitante edita (até criar conta)
+  useEffect(() => {
+    if (!draftHydrated) return;
+    const editalSel = editais.find((e) => e.nome === editalAssociado);
+    saveCriarProjetoDraft({
+      nome,
+      descricao,
+      editalAssociado,
+      editalId: editalSel?.id || editalIdParam || undefined,
+    });
+  }, [nome, descricao, editalAssociado, draftHydrated, editais, editalIdParam]);
+
   // Estados para análise IA
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
   const [analisando, setAnalisando] = useState(false);
@@ -523,16 +564,21 @@ const CriarProjeto = () => {
       const now = new Date();
       
       const editaisFiltrados = snap.docs
-        .map(d => ({
-          id: d.id,
-          ...d.data(),
-          data_encerramento: d.data().data_encerramento?.toDate 
-            ? d.data().data_encerramento.toDate() 
-            : d.data().data_encerramento,
-          dataEncerramento: d.data().dataEncerramento?.toDate 
-            ? d.data().dataEncerramento.toDate() 
-            : d.data().dataEncerramento
-        }))
+        .map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            nome: data.nome || data.titulo || 'Edital',
+            orgao: data.orgao || data.proponente || '',
+            ...data,
+            data_encerramento: data.data_encerramento?.toDate
+              ? data.data_encerramento.toDate()
+              : data.data_encerramento,
+            dataEncerramento: data.dataEncerramento?.toDate
+              ? data.dataEncerramento.toDate()
+              : data.dataEncerramento,
+          };
+        })
         .filter(edital => {
           let dataEncerramento: Date | null = null;
           if (edital.data_encerramento) {
@@ -852,15 +898,29 @@ const CriarProjeto = () => {
     setLoading(true);
     setEtapaAtualIA(0);
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.error('Usuário não logado');
-        setErro('Você precisa estar logado para criar um projeto.');
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        const editalSel = editais.find((e) => e.nome === editalAssociado);
+        saveCriarProjetoDraft({
+          nome: nome.trim(),
+          descricao: descricao.trim(),
+          editalAssociado,
+          editalId: editalSel?.id || editalId || editalIdParam || undefined,
+        });
+        const params = new URLSearchParams();
+        if (editalIdParam) params.set('edital', editalIdParam);
+        else if (editalSel?.id) params.set('edital', editalSel.id);
+        params.set('continuar', '1');
+        const returnPath = `/criar-projeto${params.toString() ? `?${params.toString()}` : ''}`;
+        toast.message('Rascunho salvo neste navegador', {
+          description: 'Crie sua conta para salvar o projeto e rodar a avaliação com IA.',
+        });
+        navigate(buildCadastroRedirectToCriarProjeto(returnPath));
         setLoading(false);
         return;
       }
-      
-      console.log('Usuário logado:', user.uid);
+
+      const user = currentUser;
       
       // Verificar limite de projetos antes de criar
       const verificacaoLimite = await verificarLimiteProjetos(user.uid);
@@ -895,6 +955,8 @@ const CriarProjeto = () => {
       console.log('Salvando projeto no Firestore...');
       const docRef = await addDoc(collection(db, 'projetos'), projetoData);
       console.log('Projeto criado com ID:', docRef.id);
+
+      clearCriarProjetoDraft();
       
       const userRef = doc(db, 'usuarios', user.uid);
       await updateDoc(userRef, { projetos_criados_count: increment(1) });
@@ -1063,6 +1125,12 @@ const CriarProjeto = () => {
               <p className="text-gray-600 text-sm md:text-base break-words">
                 Preencha os detalhes do seu projeto cultural para começar a usar o Oráculo AI.
               </p>
+              {!user && (
+                <p className="mt-2 text-sm text-oraculo-blue/90 bg-oraculo-blue/5 border border-oraculo-blue/20 rounded-lg px-3 py-2">
+                  Você pode escrever sem conta — o rascunho fica salvo neste navegador. Ao clicar em{' '}
+                  <strong>Avaliar com IA</strong>, pedimos cadastro e voltamos com tudo preenchido.
+                </p>
+              )}
             </div>
 
             {/* Barra de progresso - no mobile só etapas 1, 2, 3 e "..."; no desktop todas */}

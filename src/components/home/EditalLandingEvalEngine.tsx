@@ -203,7 +203,7 @@ export function EditalLandingEvalEngine({ config, editalSlug }: Props) {
               onClick={avancarLead}
               className="w-full bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-black py-6 rounded-xl text-base md:text-lg shadow-xl border-0"
             >
-              ⚡ SIMULAR MINHA NOTA NESTE EDITAL (15 CRÉDITOS GRÁTIS)
+              ⚡ SIMULAR MINHA NOTA NESTE EDITAL
             </Button>
           </div>
           <p className="text-xs text-zinc-400 mt-4 flex items-start gap-2">

@@ -1,4 +1,4 @@
-import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, limit, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   getEditalLandingConfig,
@@ -109,7 +109,6 @@ export function buildEditalLandingFromFirestore(
   const thumbnailUrl = typeof thumb === 'string' && thumb.trim() ? thumb.trim() : undefined;
 
   const criterios = parseCriteriosFromFirestore(data.criterios);
-  const orgaoCurto = proponente.split('|')[0]?.trim() || 'edital';
 
   return {
     slug,
@@ -129,9 +128,9 @@ export function buildEditalLandingFromFirestore(
     categorias,
     textosExigidos,
     documentacao: documentacao as string[],
-    cardTitulo: `Veja como o parecerista do ${orgaoCurto} pode avaliar seu projeto`,
+    cardTitulo: `Veja como a banca do ${nome} vai avaliar seu projeto`,
     cardSubtitulo:
-      'Nossa IA lê as exigências deste edital e simula a nota da banca antes de você enviar a versão final.',
+      'Sua proposta analisada item por item contra os critérios oficiais antes do envio final.',
     demoIA: { ...DEFAULT_DEMO_IA, criterioDestaque: criterios[0]?.nome ?? DEFAULT_DEMO_IA.criterioDestaque },
     editalNomeParam: nome,
     firestoreEditalId: editalId,
@@ -166,6 +165,30 @@ export async function assignLandingFieldsForNewEdital(editalData: Record<string,
   const landing_slug = await generateUniqueLandingSlug(nome || 'edital');
   editalData.landing_slug = landing_slug;
   editalData.landing_ativa = true;
+  return landing_slug;
+}
+
+/** Garante slug de landing em edital já salvo (backfill ou reativação). */
+export async function ensureEditalLandingFields(
+  editalId: string,
+  nome: string,
+  currentSlug?: string | null
+): Promise<string> {
+  const normalized =
+    typeof currentSlug === 'string' && isLandingSlugValid(normalizeLandingSlug(currentSlug))
+      ? normalizeLandingSlug(currentSlug)
+      : null;
+
+  if (normalized) {
+    await updateDoc(doc(db, 'editais', editalId), { landing_ativa: true });
+    return normalized;
+  }
+
+  const landing_slug = await generateUniqueLandingSlug(nome || 'edital');
+  await updateDoc(doc(db, 'editais', editalId), {
+    landing_slug,
+    landing_ativa: true,
+  });
   return landing_slug;
 }
 

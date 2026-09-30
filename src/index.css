@@ -98,6 +98,10 @@
   background: linear-gradient(135deg, #2563eb 0%, #7c3aed 50%, #ec4899 100%);
 }
 
+.gradient-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 55%, #6d28d9 100%);
+}
+
 .card-hover {
   transition: all 0.3s ease;
 }

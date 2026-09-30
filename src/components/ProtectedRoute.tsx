@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import ConfirmarEmail from '@/pages/ConfirmarEmail';
@@ -12,12 +12,18 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireEmailVerification = false }: ProtectedRouteProps) {
   const [user, loading] = useAuthState(auth);
   const navigate = useNavigate();
+  const location = useLocation();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        navigate('/cadastro');
+        const returnTo = `${location.pathname}${location.search}`;
+        const redirect =
+          returnTo && returnTo !== '/cadastro'
+            ? `?redirect=${encodeURIComponent(returnTo)}`
+            : '';
+        navigate(`/cadastro${redirect}`);
       } else {
         // COMENTADO: Verificação de email confirmado
         // if (requireEmailVerification && !user.emailVerified) {
@@ -28,7 +34,7 @@ export function ProtectedRoute({ children, requireEmailVerification = false }: P
         setChecking(false);
       }
     }
-  }, [user, loading, navigate, requireEmailVerification]);
+  }, [user, loading, navigate, requireEmailVerification, location.pathname, location.search]);
 
   if (loading || checking) {
     return (

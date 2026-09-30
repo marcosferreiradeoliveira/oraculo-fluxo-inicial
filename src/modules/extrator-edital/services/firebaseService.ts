@@ -1,5 +1,5 @@
 import { db, storage } from '@/lib/firebase';
-import { assignLandingFieldsForNewEdital } from '@/lib/editalLandingFirestore';
+import { assignLandingFieldsForNewEdital, getEditalLandingPublicUrl } from '@/lib/editalLandingFirestore';
 import {
   collection,
   addDoc,
@@ -54,7 +54,7 @@ function mapDoc(id: string, data: Record<string, unknown>): AnaliseEdital {
 export async function salvarAnalise(
   analise: Omit<AnaliseEdital, 'id' | 'dataAnalise'>,
   pdfFile?: File | null
-): Promise<string> {
+): Promise<{ id: string; landingSlug?: string }> {
   const payload: Record<string, unknown> = {
     ...analise,
     dataEncerramento: toTimestamp(analise.dataEncerramento),
@@ -75,7 +75,10 @@ export async function salvarAnalise(
     dataAnalise: Timestamp.now(),
   });
 
-  return docRef.id;
+  const landingSlug =
+    typeof payload.landing_slug === 'string' ? payload.landing_slug : undefined;
+
+  return { id: docRef.id, landingSlug };
 }
 
 export async function obterHistoricoAnalises(limite: number = 10): Promise<AnaliseEdital[]> {

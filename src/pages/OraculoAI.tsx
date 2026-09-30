@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Brain, FileText, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
+import { assignLandingFieldsForNewEdital } from '@/lib/editalLandingFirestore';
 import { collection, getDocs, query, where, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -252,6 +253,8 @@ const OraculoAI = () => {
           delete editalData.data_encerramento; // Remove invalid date
         }
       }
+
+      await assignLandingFieldsForNewEdital(editalData);
 
       const docRef = await addDoc(collection(db, 'editais'), editalData);
       setEtapaLog(log => [...log, "Cadastro concluído!"]);

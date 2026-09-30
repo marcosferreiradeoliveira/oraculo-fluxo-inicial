@@ -108,7 +108,7 @@ const App = () => (
           <Route path="/cadastro-premium" element={<CadastroPremium />} />
           <Route path="/contato-premium" element={<ProtectedRoute><ContatoPremium /></ProtectedRoute>} />
           <Route path="/gerenciar-assinatura" element={<ProtectedRoute><GerenciarAssinatura /></ProtectedRoute>} />
-          <Route path="/criar-projeto" element={<ProtectedRoute><CriarProjeto /></ProtectedRoute>} />
+          <Route path="/criar-projeto" element={<CriarProjeto />} />
           {/* Rotas específicas de projeto devem vir antes da rota genérica /projeto/:id */}
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><StarterPlanGuard><GerarTextos /></StarterPlanGuard></ProtectedRoute>} />

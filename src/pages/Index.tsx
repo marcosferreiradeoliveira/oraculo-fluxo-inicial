@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { FeaturedGuides } from '@/components/FeaturedGuides';
@@ -11,12 +11,13 @@ import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones,
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../lib/firebase';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { trackNewsletterSubscribed, trackCtaVerComoFunciona } from '@/lib/analytics';
 import analisarImage from '@/assets/Analisar.jpeg';
+import { DashboardPremiumHero } from '@/components/home/DashboardPremiumHero';
+import { filterEditaisAbertos, findEditalMaisUrgente, type EditalUrgenteInfo } from '@/lib/editalDates';
 
 // Função para capitalizar apenas a primeira letra do título
 const capitalizarTitulo = (titulo: string): string => {
@@ -32,9 +33,25 @@ const Index = () => {
   const [loadingGuias, setLoadingGuias] = useState(true);
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [loadingPodcasts, setLoadingPodcasts] = useState(true);
-  const [editais, setEditais] = useState<any[]>([]);
+  const [editaisAbertosTodos, setEditaisAbertosTodos] = useState<any[]>([]);
   const [loadingEditais, setLoadingEditais] = useState(true);
-  const [user] = useAuthState(auth);
+  const { user, loading: profileLoading, isPremium, profile, planLabel } = useUserProfile();
+  /** Banners de aquisição/demo — só para visitantes ou contas não premium */
+  const showOnboardingBanners = !user || (!profileLoading && !isPremium);
+  const showPremiumDashboard = Boolean(user && !profileLoading && isPremium && profile);
+
+  const editaisAbertosCount = editaisAbertosTodos.length;
+  const editalUrgente: EditalUrgenteInfo | null = useMemo(
+    () => findEditalMaisUrgente(editaisAbertosTodos),
+    [editaisAbertosTodos]
+  );
+  const editais = useMemo(
+    () =>
+      [...editaisAbertosTodos]
+        .sort((a: any, b: any) => (a.destaque ? 0 : 1) - (b.destaque ? 0 : 1))
+        .slice(0, 4),
+    [editaisAbertosTodos]
+  );
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [redirectPremium, setRedirectPremium] = useState(false);
   const [emailNewsletter, setEmailNewsletter] = useState('');
@@ -113,67 +130,20 @@ const Index = () => {
         // Busca editais abertos (máximo 4)
         let snapshot;
         try {
-          const qEditais = query(collection(db, 'editais'), orderBy('data_encerramento', 'desc'), limit(20));
+          const qEditais = query(collection(db, 'editais'), orderBy('data_encerramento', 'desc'), limit(100));
           snapshot = await getDocs(qEditais);
         } catch (orderError) {
           console.log('Erro ao ordenar editais, buscando sem ordenação:', orderError);
-          const qEditais = query(collection(db, 'editais'), limit(20));
+          const qEditais = query(collection(db, 'editais'), limit(100));
           snapshot = await getDocs(qEditais);
         }
         
-        const now = new Date();
-        const data = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(edital => {
-            let dataEncerramento: Date | null = null;
-            
-            // Verifica data_encerramento primeiro
-            if (edital.data_encerramento) {
-              if (edital.data_encerramento?.toDate) {
-                dataEncerramento = edital.data_encerramento.toDate();
-              } else if (edital.data_encerramento?.seconds) {
-                dataEncerramento = new Date(edital.data_encerramento.seconds * 1000);
-              } else if (typeof edital.data_encerramento === 'string') {
-                dataEncerramento = new Date(edital.data_encerramento);
-              }
-            }
-            
-            // Se não tem data_encerramento ou já passou, verifica dataEncerramento (com E maiúsculo)
-            if ((!dataEncerramento || (dataEncerramento && dataEncerramento <= now)) && edital.dataEncerramento) {
-              if (edital.dataEncerramento?.toDate) {
-                dataEncerramento = edital.dataEncerramento.toDate();
-              } else if (edital.dataEncerramento?.seconds) {
-                dataEncerramento = new Date(edital.dataEncerramento.seconds * 1000);
-              } else if (typeof edital.dataEncerramento === 'string') {
-                dataEncerramento = new Date(edital.dataEncerramento);
-              }
-            }
-
-            // Fallback: deadline (mesma lógica de EditaisAbertos)
-            if ((!dataEncerramento || (dataEncerramento && dataEncerramento <= now)) && edital.deadline) {
-              if (edital.deadline && typeof edital.deadline === 'object' && 'toDate' in edital.deadline) {
-                dataEncerramento = edital.deadline.toDate();
-              } else if (edital.deadline && typeof edital.deadline === 'object' && 'seconds' in edital.deadline) {
-                dataEncerramento = new Date(edital.deadline.seconds * 1000);
-              } else if (typeof edital.deadline === 'string') {
-                dataEncerramento = new Date(edital.deadline);
-              }
-            }
-            
-            // Se ainda não tem data válida, retorna false
-            if (!dataEncerramento || isNaN(dataEncerramento.getTime())) {
-              return false;
-            }
-            
-            return dataEncerramento > now;
-          })
-          .sort((a: any, b: any) => (a.destaque ? 0 : 1) - (b.destaque ? 0 : 1)) // destaque true no topo
-          .slice(0, 4); // Limita a 4 após filtrar
-        
-        setEditais(data);
+        const raw = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        const abertos = filterEditaisAbertos(raw);
+        setEditaisAbertosTodos(abertos);
       } catch (e) {
         console.error('Erro ao buscar editais:', e);
-        setEditais([]);
+        setEditaisAbertosTodos([]);
       } finally {
         setLoadingEditais(false);
       }
@@ -231,6 +201,22 @@ const Index = () => {
         {/* Main Content */}
         <main className="flex-1 p-2 md:p-4 animate-fade-in">
           <div className="max-w-7xl mx-auto">
+            {showPremiumDashboard && profile && (
+              <DashboardPremiumHero
+                userName={profile.nome}
+                planLabel={planLabel}
+                editaisAbertosCount={editaisAbertosCount}
+                metrics={profile.metrics}
+                editalUrgente={editalUrgente}
+                onCriarProjeto={() => navigate('/criar-projeto')}
+                onVerEditais={() => navigate('/editais-abertos')}
+                onContinuarProjeto={(projectId) => navigate(`/projeto/${projectId}`)}
+                onAvaliarEditalUrgente={(editalId) => navigate(`/criar-projeto?edital=${editalId}`)}
+              />
+            )}
+
+            {showOnboardingBanners && (
+            <>
             {/* Demo — Módulo 1 (simulador parcial), sem login */}
             <div className="mb-10 rounded-2xl overflow-hidden bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple shadow-xl border-2 border-oraculo-purple/30">
               <div className="flex flex-col lg:flex-row lg:items-stretch">
@@ -287,6 +273,8 @@ const Index = () => {
                 </Button>
               </div>
             </div>
+            </>
+            )}
 
             {/* Editais Abertos */}
             <div id="editais-abertos" className="mb-12 scroll-mt-24">

@@ -9,7 +9,6 @@ import type { EditalData, ProjetoSelecionado, HistoricoEdital } from '@/modules/
 import FileUpload from '@/modules/extrator-edital/components/FileUpload';
 import ResultDisplay from '@/modules/extrator-edital/components/ResultDisplay';
 import ProjetosSelecionados from '@/modules/extrator-edital/components/ProjetosSelecionados';
-import ExtratorDashboard from '@/modules/extrator-edital/components/Dashboard';
 import Loader from '@/modules/extrator-edital/components/Loader';
 import ErrorMessage from '@/modules/extrator-edital/components/ErrorMessage';
 import ExtratorHeader from '@/modules/extrator-edital/components/Header';
@@ -24,7 +23,6 @@ export default function ExtratorEditaisPage() {
   const [projetosSelecionados, setProjetosSelecionados] = useState<ProjetoSelecionado[]>([]);
   const [historicoEdital, setHistoricoEdital] = useState<HistoricoEdital | undefined>(undefined);
   const [buscandoProjetos, setBuscandoProjetos] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'analisar' | 'dashboard'>('analisar');
   const [ultimoEditalId, setUltimoEditalId] = useState<string | null>(null);
 
   const handleFileChange = (selectedFile: File | null) => {
@@ -81,7 +79,7 @@ export default function ExtratorEditaisPage() {
       }
 
       try {
-        const editalId = await salvarAnalise(
+        const { id: editalId, landingSlug } = await salvarAnalise(
           {
             ...resultData,
             nomeArquivo: file.name,
@@ -92,7 +90,13 @@ export default function ExtratorEditaisPage() {
           file
         );
         setUltimoEditalId(editalId);
-        toast.success('Edital importado e salvo');
+        if (landingSlug) {
+          toast.success('Edital importado — landing de campanha criada', {
+            description: getEditalLandingPublicUrl(landingSlug),
+          });
+        } else {
+          toast.success('Edital importado e salvo');
+        }
       } catch (firebaseError) {
         console.warn('Erro ao salvar no Firebase:', firebaseError);
         toast.error('Análise ok, mas falhou ao salvar no Firestore.');
@@ -130,12 +134,11 @@ export default function ExtratorEditaisPage() {
         <DashboardHeader />
         <main className="flex-1 overflow-auto">
           <div className="min-h-full text-gray-900">
-            <ExtratorHeader abaAtiva={abaAtiva} onAbaChange={setAbaAtiva} />
+            <ExtratorHeader />
             <div className="flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
               <div className="w-full max-w-6xl mx-auto">
-                {abaAtiva === 'analisar' && (
-                  <>
-                    <header className="text-center mb-8">
+                <>
+                  <header className="text-center mb-8">
                       <h1 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-oraculo-blue to-oraculo-purple mb-2">
                         Importar e gerenciar editais
                       </h1>
@@ -206,9 +209,6 @@ export default function ExtratorEditaisPage() {
                       )}
                     </div>
                   </>
-                )}
-
-                {abaAtiva === 'dashboard' && <ExtratorDashboard />}
               </div>
             </div>
           </div>
