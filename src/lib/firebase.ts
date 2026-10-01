@@ -38,6 +38,10 @@ export const firebaseInit = () => {
 
     // Check if Firebase app is already initialized
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    if (import.meta.env.DEV) {
+      const profile = import.meta.env.VITE_FIREBASE_PROFILE || '—';
+      console.info('[Firebase]', profile, firebaseConfig.projectId, firebaseConfig.authDomain);
+    }
     console.log('Firebase initialized successfully');
     
     // Initialize services

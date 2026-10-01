@@ -4,8 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node scripts/firebase-env.mjs dev",
+    "dev:is": "node scripts/firebase-env.mjs dev oraculo-is",
+    "dev:culturalapp": "node scripts/firebase-env.mjs dev culturalapp",
+    "build": "node scripts/firebase-env.mjs build",
+    "build:is": "node scripts/firebase-env.mjs build oraculo-is",
+    "build:culturalapp": "node scripts/firebase-env.mjs build culturalapp",
+    "env:check": "node scripts/firebase-env.mjs check",
+    "firebase:use-branch": "node scripts/firebase-env.mjs firebase-use",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

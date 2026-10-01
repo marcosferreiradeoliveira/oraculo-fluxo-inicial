@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 .env
+!.env.oraculo-is
+!.env.culturalapp
 
 # HubSpot config file
 hubspot.config.yml
