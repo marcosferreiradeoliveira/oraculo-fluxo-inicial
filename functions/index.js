@@ -837,6 +837,12 @@ Antes de finalizar, confira: pelo menos ${minRubricas} linhas, soma exata do tet
 
 Gere o orçamento COMPLETO agora:`;
       }
+    } else if (String(tipo).startsWith('tarefas_') || tipo === 'tarefas_operacionais') {
+      const promptCliente = prompt && String(prompt).trim();
+      if (!promptCliente) {
+        return res.status(400).json({ error: 'prompt obrigatório para geração de tarefas operacionais' });
+      }
+      promptEspecifico = promptCliente;
     } else {
       // Para todos os outros tipos de texto, incluir a descrição completa do projeto
       const tipoTextoFormatado = tipo.split('_').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -864,6 +870,9 @@ Com base EXCLUSIVAMENTE na descrição do projeto acima, gere o texto para "${ti
 CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos projetos ou use apenas o portfolio como base.`;
     }
     
+    const isModoTarefasOperacionais =
+      String(tipo).startsWith('tarefas_') || tipo === 'tarefas_operacionais';
+
     // Adicionar equipeBio, portfolio e dadosCadastrais ao prompt se disponíveis
     let contextInfo = '';
     if (equipeBio && equipeBio.trim()) {
@@ -875,7 +884,7 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
     if (dadosCadastrais && dadosCadastrais.trim()) {
       contextInfo += `\n\nDADOS CADASTRAIS DO PROPONENTE (APENAS PARA REFERÊNCIA, NÃO INCLUIR LITERALMENTE):\n${dadosCadastrais}\n\nIMPORTANTE: Use apenas como contexto adicional. NÃO inclua os dados cadastrais literalmente no texto gerado. O texto gerado deve focar nos dados do projeto.`;
     }
-    const promptFinal = promptEspecifico + contextInfo;
+    const promptFinal = isModoTarefasOperacionais ? promptEspecifico : promptEspecifico + contextInfo;
     
     const openai = getAI();
     
@@ -889,12 +898,14 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
         ? minimoRubricasOrcamento(Number(dadosProjeto.teto) || 0)
         : 15;
     const orcamentoAlteracoes = tipo === 'orcamento' && orcamentoAtualEnviado && promptAlteracoesEnviado;
-    const systemOrcamento = orcamentoAlteracoes
+    const systemOrcamento = isModoTarefasOperacionais
+      ? 'Você decompõe UMA atividade de cronograma em tarefas operacionais (checklist). Responda APENAS JSON válido no formato {"tarefas":[{"titulo":"..."}]}. PROIBIDO: parágrafos, texto descritivo do projeto, "Etapa 1", listar outras fases do cronograma, markdown. Cada titulo: frase curta (máx. 120 caracteres), uma ação verificável. Não descreva o projeto — só tarefas da atividade pedida.'
+      : orcamentoAlteracoes
       ? 'Você é um especialista em orçamentos para projetos culturais. O usuário enviou um ORÇAMENTO ATUAL e SUGESTÕES DE ALTERAÇÕES. Sua tarefa é devolver SOMENTE o orçamento atualizado: aplique as alterações pedidas EM CIMA do orçamento atual. NÃO gere um orçamento do zero. Mantenha rubricas que não forem citadas nas sugestões; altere, remova ou adicione apenas o que as sugestões pedirem. Respeite o teto máximo. Formato: texto puro, uma rubrica por linha (Nome: R$ valor ou Nome - R$ valor), sem markdown.'
       : (tipo === 'orcamento'
         ? `Você é um especialista em orçamentos para projetos culturais. Crie orçamentos DETALHADOS com NO MÍNIMO ${orcamentoMinRubricas} rubricas (linhas), baseados EXCLUSIVAMENTE nos dados do projeto. Respostas com apenas 3–5 verbas genéricas (ex.: só Coordenação, Produção Executiva, Assistência) estão ERRADAS. CRÍTICO: texto puro, sem markdown. NÃO invente outros projetos.`
         : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados baseados EXCLUSIVAMENTE na descrição do projeto fornecida. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito. NÃO use apenas o portfolio como base.');
-    const maxTokensGeracao = tipo === 'orcamento' ? 8192 : 2000;
+    const maxTokensGeracao = tipo === 'orcamento' ? 8192 : isModoTarefasOperacionais ? 1200 : 2000;
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
