@@ -43,11 +43,15 @@ const Index = () => {
 
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    if (hash === 'editais-abertos' || hash === 'fornecedores') {
+    if (hash === 'fornecedores') {
+      navigate('/fornecedores', { replace: true });
+      return;
+    }
+    if (hash === 'editais-abertos') {
       const el = document.getElementById(hash);
       if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [location.hash]);
+  }, [location.hash, navigate]);
 
   useEffect(() => {
     if (location.state?.showCadastroSuccess === true) {

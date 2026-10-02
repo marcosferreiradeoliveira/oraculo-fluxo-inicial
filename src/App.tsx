@@ -8,7 +8,6 @@ declare global {
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { EnvDebug } from "./components/EnvDebug";
 import GoogleTagManager, { GoogleTagManagerRouteTracker } from "./components/GoogleTagManager";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -45,6 +44,7 @@ import Privacidade from './pages/Privacidade';
 import DetalhesEdital from './pages/DetalhesEdital';
 import ConfirmarEmail from './pages/ConfirmarEmail';
 import EditaisAbertos from './pages/EditaisAbertos';
+import Fornecedores from './pages/Fornecedores';
 import Portfolio from './pages/Portfolio';
 import Admin from './pages/Admin';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -80,7 +80,6 @@ const App = () => (
       <GoogleTagManager />
       <Toaster />
       <Sonner />
-      <EnvDebug />
       <BrowserRouter>
         <AnalyticsListener />
         <GoogleTagManagerRouteTracker />
@@ -96,6 +95,7 @@ const App = () => (
           <Route path="/biblioteca" element={<ProtectedRoute><Biblioteca /></ProtectedRoute>} />
           <Route path="/podcast" element={<Podcast />} />
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
+          <Route path="/fornecedores" element={<Fornecedores />} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />

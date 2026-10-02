@@ -2,14 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { 
-  Home, 
-  Brain, 
-  BookOpen, 
-  Headphones, 
-  User, 
+import {
+  Home,
+  User,
   HelpCircle,
-  Sparkles,
   Menu,
   X,
   Plus,
@@ -21,8 +17,8 @@ import {
   Building2,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
-import { Badge } from '@/components/ui/badge';
 import { trackMenuIntent } from '@/lib/analytics';
+import { useDashboardUser } from '@/hooks/useDashboardUser';
 
 type MenuItem = {
   title: string;
@@ -31,15 +27,13 @@ type MenuItem = {
   menuItem: string; // canonical: "inicio" | "editais" | "perfil" | etc
   external?: boolean;
   outline?: boolean;
-  /** Ancora na home (ex.: fornecedores) */
-  homeHash?: string;
 };
 
 const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
-  { title: 'Fornecedores', url: '/', icon: Building2, menuItem: 'fornecedores', homeHash: 'fornecedores' },
+  { title: 'Fornecedores', url: '/fornecedores', icon: Building2, menuItem: 'fornecedores' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
@@ -47,6 +41,7 @@ const menuItems: MenuItem[] = [
 ];
 
 export function DashboardSidebar() {
+  const { user } = useDashboardUser();
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -167,17 +162,17 @@ export function DashboardSidebar() {
                   </a>
                 ) : (
                   <NavLink
-                    to={item.homeHash ? { pathname: '/', hash: item.homeHash } : item.url}
+                    to={item.url}
                     onClick={() =>
                       trackMenuIntent({
                         menu_item: item.menuItem,
-                        destination: item.homeHash ? `/#${item.homeHash}` : item.url,
+                        destination: item.url,
                         cta_type: 'nav_link',
                       })
                     }
                     className={({ isActive }) =>
                       `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-                        isActive && !item.homeHash
+                        isActive
                           ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
                           : item.outline
                           ? 'border-2 border-[#FFCB05]/40 hover:border-[#FFCB05] hover:bg-white/10'
@@ -194,25 +189,23 @@ export function DashboardSidebar() {
               </li>
             ))}
           </ul>
+
+          {user ? (
+            <div className="px-4 mt-4 pt-4 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => signOut(auth)}
+                className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-[#ED1C24]/90 hover:bg-[#ED1C24] border border-[#ED1C24]/50 font-medium transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                Sair
+              </button>
+            </div>
+          ) : null}
         </nav>
 
-        {/* Logout ao pé do menu — visível em todas as telas */}
-        <div className="px-4 pb-3 border-t border-white/10">
-          <button
-            type="button"
-            onClick={() => signOut(auth)}
-            className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-[#ED1C24]/90 hover:bg-[#ED1C24] border border-[#ED1C24]/50 font-medium transition-colors"
-          >
-            <LogOut className="h-5 w-5" />
-            Sair da conta
-          </button>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-white/10">
-          <div className="text-center text-sm text-white/60">
-            <p>© 2026 Instituto dos Sonhos</p>
-          </div>
+        <div className="p-4 border-t border-white/10 mt-auto">
+          <p className="text-center text-sm text-white/60">© 2026 Instituto dos Sonhos</p>
         </div>
       </div>
     </>

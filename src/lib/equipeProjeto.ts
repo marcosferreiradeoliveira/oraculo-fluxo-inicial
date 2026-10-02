@@ -64,6 +64,36 @@ export function fornecedoresDaRubrica(alocacoes: AlocacaoEquipe[], rubricaId: st
   return alocacoes.filter((a) => a.rubricaIds.includes(rubricaId)).map((a) => a.fornecedorId);
 }
 
+/** Define de uma vez quem está vinculado à rubrica (substitui seleção anterior). */
+export function setFornecedoresNaRubrica(
+  alocacoes: AlocacaoEquipe[],
+  rubricaId: string,
+  fornecedorIdsSelecionados: string[],
+  todosFornecedorIds: string[]
+): AlocacaoEquipe[] {
+  const sel = new Set(fornecedorIdsSelecionados);
+  let next = alocacoes;
+  for (const fid of todosFornecedorIds) {
+    next = setFornecedorNaRubrica(next, rubricaId, fid, sel.has(fid));
+  }
+  return next;
+}
+
+/** Define de uma vez quem está vinculado à etapa. */
+export function setFornecedoresNaEtapa(
+  alocacoes: AlocacaoEquipe[],
+  etapaId: string,
+  fornecedorIdsSelecionados: string[],
+  todosFornecedorIds: string[]
+): AlocacaoEquipe[] {
+  const sel = new Set(fornecedorIdsSelecionados);
+  let next = alocacoes;
+  for (const fid of todosFornecedorIds) {
+    next = setFornecedorNaEtapa(next, etapaId, fid, sel.has(fid));
+  }
+  return next;
+}
+
 export function fornecedoresDaEtapa(alocacoes: AlocacaoEquipe[], etapaId: string): string[] {
   return alocacoes.filter((a) => a.etapaIds.includes(etapaId)).map((a) => a.fornecedorId);
 }

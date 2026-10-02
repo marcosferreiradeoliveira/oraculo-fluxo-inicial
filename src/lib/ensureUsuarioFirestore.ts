@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { emptyDadosCadastraisEmpresa } from '@/lib/dadosCadastraisEmpresa';
 
 /** Garante doc em `usuarios/{uid}` (login / criar projeto). Evita permission-denied em updates. */
 export async function ensureUsuarioFirestore(user: User): Promise<void> {
@@ -25,6 +26,7 @@ export async function ensureUsuarioFirestore(user: User): Promise<void> {
       portfolio: '',
       equipeBio: '',
       dadosCadastrais: '',
+      dadosCadastraisEmpresa: emptyDadosCadastraisEmpresa(),
     });
     return;
   }

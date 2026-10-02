@@ -100,8 +100,8 @@ const ProjetoEquipe = () => {
 
   const routes = useMemo(() => (id ? wizardRoutes(id) : []), [id]);
 
-  const salvarEquipe = async () => {
-    if (!id) return;
+  const salvarEquipe = async (opts?: { silencioso?: boolean }): Promise<boolean> => {
+    if (!id) return false;
     setSalvando(true);
     try {
       const rubricaIds = new Set(rubricas.map((r) => r.id));
@@ -116,12 +116,24 @@ const ProjetoEquipe = () => {
         },
       });
       setAlocacoes(limpas);
-      toast.success('Equipe do projeto salva.');
+      if (!opts?.silencioso) {
+        toast.success('Equipe do projeto salva.');
+      }
+      return true;
     } catch (e) {
       console.error(e);
       toast.error('Não foi possível salvar a equipe.');
+      return false;
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const irParaDocumentosInscricao = async () => {
+    const ok = await salvarEquipe({ silencioso: true });
+    if (ok && id) {
+      toast.success('Equipe salva. Indo para documentos…');
+      navigate(`/projeto/${id}/documentos-inscricao`);
     }
   };
 
@@ -145,17 +157,35 @@ const ProjetoEquipe = () => {
                 <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">Equipe do projeto</h1>
                 <p className="text-gray-600 text-sm md:text-base">{nomeProjeto}</p>
               </div>
-              <div className="flex flex-col items-stretch sm:items-end gap-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Próximo passo
+              <div className="flex flex-col items-stretch sm:items-end gap-2">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => salvarEquipe()}
+                    disabled={salvando}
+                  >
+                    {salvando ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Salvando…
+                      </>
+                    ) : (
+                      'Salvar equipe'
+                    )}
+                  </Button>
+                  <Button
+                    size="lg"
+                    className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                    onClick={irParaDocumentosInscricao}
+                    disabled={salvando}
+                  >
+                    Documentos de Inscrição →
+                  </Button>
+                </div>
+                <span className="text-xs text-gray-500 text-right">
+                  O próximo passo salva a equipe automaticamente.
                 </span>
-                <Button
-                  size="lg"
-                  className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
-                  onClick={() => id && navigate(`/projeto/${id}/documentos-inscricao`)}
-                >
-                  Documentos de Inscrição →
-                </Button>
               </div>
             </div>
 
@@ -207,7 +237,7 @@ const ProjetoEquipe = () => {
                   variant="outline"
                   size="sm"
                   className="w-full sm:w-auto"
-                  onClick={() => navigate({ pathname: '/', hash: 'fornecedores' })}
+                  onClick={() => navigate('/fornecedores')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Gerenciar cadastro na página inicial
