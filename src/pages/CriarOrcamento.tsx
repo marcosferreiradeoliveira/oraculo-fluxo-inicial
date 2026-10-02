@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -11,7 +11,34 @@ import { Loader2, Plus, Trash2, Save, DollarSign, Sparkles, FileDown, FileText, 
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Clock } from 'lucide-react';
+import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
+import {
+  arredondarValorOrcamento,
+  extrairValorRsUltimoDaLinha,
+  instrucoesQuantidadeRubricas,
+  linhaIgnoradaNoOrcamento,
+  minimoRubricasOrcamento,
+  ORCAMENTO_COOLDOWN_ENTRE_TENTATIVAS_SEC,
+  checklistRubricasDetalhadas,
+  extrairQuantidadeMesesDaLinha,
+  posProcessarRubricasGeradas,
+} from '@/lib/orcamentoTeto';
+import {
+  inferirDuracaoMesesCronograma,
+  instrucoesOrcamentoAlinhadoCronograma,
+  resumoCronogramaParaOrcamento,
+} from '@/lib/cronogramaDuracao';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
+import {
+  type EtapaVinculo,
+  limparRubricasOrfas,
+  sugerirVinculosRubricasEtapas,
+} from '@/lib/vinculoCronogramaOrcamento';
 
 interface RubricaOrcamento {
   id: string;
@@ -30,6 +57,16 @@ interface ProjetoDocument {
   orcamento?: {
     teto: number;
     rubricas: RubricaOrcamento[];
+  };
+  cronograma?: {
+    duracaoMeses?: number;
+    etapas?: {
+      id?: string;
+      etapa?: string;
+      inicio?: string;
+      fim?: string;
+      rubricasAssociadas?: string[];
+    }[];
   };
   [key: string]: any;
 }
@@ -191,30 +228,56 @@ const CriarOrcamento = () => {
   const [temAlteracoesPendentes, setTemAlteracoesPendentes] = useState(false); // Flag para indicar se há alterações não salvas
   const [sugestoesAlteracoes, setSugestoesAlteracoes] = useState<string>('');
   const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-  const currentStep = 4;
+  const [rateLimitModal, setRateLimitModal] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
+  const [etapasCronograma, setEtapasCronograma] = useState<EtapaVinculo[]>([]);
+  const [abaOrcamento, setAbaOrcamento] = useState('rubricas');
 
-  // Carregar premium e créditos (sem plano: 3 créditos para salvar orçamento)
+  const gerarIdEtapa = () => Math.random().toString(36).slice(2, 11);
+
+  const rubricasParaVinculo = useMemo(
+    () =>
+      rubricas
+        .filter((r) => r.nome.trim())
+        .map((r) => ({ id: r.id, nome: r.nome.trim() })),
+    [rubricas]
+  );
+
+  const aplicarSugestaoVinculosOrcamento = () => {
+    if (!etapasCronograma.length) {
+      toast.info('Não há etapas no cronograma. Crie o cronograma antes de vincular.');
+      return;
+    }
+    setEtapasCronograma(sugerirVinculosRubricasEtapas(etapasCronograma, rubricasParaVinculo));
+    toast.success('Vínculos sugeridos — revise e salve o orçamento.');
+  };
+
+  const vincularOrcamentoGeradoAoCronograma = (lista: RubricaOrcamento[]) => {
+    const rub = lista.filter((r) => r.nome.trim()).map((r) => ({ id: r.id, nome: r.nome.trim() }));
+    if (!rub.length) return;
+    setEtapasCronograma((prev) => {
+      if (!prev.length) return prev;
+      return sugerirVinculosRubricasEtapas(prev, rub);
+    });
+    setAbaOrcamento('vinculos');
+    toast.success('Orçamento gerado. Revise os vínculos com o cronograma e clique em Salvar orçamento.', {
+      duration: 6000,
+    });
+  };
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const currentStep = 5;
+
+  // Analytics: etapa "Criar Orçamento" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
   useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) return;
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
-      } catch (e) {
-        console.error('Erro ao verificar acesso:', e);
-      }
-    };
-    checkAccess();
-  }, [user]);
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'criar_orcamento',
+        });
+    }
+  }, [id, projeto]);
+
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -243,6 +306,19 @@ const CriarOrcamento = () => {
         } as ProjetoDocument;
 
         setProjeto(projetoData);
+
+        const etapasRaw = projetoData.cronograma?.etapas ?? [];
+        setEtapasCronograma(
+          Array.isArray(etapasRaw)
+            ? etapasRaw.map((e) => ({
+                id: e.id || gerarIdEtapa(),
+                etapa: e.etapa || '',
+                inicio: e.inicio,
+                fim: e.fim,
+                rubricasAssociadas: e.rubricasAssociadas ?? [],
+              }))
+            : []
+        );
 
         // Buscar edital para obter o teto do orçamento
         if (projetoData.edital_id) {
@@ -364,6 +440,17 @@ const CriarOrcamento = () => {
     return rubricas.reduce((total, rubrica) => total + rubrica.total, 0);
   };
 
+  const avisarSePoucasRubricas = (lista: RubricaOrcamento[]) => {
+    const min = minimoRubricasOrcamento(tetoOrcamento);
+    if (lista.length > 0 && lista.length < min) {
+      toast.warning(`Poucas rubricas (${lista.length} de ${min} esperadas)`, {
+        description:
+          'Gere o orçamento de novo (prompt pede mais detalhes) ou use "+ Adicionar Rubrica".',
+        duration: 7000,
+      });
+    }
+  };
+
   // Gerar orçamento com IA em streaming
   const gerarOrcamento = async () => {
     if (!projeto) {
@@ -382,16 +469,19 @@ const CriarOrcamento = () => {
       return;
     }
 
-    if (!isPremium && (creditos ?? 0) < CREDITOS_ORCAMENTO) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
 
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
     setRubricas([]);
 
+    const startTimeOrcamento = Date.now();
+    trackTextGenerationStarted({
+      projectId: id!,
+      textType: 'orcamento',
+    });
+
     let gerouComSucesso = false;
+    let rubricasFinaisGeracao: RubricaOrcamento[] = [];
     try {
       // Buscar dados do projeto para enviar à IA
       const descricaoProjeto = projeto.descricao || '';
@@ -413,263 +503,179 @@ const CriarOrcamento = () => {
         }
       }
 
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto';
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projetoId: id,
-          tipo: 'orcamento',
-          dadosProjeto: {
-            ...projeto,
-            portfolio: portfolioTexto,
-            teto: tetoOrcamento // Enviar teto nos dados do projeto
-          },
-          prompt: `Gere um orçamento detalhado para o projeto. TETO MÁXIMO ABSOLUTO: R$ ${tetoOrcamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. CRÍTICO: A soma de TODAS as rubricas DEVE ser igual ou menor que R$ ${tetoOrcamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Gere rubricas variadas e detalhadas, distribuindo o valor total entre elas de forma coerente com as necessidades do projeto.`,
-          userId: user?.uid
-        }),
+      const endpoint = `${getFunctionsBaseUrl()}/gerarTextosProjeto`;
+      const minEsperado = minimoRubricasOrcamento(tetoOrcamento);
+      const tetoFmt = tetoOrcamento.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Erro ao gerar orçamento: ${response.status} - ${JSON.stringify(errorData)}`);
+      const duracaoMeses = inferirDuracaoMesesCronograma(projeto.cronograma);
+      const resumoCron = resumoCronogramaParaOrcamento(projeto.cronograma);
+      const blocoCron =
+        resumoCron.trim().length > 0
+          ? `${instrucoesOrcamentoAlinhadoCronograma(duracaoMeses)}\n\n${resumoCron}\n\n`
+          : '';
+      if (!resumoCron.trim()) {
+        toast.info('Cronograma vazio — orçamento sem prazo de referência.', {
+          description: 'Crie o cronograma antes para alinhar rubricas mensais.',
+          duration: 5000,
+        });
       }
+      const promptBase = `${blocoCron}Gere um orçamento detalhado para o projeto. VALOR TOTAL (valor CHEIO): R$ ${tetoFmt} — soma EXATA. ${instrucoesQuantidadeRubricas(tetoOrcamento)} Uma rubrica por linha: "Nome: R$ valor" ou "Nome (unidade: mês, quantidade: N): R$ valor" (R$ = total da linha).`;
 
-      // Processar resposta streaming e ir criando rubricas progressivamente
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let textoAcumulado = '';
-      let idCounter = Date.now();
-      let rubricasProcessadas = new Set<string>();
+      const orcamentoGeracaoId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `orc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-      if (!reader) {
-        throw new Error('Não foi possível ler a resposta do servidor');
-      }
+      const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const consumirStreamOrcamento = async (
+        response: Response,
+        onProgress?: (rubricas: RubricaOrcamento[]) => void
+      ): Promise<RubricaOrcamento[]> => {
+        if (!response.ok) {
+          const errorData = (await response.json().catch(() => ({}))) as {
+            message?: string;
+            retryAfterSeconds?: number;
+          };
+          const err = new Error(
+            errorData.message ||
+              `Erro ao gerar orçamento: ${response.status} - ${JSON.stringify(errorData)}`
+          ) as Error & { status?: number; retryAfterSeconds?: number };
+          err.status = response.status;
+          err.retryAfterSeconds = errorData.retryAfterSeconds;
+          throw err;
+        }
 
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('Não foi possível ler a resposta do servidor');
 
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let textoAcumulado = '';
+        let textoCompletoEvento = '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') {
-              break;
-            }
-            
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const raw = line.slice(6).trim();
+            if (raw === '[DONE]') continue;
             try {
-              const parsed = JSON.parse(data);
-              
-              // Processar chunks de conteúdo em streaming
+              const parsed = JSON.parse(raw);
               if (parsed.type === 'chunk' && parsed.content) {
                 textoAcumulado += parsed.content;
-                
-                // Processar e extrair rubricas progressivamente a cada chunk
-                // Usar debounce maior para esperar mais texto antes de processar
-                // Isso evita mostrar versões muito curtas
-                clearTimeout((window as any).timeoutRubricas);
-                (window as any).timeoutRubricas = setTimeout(() => {
-                  // Só processar se tiver uma quantidade mínima de texto
-                  // Isso garante que estamos processando um orçamento mais completo
-                  if (textoAcumulado.length > 200) {
-                    setRubricas(prev => {
-                      // Extrair todas as rubricas do texto acumulado até agora
-                      const todasRubricas = extrairRubricasDoTextoStream(textoAcumulado, idCounter);
-                      
-                      // Só atualizar se encontrou mais rubricas que já temos
-                      // Isso previne substituir um orçamento completo por uma versão parcial
-                      if (todasRubricas.length >= prev.length) {
-                        // Criar um mapa de rubricas únicas baseado em nome+valor
-                        const mapaRubricas = new Map<string, RubricaOrcamento>();
-                        
-                        // Primeiro, adicionar as existentes
-                        prev.forEach(r => {
-                          const chave = `${r.nome.toLowerCase().trim()}_${Math.round(r.total * 100)}`;
-                          if (!mapaRubricas.has(chave)) {
-                            mapaRubricas.set(chave, r);
-                          }
-                        });
-                        
-                        // Depois, adicionar novas rubricas
-                        todasRubricas.forEach(rubrica => {
-                          const chave = `${rubrica.nome.toLowerCase().trim()}_${Math.round(rubrica.total * 100)}`;
-                          if (!mapaRubricas.has(chave) && rubrica.nome.trim() && rubrica.total > 0) {
-                            mapaRubricas.set(chave, rubrica);
-                          }
-                        });
-                        
-                        const todasAtualizadas = Array.from(mapaRubricas.values());
-                        
-                    // Verificar e ajustar para respeitar o teto máximo
-                    let totalAtual = todasAtualizadas.reduce((sum, r) => sum + r.total, 0);
-                    if (totalAtual > tetoOrcamento && todasAtualizadas.length > 0) {
-                      // Redimensionar proporcionalmente para respeitar o teto
-                      const fatorAjuste = tetoOrcamento / totalAtual;
-                      todasAtualizadas.forEach(r => {
-                        let novoValor = r.total * fatorAjuste;
-                        // Arredondar para valores bem redondos
-                        if (novoValor >= 10000) {
-                          novoValor = Math.round(novoValor / 1000) * 1000;
-                        } else if (novoValor >= 1000) {
-                          novoValor = Math.round(novoValor / 100) * 100;
-                        } else if (novoValor >= 100) {
-                          novoValor = Math.round(novoValor / 50) * 50;
-                        } else if (novoValor >= 10) {
-                          novoValor = Math.round(novoValor / 10) * 10;
-                        } else {
-                          novoValor = Math.round(novoValor / 5) * 5;
-                        }
-                        r.total = novoValor;
-                        r.valorUnitario = novoValor;
-                      });
-                    }
-                        
-                        return todasAtualizadas;
-                      }
-                      // Se não encontrou mais rubricas, manter as anteriores
-                      return prev;
-                    });
-                  }
-                }, 1000); // Processar a cada 1 segundo para aguardar mais texto
+                if (onProgress && textoAcumulado.length > 200) {
+                  const parcial = posProcessarRubricasGeradas(
+                    extrairRubricasDoTexto(textoAcumulado),
+                    tetoOrcamento,
+                    duracaoMeses
+                  );
+                  if (parcial.length > 0) onProgress(parcial);
+                }
               }
-              
-              // Processar quando completo
               if (parsed.type === 'complete') {
-                clearTimeout((window as any).timeoutRubricas);
-                const textoFinal = parsed.fullText || textoAcumulado;
-                setRubricas(prev => {
-                  // Extrair todas as rubricas do texto final
-                  const rubricasFinais = extrairRubricasDoTexto(textoFinal);
-                  
-                  // Garantir que o total não ultrapasse o teto
-                  let totalFinal = rubricasFinais.reduce((sum, r) => sum + r.total, 0);
-                  if (totalFinal > tetoOrcamento && rubricasFinais.length > 0) {
-                    // Redimensionar proporcionalmente
-                    const fatorAjuste = tetoOrcamento / totalFinal;
-                    rubricasFinais.forEach(r => {
-                      let novoValor = r.total * fatorAjuste;
-                      // Arredondar para valores bem redondos
-                      if (novoValor >= 10000) {
-                        novoValor = Math.round(novoValor / 1000) * 1000;
-                      } else if (novoValor >= 1000) {
-                        novoValor = Math.round(novoValor / 100) * 100;
-                      } else if (novoValor >= 100) {
-                        novoValor = Math.round(novoValor / 50) * 50;
-                      } else if (novoValor >= 10) {
-                        novoValor = Math.round(novoValor / 10) * 10;
-                      } else {
-                        novoValor = Math.round(novoValor / 5) * 5;
-                      }
-                      r.total = novoValor;
-                      r.valorUnitario = novoValor;
-                    });
-                  }
-                  
-                  return rubricasFinais.length > 0 ? rubricasFinais : prev;
-                });
-                gerouComSucesso = true;
+                textoCompletoEvento = parsed.fullText || textoAcumulado;
               }
-            } catch (e) {
-              // Ignorar erros de parsing, continuar processando
-              console.debug('Erro ao parsear chunk:', e);
+            } catch {
+              /* chunk inválido */
             }
           }
         }
+
+        const textoFinal = textoCompletoEvento || textoAcumulado;
+        return posProcessarRubricasGeradas(
+          extrairRubricasDoTexto(textoFinal),
+          tetoOrcamento,
+          duracaoMeses
+        );
+      };
+
+      let melhor: RubricaOrcamento[] = [];
+      const maxTentativas = 2;
+
+      for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+        const reforco =
+          tentativa === 1
+            ? ''
+            : [
+                `REFORÇO (2ª passagem): mínimo ${minEsperado} rubricas.`,
+                'NÃO repita só Coordenação Geral, Direção Artística e Produção Executiva.',
+                checklistRubricasDetalhadas(),
+                `Soma EXATA R$ ${tetoFmt}.`,
+              ].join(' ');
+
+        if (tentativa > 1) {
+          toast.info(
+            `Aguardando ${ORCAMENTO_COOLDOWN_ENTRE_TENTATIVAS_SEC}s (limite do servidor)…`,
+            { duration: ORCAMENTO_COOLDOWN_ENTRE_TENTATIVAS_SEC * 1000 }
+          );
+          await sleepMs(ORCAMENTO_COOLDOWN_ENTRE_TENTATIVAS_SEC * 1000);
+          toast.info('Detalhando orçamento (2ª passagem)…', { duration: 4000 });
+          setRubricas([]);
+        }
+
+        let resultado: RubricaOrcamento[] = [];
+        let fetchOk = false;
+
+        for (let sub = 0; sub < 2 && !fetchOk; sub++) {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projetoId: id,
+              tipo: 'orcamento',
+              refinementAttempt: tentativa,
+              orcamentoGeracaoId,
+              dadosProjeto: {
+                ...projeto,
+                portfolio: portfolioTexto,
+                teto: tetoOrcamento,
+              },
+              prompt: reforco ? `${promptBase}\n\n${reforco}` : promptBase,
+              userId: user?.uid,
+            }),
+          });
+
+          try {
+            resultado = await consumirStreamOrcamento(
+              response,
+              tentativa === 1 ? (r) => setRubricas(r) : undefined
+            );
+            fetchOk = true;
+          } catch (streamErr: unknown) {
+            const e = streamErr as Error & { status?: number; retryAfterSeconds?: number };
+            if (e.status === 429 && sub === 0) {
+              const waitSec = Math.min(60, Math.max(1, e.retryAfterSeconds ?? 30));
+              toast.info(`Aguardando ${waitSec}s (limite do servidor)…`, { duration: waitSec * 1000 });
+              await sleepMs(waitSec * 1000 + 500);
+              continue;
+            }
+            throw streamErr;
+          }
+        }
+
+        if (resultado.length > melhor.length) melhor = resultado;
+        if (resultado.length >= minEsperado) {
+          setRubricas(resultado);
+          rubricasFinaisGeracao = resultado;
+          gerouComSucesso = true;
+          break;
+        }
       }
 
-      // Se chegou aqui sem evento complete, processar texto final acumulado
-      if (textoAcumulado) {
-        setRubricas(prev => {
-          // Se já processou rubricas no streaming, só ajustar se necessário
-          if (prev.length > 0) {
-            let totalAtual = prev.reduce((sum, r) => sum + r.total, 0);
-            if (totalAtual > tetoOrcamento) {
-              const fatorAjuste = tetoOrcamento / totalAtual;
-              const ajustadas = prev.map(r => {
-                let novoValor = r.total * fatorAjuste;
-                // Arredondar para valores bem redondos
-                if (novoValor >= 10000) {
-                  novoValor = Math.round(novoValor / 1000) * 1000;
-                } else if (novoValor >= 1000) {
-                  novoValor = Math.round(novoValor / 100) * 100;
-                } else if (novoValor >= 100) {
-                  novoValor = Math.round(novoValor / 50) * 50;
-                } else if (novoValor >= 10) {
-                  novoValor = Math.round(novoValor / 10) * 10;
-                } else {
-                  novoValor = Math.round(novoValor / 5) * 5;
-                }
-                return {
-                  ...r,
-                  total: novoValor,
-                  valorUnitario: novoValor
-                };
-              });
-              return ajustadas;
-            }
-            return prev;
-          }
-          
-          // Se não tem rubricas, processar texto final
-          const rubricasFinais = extrairRubricasDoTexto(textoAcumulado);
-          let totalFinal = rubricasFinais.reduce((sum, r) => sum + r.total, 0);
-          
-          if (totalFinal > tetoOrcamento && rubricasFinais.length > 0) {
-            const fatorAjuste = tetoOrcamento / totalFinal;
-            rubricasFinais.forEach(r => {
-              let novoValor = r.total * fatorAjuste;
-              // Arredondar para valores bem redondos
-              if (novoValor >= 10000) {
-                novoValor = Math.round(novoValor / 1000) * 1000;
-              } else if (novoValor >= 1000) {
-                novoValor = Math.round(novoValor / 100) * 100;
-              } else if (novoValor >= 100) {
-                novoValor = Math.round(novoValor / 50) * 50;
-              } else if (novoValor >= 10) {
-                novoValor = Math.round(novoValor / 10) * 10;
-              } else {
-                novoValor = Math.round(novoValor / 5) * 5;
-              }
-              r.total = novoValor;
-              r.valorUnitario = novoValor;
-            });
-            // Verificar novamente após arredondamento e ajustar se necessário
-            totalFinal = rubricasFinais.reduce((sum, r) => sum + r.total, 0);
-            if (totalFinal > tetoOrcamento) {
-              const fatorAjusteFinal = tetoOrcamento / totalFinal;
-              rubricasFinais.forEach(r => {
-                let valorAjustado = r.total * fatorAjusteFinal;
-                // Arredondar novamente após ajuste final
-                if (valorAjustado >= 10000) {
-                  valorAjustado = Math.round(valorAjustado / 1000) * 1000;
-                } else if (valorAjustado >= 1000) {
-                  valorAjustado = Math.round(valorAjustado / 100) * 100;
-                } else if (valorAjustado >= 100) {
-                  valorAjustado = Math.round(valorAjustado / 50) * 50;
-                } else if (valorAjustado >= 10) {
-                  valorAjustado = Math.round(valorAjustado / 10) * 10;
-                } else {
-                  valorAjustado = Math.round(valorAjustado / 5) * 5;
-                }
-                r.total = valorAjustado;
-                r.valorUnitario = valorAjustado;
-              });
-            }
-          }
-          
-          return rubricasFinais.length > 0 ? rubricasFinais : prev;
-        });
+      if (!gerouComSucesso && melhor.length > 0) {
+        setRubricas(melhor);
+        rubricasFinaisGeracao = melhor;
         gerouComSucesso = true;
+        avisarSePoucasRubricas(melhor);
       }
 
     } catch (error) {
@@ -679,278 +685,95 @@ const CriarOrcamento = () => {
         duration: 5000,
       });
     } finally {
-      if (gerouComSucesso && user && !isPremium) {
-        try {
-          const db = getFirestore();
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_ORCAMENTO) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_ORCAMENTO));
-        } catch (e) {
-          console.error('Erro ao descontar créditos orçamento:', e);
+      if (gerouComSucesso) {
+        trackTextGenerationCompleted({
+          projectId: id!,
+          textType: 'orcamento',
+          durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
+        });
+        if (rubricasFinaisGeracao.length > 0) {
+          if (etapasCronograma.length > 0) {
+            vincularOrcamentoGeradoAoCronograma(rubricasFinaisGeracao);
+          } else {
+            toast.info('Orçamento gerado. Crie o cronograma para vincular rubricas às etapas.');
+          }
         }
       }
       setGerandoOrcamento(false);
     }
   };
 
-  // Extrair rubricas do texto em streaming (versão otimizada para processamento incremental)
+  const adicionarRubricaDeLinha = (
+    linhaLimpa: string,
+    idCounter: number,
+    rubricasProcessadas: Set<string>,
+    rubricas: RubricaOrcamento[]
+  ): number => {
+    if (linhaIgnoradaNoOrcamento(linhaLimpa)) return idCounter;
+    const valorRaw = extrairValorRsUltimoDaLinha(linhaLimpa);
+    if (!valorRaw) return idCounter;
+
+    let nome = linhaLimpa.split(/R\$/i)[0].trim().replace(/^\d+[\.\)]\s*/, '').replace(/^[-*•]\s*/, '');
+    nome = nome.replace(/\s*[:\-]\s*$/, '').trim();
+    nome = nome.replace(/\s*\(unidade\s*:\s*[^)]+\)/gi, '').trim();
+    nome = nome.replace(/\s*\(por\s+[^)]+\)/gi, '').trim();
+    nome = nome.replace(/\s*\/\s*[a-záêêéíóôú]+$/i, '').trim();
+    if (nome.length < 3 || /^teto\b/i.test(nome)) return idCounter;
+
+    const valorTotal = arredondarValorOrcamento(valorRaw, tetoOrcamento);
+    const chave = `${nome.toLowerCase().trim()}_${valorTotal}`;
+    if (rubricasProcessadas.has(chave)) return idCounter;
+
+    rubricasProcessadas.add(chave);
+    const unidade = detectarUnidade(nome, linhaLimpa);
+    const duracaoMeses = inferirDuracaoMesesCronograma(projeto?.cronograma);
+    let quantidadeUnidade = 1;
+    if (unidade === 'mês') {
+      const expl = extrairQuantidadeMesesDaLinha(linhaLimpa);
+      quantidadeUnidade = expl ?? duracaoMeses;
+      quantidadeUnidade = Math.max(1, Math.min(120, Math.round(quantidadeUnidade)));
+    }
+    const quantidade = 1;
+    const valorUnitario =
+      quantidade * quantidadeUnidade > 0
+        ? arredondarValorOrcamento(valorTotal / (quantidade * quantidadeUnidade), tetoOrcamento)
+        : valorTotal;
+    rubricas.push({
+      id: (idCounter++).toString(),
+      nome,
+      quantidade,
+      unidade,
+      quantidadeUnidade,
+      valorUnitario,
+      total: valorTotal,
+    });
+    return idCounter;
+  };
+
   const extrairRubricasDoTextoStream = (texto: string, idCounterBase: number): RubricaOrcamento[] => {
     const rubricas: RubricaOrcamento[] = [];
-    const linhas = texto.split('\n');
-    
     let idCounter = idCounterBase;
     const rubricasProcessadas = new Set<string>();
-    
-    linhas.forEach((linha, index) => {
-      let linhaLimpa = linha.trim();
-      // Remover marcadores de lista no início (-, *, •, etc.)
-      linhaLimpa = linhaLimpa.replace(/^[-*•]\s+/, '').trim();
-      if (!linhaLimpa) return;
 
-      // Ignorar linhas que são totais, somas ou justificativas (não são rubricas)
-      const linhaLower = linhaLimpa.toLowerCase();
-      
-      // Verificar se é um total/soma
-      if (linhaLower.includes('total') || linhaLower.includes('soma') || linhaLower.includes('subtotal') || 
-          linhaLower.includes('total do orçamento') || linhaLower.includes('total geral') ||
-          linhaLower === 'total:' || linhaLower.startsWith('total ') || 
-          linhaLower.includes('valor total') || linhaLower.includes('totalizador')) {
-        return;
-      }
-      
-      // Verificar se é uma justificativa/explicação (linha que NÃO contém R$)
-      if (!linhaLimpa.match(/R\$\s*[\d.,]+/i)) {
-        // Se não tem valor monetário, pode ser justificativa
-        if (linhaLower.startsWith('justificativa') || linhaLower.startsWith('justificat') ||
-            linhaLower.startsWith('observação') || linhaLower.startsWith('observacao') ||
-            linhaLower.startsWith('observa') || linhaLower.startsWith('nota:') ||
-            linhaLower.startsWith('nota ') || linhaLower.startsWith('explicação') ||
-            linhaLower.startsWith('explicacao') || linhaLower.startsWith('explica') ||
-            linhaLower.startsWith('descrição') || linhaLower.startsWith('descricao') ||
-            linhaLower.startsWith('motivo') || linhaLower.startsWith('razão') ||
-            linhaLower.startsWith('razao') || linhaLower.startsWith('porque') ||
-            linhaLower.startsWith('por que') || linhaLower.includes('esta rubrica') ||
-            linhaLower.includes('esta verba') || linhaLower.includes('este item') ||
-            linhaLower.includes('para justificar') || linhaLower.includes('objetivo') ||
-            linhaLower.includes('finalidade') || linhaLower.includes('necessário') ||
-            linhaLower.includes('necessario') || linhaLower.length > 100) {
-          return;
-        }
-      }
-
-      // Padrão 1: "Nome: R$ valor" ou "Nome - R$ valor"
-      const padrao1 = /^(.+?)\s*[:\-]\s*R\$\s*([\d.,]+)/i;
-      const match1 = linhaLimpa.match(padrao1);
-
-      if (match1) {
-        let nome = match1[1].trim().replace(/^\d+[\.\)]\s*/, '').replace(/^-\s*/, '');
-        // Remover unidade do nome da rubrica (ex: "Nome (unidade: verba)" -> "Nome")
-        nome = nome.replace(/\s*\(unidade\s*:\s*[^)]+\)/gi, '').trim();
-        nome = nome.replace(/\s*\(por\s+[^)]+\)/gi, '').trim();
-        nome = nome.replace(/\s*\/\s*[a-záêêéíóôú]+$/i, '').trim();
-        const valorStr = match1[2].trim().replace(/\./g, '').replace(',', '.');
-        const valorTotal = parseFloat(valorStr) || 0;
-        
-        const chave = `${nome.toLowerCase()}_${valorTotal}`;
-        if (nome && valorTotal > 0 && !rubricasProcessadas.has(chave)) {
-          rubricasProcessadas.add(chave);
-          const unidadeDetectada = detectarUnidade(nome, linhaLimpa);
-          rubricas.push({
-            id: (idCounter++).toString(),
-            nome,
-            quantidade: 1,
-            unidade: unidadeDetectada,
-            quantidadeUnidade: 1,
-            valorUnitario: valorTotal,
-            total: valorTotal
-          });
-        }
-      }
-
-      // Padrão 2: Linhas que contêm valores monetários e nomes
-      if (!match1) {
-        const padrao2 = /R\$\s*([\d.,]+)/i;
-        const match2 = linhaLimpa.match(padrao2);
-
-        if (match2) {
-          const partes = linhaLimpa.split(/R\$/i);
-          if (partes.length >= 2) {
-            let nome = partes[0].trim().replace(/^\d+[\.\)]\s*/, '').replace(/[:\-]\s*$/, '');
-            // Remover unidade do nome da rubrica (ex: "Nome (unidade: verba)" -> "Nome")
-            nome = nome.replace(/\s*\(unidade\s*:\s*[^)]+\)/gi, '').trim();
-            nome = nome.replace(/\s*\(por\s+[^)]+\)/gi, '').trim();
-            nome = nome.replace(/\s*\/\s*[a-záêêéíóôú]+$/i, '').trim();
-            const valorStr = match2[1].trim().replace(/\./g, '').replace(',', '.');
-            const valorTotal = parseFloat(valorStr) || 0;
-            
-            const chave = `${nome.toLowerCase()}_${valorTotal}`;
-            if (nome && valorTotal > 0 && nome.length > 2 && !rubricasProcessadas.has(chave)) {
-              rubricasProcessadas.add(chave);
-              const unidadeDetectada = detectarUnidade(nome, linhaLimpa);
-              rubricas.push({
-                id: (idCounter++).toString(),
-                nome,
-                quantidade: 1,
-                unidade: unidadeDetectada,
-                quantidadeUnidade: 1,
-                valorUnitario: valorTotal,
-                total: valorTotal
-              });
-            }
-          }
-        }
-      }
-    });
+    for (const linha of texto.split('\n')) {
+      let linhaLimpa = linha.trim().replace(/^[-*•]\s+/, '').trim();
+      if (!linhaLimpa) continue;
+      idCounter = adicionarRubricaDeLinha(linhaLimpa, idCounter, rubricasProcessadas, rubricas);
+    }
 
     return rubricas;
   };
 
-  // Extrair rubricas do texto do orçamento (versão completa)
   const extrairRubricasDoTexto = (texto: string): RubricaOrcamento[] => {
     const rubricas: RubricaOrcamento[] = [];
-    const linhas = texto.split('\n');
-    
     let idCounter = Date.now();
     const rubricasProcessadas = new Set<string>();
-    
-    linhas.forEach((linha) => {
-      let linhaLimpa = linha.trim();
-      // Remover marcadores de lista no início (-, *, •, etc.)
-      linhaLimpa = linhaLimpa.replace(/^[-*•]\s+/, '').trim();
-      if (!linhaLimpa) return;
 
-      // Ignorar linhas que são totais, somas ou justificativas (não são rubricas)
-      const linhaLower = linhaLimpa.toLowerCase();
-      
-      // Verificar se é um total/soma
-      if (linhaLower.includes('total') || linhaLower.includes('soma') || linhaLower.includes('subtotal') || 
-          linhaLower.includes('total do orçamento') || linhaLower.includes('total geral') ||
-          linhaLower === 'total:' || linhaLower.startsWith('total ') || 
-          linhaLower.includes('valor total') || linhaLower.includes('totalizador')) {
-        return;
-      }
-      
-      // Verificar se é uma justificativa/explicação (linha que NÃO contém R$)
-      if (!linhaLimpa.match(/R\$\s*[\d.,]+/i)) {
-        // Se não tem valor monetário, pode ser justificativa
-        if (linhaLower.startsWith('justificativa') || linhaLower.startsWith('justificat') ||
-            linhaLower.startsWith('observação') || linhaLower.startsWith('observacao') ||
-            linhaLower.startsWith('observa') || linhaLower.startsWith('nota:') ||
-            linhaLower.startsWith('nota ') || linhaLower.startsWith('explicação') ||
-            linhaLower.startsWith('explicacao') || linhaLower.startsWith('explica') ||
-            linhaLower.startsWith('descrição') || linhaLower.startsWith('descricao') ||
-            linhaLower.startsWith('motivo') || linhaLower.startsWith('razão') ||
-            linhaLower.startsWith('razao') || linhaLower.startsWith('porque') ||
-            linhaLower.startsWith('por que') || linhaLower.includes('esta rubrica') ||
-            linhaLower.includes('esta verba') || linhaLower.includes('este item') ||
-            linhaLower.includes('para justificar') || linhaLower.includes('objetivo') ||
-            linhaLower.includes('finalidade') || linhaLower.includes('necessário') ||
-            linhaLower.includes('necessario') || linhaLower.length > 100) {
-          return;
-        }
-      }
-
-      // Padrão 1: "Nome: R$ valor" ou "Nome - R$ valor"
-      const padrao1 = /^(.+?)\s*[:\-]\s*R\$\s*([\d.,]+)/i;
-      const match1 = linhaLimpa.match(padrao1);
-
-      if (match1) {
-        let nome = match1[1].trim().replace(/^\d+[\.\)]\s*/, '').replace(/^-\s*/, '');
-        // Remover unidade do nome da rubrica (ex: "Nome (unidade: verba)" -> "Nome")
-        nome = nome.replace(/\s*\(unidade\s*:\s*[^)]+\)/gi, '').trim();
-        nome = nome.replace(/\s*\(por\s+[^)]+\)/gi, '').trim();
-        nome = nome.replace(/\s*\/\s*[a-záêêéíóôú]+$/i, '').trim();
-        const valorStr = match1[2].trim().replace(/\./g, '').replace(',', '.');
-        // Arredondar para valores bem redondos, sem centavos
-        let valorTotal = parseFloat(valorStr) || 0;
-        if (valorTotal > 0) {
-          if (valorTotal >= 10000) {
-            // Valores muito grandes: múltiplos de 1000
-            valorTotal = Math.round(valorTotal / 1000) * 1000;
-          } else if (valorTotal >= 1000) {
-            // Valores grandes: múltiplos de 100
-            valorTotal = Math.round(valorTotal / 100) * 100;
-          } else if (valorTotal >= 100) {
-            // Valores médios: múltiplos de 50
-            valorTotal = Math.round(valorTotal / 50) * 50;
-          } else if (valorTotal >= 10) {
-            // Valores pequenos: múltiplos de 10
-            valorTotal = Math.round(valorTotal / 10) * 10;
-          } else {
-            // Valores muito pequenos: múltiplos de 5
-            valorTotal = Math.round(valorTotal / 5) * 5;
-          }
-        }
-        
-        const chave = `${nome.toLowerCase().trim()}_${valorTotal}`;
-        if (nome && valorTotal > 0 && !rubricasProcessadas.has(chave)) {
-          rubricasProcessadas.add(chave);
-          const unidadeDetectada = detectarUnidade(nome, linhaLimpa);
-          rubricas.push({
-            id: (idCounter++).toString(),
-            nome,
-            quantidade: 1,
-            unidade: unidadeDetectada,
-            quantidadeUnidade: 1,
-            valorUnitario: valorTotal,
-            total: valorTotal
-          });
-        }
-      }
-
-      // Padrão 2: Linhas que contêm valores monetários e nomes
-      if (!match1) {
-        const padrao2 = /R\$\s*([\d.,]+)/i;
-        const match2 = linhaLimpa.match(padrao2);
-
-        if (match2) {
-          const partes = linhaLimpa.split(/R\$/i);
-          if (partes.length >= 2) {
-            let nome = partes[0].trim().replace(/^\d+[\.\)]\s*/, '').replace(/[:\-]\s*$/, '').replace(/^-\s*/, '');
-            // Remover unidade do nome da rubrica (ex: "Nome (unidade: verba)" -> "Nome")
-            nome = nome.replace(/\s*\(unidade\s*:\s*[^)]+\)/gi, '').trim();
-            nome = nome.replace(/\s*\(por\s+[^)]+\)/gi, '').trim();
-            nome = nome.replace(/\s*\/\s*[a-záêêéíóôú]+$/i, '').trim();
-            const valorStr = match2[1].trim().replace(/\./g, '').replace(',', '.');
-            // Arredondar para valores bem redondos, sem centavos
-            let valorTotal = parseFloat(valorStr) || 0;
-            if (valorTotal > 0) {
-              if (valorTotal >= 10000) {
-                // Valores muito grandes: múltiplos de 1000
-                valorTotal = Math.round(valorTotal / 1000) * 1000;
-              } else if (valorTotal >= 1000) {
-                // Valores grandes: múltiplos de 100
-                valorTotal = Math.round(valorTotal / 100) * 100;
-              } else if (valorTotal >= 100) {
-                // Valores médios: múltiplos de 50
-                valorTotal = Math.round(valorTotal / 50) * 50;
-              } else if (valorTotal >= 10) {
-                // Valores pequenos: múltiplos de 10
-                valorTotal = Math.round(valorTotal / 10) * 10;
-              } else {
-                // Valores muito pequenos: múltiplos de 5
-                valorTotal = Math.round(valorTotal / 5) * 5;
-              }
-            }
-            
-            const chave = `${nome.toLowerCase().trim()}_${valorTotal}`;
-            if (nome && valorTotal > 0 && nome.length > 2 && !rubricasProcessadas.has(chave)) {
-              rubricasProcessadas.add(chave);
-              const unidadeDetectada = detectarUnidade(nome, linhaLimpa);
-              rubricas.push({
-                id: (idCounter++).toString(),
-                nome,
-                quantidade: 1,
-                unidade: unidadeDetectada,
-                quantidadeUnidade: 1,
-                valorUnitario: valorTotal,
-                total: valorTotal
-              });
-            }
-          }
-        }
-      }
-    });
+    for (const linha of texto.split('\n')) {
+      let linhaLimpa = linha.trim().replace(/^[-*•]\s+/, '').trim();
+      if (!linhaLimpa) continue;
+      idCounter = adicionarRubricaDeLinha(linhaLimpa, idCounter, rubricasProcessadas, rubricas);
+    }
 
     return rubricas;
   };
@@ -986,7 +809,7 @@ const CriarOrcamento = () => {
         }
       }
 
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto';
+      const endpoint = `${getFunctionsBaseUrl()}/gerarTextosProjeto`;
       
       // Criar contexto do orçamento atual
       const orcamentoAtual = rubricas.map((r, idx) => 
@@ -1035,6 +858,13 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          const message = (errorData as { message?: string }).message ?? (errorData as { error?: string }).error ?? 'Aguarde alguns segundos antes de gerar este texto novamente.';
+          const retryAfterSeconds = (errorData as { retryAfterSeconds?: number }).retryAfterSeconds;
+          setRateLimitModal({ message, retryAfterSeconds });
+          setProcessandoAlteracoes(false);
+          return;
+        }
         throw new Error(`Erro ao processar alterações: ${response.status} - ${JSON.stringify(errorData)}`);
       }
 
@@ -1100,54 +930,8 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         
                         const todasAtualizadas = Array.from(mapaRubricas.values());
                         
-                        // Sempre verificar e garantir que o teto é respeitado
-                        let totalAtual = todasAtualizadas.reduce((sum, r) => sum + r.total, 0);
-                        if (totalAtual > tetoOrcamento && todasAtualizadas.length > 0) {
-                          // Ajustar proporcionalmente para respeitar o teto máximo
-                          const fatorAjuste = tetoOrcamento / totalAtual;
-                          todasAtualizadas.forEach(r => {
-                            let novoValor = r.total * fatorAjuste;
-                            // Arredondar para valores bem redondos
-                            if (novoValor >= 10000) {
-                              novoValor = Math.round(novoValor / 1000) * 1000;
-                            } else if (novoValor >= 1000) {
-                              novoValor = Math.round(novoValor / 100) * 100;
-                            } else if (novoValor >= 100) {
-                              novoValor = Math.round(novoValor / 50) * 50;
-                            } else if (novoValor >= 10) {
-                              novoValor = Math.round(novoValor / 10) * 10;
-                            } else {
-                              novoValor = Math.round(novoValor / 5) * 5;
-                            }
-                            r.total = novoValor;
-                            r.valorUnitario = novoValor;
-                          });
-                          // Verificar novamente após arredondamento
-                          totalAtual = todasAtualizadas.reduce((sum, r) => sum + r.total, 0);
-                          if (totalAtual > tetoOrcamento) {
-                            // Se ainda ultrapassou, ajustar novamente com arredondamento
-                            const fatorAjusteFinal = tetoOrcamento / totalAtual;
-                            todasAtualizadas.forEach(r => {
-                              let valorAjustado = r.total * fatorAjusteFinal;
-                              // Arredondar novamente após ajuste final
-                              if (valorAjustado >= 10000) {
-                                valorAjustado = Math.round(valorAjustado / 1000) * 1000;
-                              } else if (valorAjustado >= 1000) {
-                                valorAjustado = Math.round(valorAjustado / 100) * 100;
-                              } else if (valorAjustado >= 100) {
-                                valorAjustado = Math.round(valorAjustado / 50) * 50;
-                              } else if (valorAjustado >= 10) {
-                                valorAjustado = Math.round(valorAjustado / 10) * 10;
-                              } else {
-                                valorAjustado = Math.round(valorAjustado / 5) * 5;
-                              }
-                              r.total = valorAjustado;
-                              r.valorUnitario = valorAjustado;
-                            });
-                          }
-                        }
-                        
-                        return todasAtualizadas;
+                        const dm = inferirDuracaoMesesCronograma(projeto?.cronograma);
+                        return posProcessarRubricasGeradas(todasAtualizadas, tetoOrcamento, dm);
                       }
                       return prev;
                     });
@@ -1161,54 +945,9 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                 setRubricas(prev => {
                   const rubricasFinais = extrairRubricasDoTexto(textoFinal);
                   
-                  // Sempre verificar e garantir que o teto é respeitado
-                  let totalFinal = rubricasFinais.reduce((sum, r) => sum + r.total, 0);
-                  if (totalFinal > tetoOrcamento && rubricasFinais.length > 0) {
-                    // Ajustar proporcionalmente para respeitar o teto máximo
-                    const fatorAjuste = tetoOrcamento / totalFinal;
-                    rubricasFinais.forEach(r => {
-                      let novoValor = r.total * fatorAjuste;
-                      // Arredondar para valores bem redondos
-                      if (novoValor >= 10000) {
-                        novoValor = Math.round(novoValor / 1000) * 1000;
-                      } else if (novoValor >= 1000) {
-                        novoValor = Math.round(novoValor / 100) * 100;
-                      } else if (novoValor >= 100) {
-                        novoValor = Math.round(novoValor / 50) * 50;
-                      } else if (novoValor >= 10) {
-                        novoValor = Math.round(novoValor / 10) * 10;
-                      } else {
-                        novoValor = Math.round(novoValor / 5) * 5;
-                      }
-                      r.total = novoValor;
-                      r.valorUnitario = novoValor;
-                    });
-                    // Verificar novamente após arredondamento
-                    totalFinal = rubricasFinais.reduce((sum, r) => sum + r.total, 0);
-                    if (totalFinal > tetoOrcamento) {
-                      // Se ainda ultrapassou, ajustar novamente com arredondamento
-                      const fatorAjusteFinal = tetoOrcamento / totalFinal;
-                      rubricasFinais.forEach(r => {
-                        let valorAjustado = r.total * fatorAjusteFinal;
-                        // Arredondar novamente após ajuste final
-                        if (valorAjustado >= 10000) {
-                          valorAjustado = Math.round(valorAjustado / 1000) * 1000;
-                        } else if (valorAjustado >= 1000) {
-                          valorAjustado = Math.round(valorAjustado / 100) * 100;
-                        } else if (valorAjustado >= 100) {
-                          valorAjustado = Math.round(valorAjustado / 50) * 50;
-                        } else if (valorAjustado >= 10) {
-                          valorAjustado = Math.round(valorAjustado / 10) * 10;
-                        } else {
-                          valorAjustado = Math.round(valorAjustado / 5) * 5;
-                        }
-                        r.total = valorAjustado;
-                        r.valorUnitario = valorAjustado;
-                      });
-                    }
-                  }
-                  
-                  return rubricasFinais.length > 0 ? rubricasFinais : prev;
+                  const dm = inferirDuracaoMesesCronograma(projeto?.cronograma);
+                  const ajustadas = posProcessarRubricasGeradas(rubricasFinais, tetoOrcamento, dm);
+                  return ajustadas.length > 0 ? ajustadas : prev;
                 });
               }
             } catch (e) {
@@ -1262,9 +1001,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
     }
   };
 
-  const CREDITOS_ORCAMENTO = 3;
-
-  // Salvar orçamento (não desconta créditos; a geração já descontou)
+  // Salvar orçamento
   const salvarOrcamento = async () => {
     if (!id) return;
 
@@ -1273,20 +1010,40 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
       
-      await updateDoc(projetoRef, {
+      const nomesValidos = new Set(rubricas.map((r) => r.nome.trim()).filter(Boolean));
+      const etapasVinculo =
+        etapasCronograma.length > 0
+          ? limparRubricasOrfas(etapasCronograma, nomesValidos)
+          : null;
+
+      const payload: Record<string, unknown> = {
         orcamento: {
           teto: tetoOrcamento,
           rubricas: rubricas,
           totalGeral: calcularTotalGeral(),
-          atualizado_em: serverTimestamp()
-        }
-      });
+          atualizado_em: serverTimestamp(),
+        },
+      };
+
+      if (etapasVinculo && etapasVinculo.length > 0) {
+        payload.cronograma = {
+          ...(projeto?.cronograma || {}),
+          etapas: etapasVinculo,
+          atualizado_em: serverTimestamp(),
+        };
+        setEtapasCronograma(etapasVinculo);
+      }
+
+      await updateDoc(projetoRef, payload);
 
       setTemAlteracoesPendentes(false);
       setRubricasAnteriores([]);
 
       toast.success('Orçamento salvo com sucesso!', {
-        description: 'O orçamento foi salvo no projeto.',
+        description:
+          etapasVinculo && etapasVinculo.length > 0
+            ? 'Orçamento e vínculos com o cronograma foram salvos.'
+            : 'O orçamento foi salvo no projeto.',
         duration: 4000,
         icon: <CheckCircle2 className="h-5 w-5 text-green-600" />,
       });
@@ -1469,10 +1226,10 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
                 <Button
                   size="lg"
-                  onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
+                  onClick={() => navigate(`/projeto/${id}/equipe`)}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Próximo: Criar Cronograma <span className="ml-2 opacity-90">→</span>
+                  Próximo: Equipe <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>
@@ -1566,7 +1323,6 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         <>
                           <Sparkles className="mr-2 h-4 w-4" />
                           Gerar Orçamento
-                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>
@@ -1613,8 +1369,13 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
               </div>
               )}
 
-              {/* Tabela de Rubricas */}
-              <div className="p-4 md:p-6 min-w-0">
+              <div className="p-4 md:p-6 min-w-0 border-b">
+                <Tabs value={abaOrcamento} onValueChange={setAbaOrcamento}>
+                  <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+                    <TabsTrigger value="rubricas">Rubricas</TabsTrigger>
+                    <TabsTrigger value="vinculos">Orçamento × Cronograma</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="rubricas" className="mt-0">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Rubricas do Orçamento</h2>
                   <Button
@@ -1741,6 +1502,28 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                     </tfoot>
                   </table>
                 </div>
+                  </TabsContent>
+                  <TabsContent value="vinculos" className="mt-0">
+                    <VinculoCronogramaOrcamentoPainel
+                      etapas={etapasCronograma}
+                      rubricas={rubricasParaVinculo}
+                      onEtapasChange={setEtapasCronograma}
+                      onSugerirVinculos={
+                        rubricasParaVinculo.length && etapasCronograma.length
+                          ? aplicarSugestaoVinculosOrcamento
+                          : undefined
+                      }
+                      emptyEtapasMessage={
+                        id
+                          ? `Nenhuma etapa no cronograma. Volte em Criar Cronograma ou abra /projeto/${id}/criar-cronograma.`
+                          : 'Nenhuma etapa no cronograma.'
+                      }
+                    />
+                    <p className="text-xs text-gray-500 mt-4">
+                      Os vínculos são gravados no cronograma ao clicar em &quot;Salvar Orçamento&quot;.
+                    </p>
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Botões de ação */}
@@ -1805,20 +1588,55 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
               </div>
             </div>
 
-            {/* Próximo passo: Criar Cronograma — mesmo formato da página Gerar Textos */}
+            {/* Próximo passo: Documentos de Inscrição — mesmo formato da página Gerar Textos */}
             <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
               <Button
                 size="lg"
-                onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
+                onClick={() => navigate(`/projeto/${id}/equipe`)}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
               >
-                Próximo: Criar Cronograma <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+                Próximo: Equipe <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
               </Button>
             </div>
           </div>
         </main>
       </div>
+
+      {/* Popup estilizado para limite de taxa (429) */}
+      <Dialog open={!!rateLimitModal} onOpenChange={(open) => !open && setRateLimitModal(null)}>
+        <DialogContent className="sm:max-w-md bg-white border-2 border-amber-200/80 shadow-xl rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/80 pointer-events-none" />
+          <DialogHeader className="relative">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 border-2 border-amber-300/80 shadow-inner">
+              <Clock className="h-7 w-7 text-amber-600" />
+            </div>
+            <DialogTitle className="text-center text-xl font-semibold text-gray-800 pt-3">
+              Aguarde um momento
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-center space-y-3 pt-1 pb-2">
+                <p className="text-gray-600 leading-relaxed">
+                  {rateLimitModal?.message}
+                </p>
+                {rateLimitModal?.retryAfterSeconds != null && (
+                  <p className="text-sm font-medium text-amber-700 bg-amber-100/80 rounded-lg py-2 px-3 inline-block">
+                    Tente novamente em cerca de {rateLimitModal.retryAfterSeconds} segundos
+                  </p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative flex justify-center pb-1">
+            <Button
+              onClick={() => setRateLimitModal(null)}
+              className="bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl px-6 py-2 shadow-md"
+            >
+              Entendi
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

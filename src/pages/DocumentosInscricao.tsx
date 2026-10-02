@@ -10,6 +10,7 @@ import { ClipboardList, Upload, FileText, CheckCircle, Loader2, ArrowLeft, Arrow
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackProjectStepViewed } from '@/lib/analytics';
 
 interface ProjetoDocument {
   id: string;
@@ -26,8 +27,8 @@ interface EditalDocument {
   [key: string]: unknown;
 }
 
-const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-const currentStep = 6; // Documentos de Inscrição = bolinha 7
+const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+const currentStep = 7;
 
 const DocumentosInscricao = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,11 +38,6 @@ const DocumentosInscricao = () => {
   const [edital, setEdital] = useState<EditalDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  const [creditos, setCreditos] = useState<number>(0);
-  const [isPremium, setIsPremium] = useState(false);
-
-  const CREDITOS_ANEXO = 2;
-
   const documentacaoExigida: string[] = edital?.documentacao_exigida
     ? edital.documentacao_exigida.map((item) =>
         typeof item === 'string' ? item : (item as { nome: string; fase?: string }).nome || String(item)
@@ -49,6 +45,18 @@ const DocumentosInscricao = () => {
     : [];
 
   const documentosSalvos = projeto?.documentos_inscricao ?? [];
+
+  // Analytics: etapa "Documentos de Inscrição" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'documentos_inscricao',
+      });
+    }
+  }, [id, projeto]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,13 +83,6 @@ const DocumentosInscricao = () => {
           }
         }
 
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
         toast.error('Erro ao carregar dados');
@@ -94,10 +95,6 @@ const DocumentosInscricao = () => {
 
   const handleUpload = async (index: number, file: File) => {
     if (!id || !user || !projeto) return;
-    if (!isPremium && (creditos ?? 0) < CREDITOS_ANEXO) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
     setUploadingIndex(index);
     try {
       const storage = getStorage();
@@ -119,16 +116,6 @@ const DocumentosInscricao = () => {
         documentos_inscricao: novosDocumentos,
       });
       setProjeto((prev) => (prev ? { ...prev, documentos_inscricao: novosDocumentos } : null));
-
-      if (!isPremium) {
-        try {
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_ANEXO) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_ANEXO));
-        } catch (e) {
-          console.error('Erro ao descontar créditos anexo:', e);
-        }
-      }
 
       toast.success('Documento enviado com sucesso.');
     } catch (error) {
@@ -184,8 +171,9 @@ const DocumentosInscricao = () => {
                     `/projeto/${id}`,
                     `/projeto/${id}/alterar-com-ia`,
                     `/projeto/${id}/gerar-textos`,
-                    `/projeto/${id}/criar-orcamento`,
                     `/projeto/${id}/criar-cronograma`,
+                    `/projeto/${id}/criar-orcamento`,
+                    `/projeto/${id}/equipe`,
                     `/projeto/${id}/documentos-inscricao`,
                     `/projeto/${id}/preencher-anexos`,
                   ];
@@ -231,7 +219,7 @@ const DocumentosInscricao = () => {
 
             <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+                <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div className="min-w-0">
@@ -261,7 +249,7 @@ const DocumentosInscricao = () => {
                     ? 'Este edital não possui lista de documentação exigida cadastrada.'
                     : 'Associe um edital ao projeto para ver os documentos exigidos para inscrição.'}
                   <div className="mt-4">
-                    <Button variant="outline" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+                    <Button variant="outline" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                       Voltar ao Cronograma
                     </Button>
                   </div>
@@ -342,7 +330,7 @@ const DocumentosInscricao = () => {
             )}
 
             <div className="mt-6">
-              <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+              <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                 Voltar ao Cronograma
               </Button>
             </div>

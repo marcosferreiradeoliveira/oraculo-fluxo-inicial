@@ -94,6 +94,19 @@ export const trackProjectViewed = (params: {
   });
 };
 
+/** Etapa do assistente de projeto visualizada */
+export const trackProjectStepViewed = (params: {
+  projectId: string;
+  step: string;
+  planType?: string;
+}) => {
+  trackEvent('project_step_viewed', {
+    project_id: params.projectId,
+    step: params.step,
+    plan_type: params.planType,
+  });
+};
+
 /**
  * Projeto excluído
  */

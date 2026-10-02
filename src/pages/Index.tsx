@@ -18,6 +18,7 @@ import { trackNewsletterSubscribed, trackCtaVerComoFunciona } from '@/lib/analyt
 import analisarImage from '@/assets/Analisar.jpeg';
 import { DashboardPremiumHero } from '@/components/home/DashboardPremiumHero';
 import { filterEditaisAbertos, findEditalMaisUrgente, type EditalUrgenteInfo } from '@/lib/editalDates';
+import { FornecedoresPainel } from '@/components/fornecedores/FornecedoresPainel';
 
 // Função para capitalizar apenas a primeira letra do título
 const capitalizarTitulo = (titulo: string): string => {
@@ -57,10 +58,11 @@ const Index = () => {
   const [emailNewsletter, setEmailNewsletter] = useState('');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
 
-  // Scroll para a seção de editais quando a URL tiver #editais-abertos
+  // Scroll para seções quando a URL tiver hash (#editais-abertos, #fornecedores)
   useEffect(() => {
-    if (location.hash === '#editais-abertos') {
-      const el = document.getElementById('editais-abertos');
+    const hash = location.hash.replace('#', '');
+    if (hash === 'editais-abertos' || hash === 'fornecedores') {
+      const el = document.getElementById(hash);
       if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   }, [location.hash]);
@@ -277,6 +279,8 @@ const Index = () => {
             )}
 
             {/* Editais Abertos */}
+            {user && <FornecedoresPainel />}
+
             <div id="editais-abertos" className="mb-12 scroll-mt-24">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">

@@ -52,6 +52,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { StarterPlanGuard } from './components/StarterPlanGuard';
 import AvaliarProjeto from './pages/AvaliarProjeto';
 import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
+import ProjetoEquipe from './pages/ProjetoEquipe';
 
 const queryClient = new QueryClient();
 
@@ -112,8 +113,9 @@ const App = () => (
           {/* Rotas específicas de projeto devem vir antes da rota genérica /projeto/:id */}
           <Route path="/projeto/:id/alterar-com-ia" element={<ProtectedRoute><AlterarComIA /></ProtectedRoute>} />
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><StarterPlanGuard><GerarTextos /></StarterPlanGuard></ProtectedRoute>} />
-          <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><StarterPlanGuard><CriarOrcamento /></StarterPlanGuard></ProtectedRoute>} />
           <Route path="/projeto/:id/criar-cronograma" element={<ProtectedRoute><StarterPlanGuard><CriarCronograma /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><StarterPlanGuard><CriarOrcamento /></StarterPlanGuard></ProtectedRoute>} />
+          <Route path="/projeto/:id/equipe" element={<ProtectedRoute><StarterPlanGuard><ProjetoEquipe /></StarterPlanGuard></ProtectedRoute>} />
           <Route path="/projeto/:id/documentos-inscricao" element={<ProtectedRoute><StarterPlanGuard><DocumentosInscricao /></StarterPlanGuard></ProtectedRoute>} />
           <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><StarterPlanGuard><PreencherAnexos /></StarterPlanGuard></ProtectedRoute>} />
           <Route path="/projeto/:id/resumo" element={<ProtectedRoute><StarterPlanGuard><ResumoProjeto /></StarterPlanGuard></ProtectedRoute>} />

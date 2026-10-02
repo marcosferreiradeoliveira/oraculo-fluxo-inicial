@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -41,6 +42,25 @@ const TIPO_MAP: Record<TextoTipo, string> = {
   orcamento: 'orcamento'
 };
 
+/** Remove da resposta qualquer bloco "CONTEXTO ADICIONAL / PORTFOLIO DO PROPONENTE" que a IA às vezes inclui. */
+const removerContextoPortfolioDaResposta = (texto: string): string => {
+  if (!texto || !texto.trim()) return texto;
+  const markers = [
+    /CONTEXTO ADICIONAL\s*[-–]?\s*PORTFOLIO DO PROPONENTE/i,
+    /PORTFOLIO DO PROPONENTE\s*\(APENAS PARA REFERÊNCIA/i,
+    /\[CONTEXTO INTERNO\s*[-–]?\s*NÃO FAZER PARTE/i,
+  ];
+  let out = texto;
+  for (const m of markers) {
+    const idx = out.search(m);
+    if (idx !== -1) {
+      out = out.slice(0, idx).trimEnd();
+      break;
+    }
+  }
+  return out.trim();
+};
+
 const GerarTextos = () => {
   // Force update hook
   const [, forceUpdate] = useState<{} | undefined>();
@@ -64,12 +84,10 @@ const GerarTextos = () => {
   const [mostrarModalRubricas, setMostrarModalRubricas] = useState(false);
   const [sugestaoTexto, setSugestaoTexto] = useState<string>('');
   const [aplicandoSugestao, setAplicandoSugestao] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
   const isMounted = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 3; // Gerar Textos
   const totalVisible = 5;
   const startIndex = Math.max(0, Math.min(currentStep - 2, steps.length - totalVisible));
@@ -79,9 +97,10 @@ const GerarTextos = () => {
     if (index === 1) return id ? `/projeto/${id}` : '#';
     if (index === 2) return id ? `/projeto/${id}/alterar-com-ia` : '#';
     if (index === 3) return '#';
-    if (index === 4) return id ? `/projeto/${id}/criar-orcamento` : '#';
-    if (index === 5) return id ? `/projeto/${id}/criar-cronograma` : '#';
-    if (index === 6) return id ? `/projeto/${id}/documentos-inscricao` : '#';
+    if (index === 4) return id ? `/projeto/${id}/criar-cronograma` : '#';
+    if (index === 5) return id ? `/projeto/${id}/criar-orcamento` : '#';
+    if (index === 6) return id ? `/projeto/${id}/equipe` : '#';
+    if (index === 7) return id ? `/projeto/${id}/documentos-inscricao` : '#';
     return id ? `/projeto/${id}/preencher-anexos` : '#';
   };
 
@@ -112,29 +131,6 @@ const GerarTextos = () => {
       setMostrarCaixaTexto(true);
     }
   }, [textoSelecionado, gerando]);
-  // Carregar premium e créditos do usuário (sem plano: 1 crédito por geração de texto)
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) {
-        navigate('/');
-        return;
-      }
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setIsPremium(userData.isPremium === true);
-          setCreditos(typeof userData.creditos === 'number' ? userData.creditos : 0);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar acesso:', error);
-        navigate('/');
-      }
-    };
-    checkAccess();
-  }, [user, navigate]);
 
   // Buscar projeto ao carregar o componente
   useEffect(() => {
@@ -168,6 +164,9 @@ const GerarTextos = () => {
         // Set the project data
         setProjeto(projetoData);
         
+        const tiposPadrao = ['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento'];
+        let tiposBase: string[] = tiposPadrao;
+        
         // Buscar edital se o projeto tiver um edital_id
         if (projetoData.edital_id) {
           try {
@@ -184,35 +183,32 @@ const GerarTextos = () => {
               
               // Definir tipos de texto baseado no edital
               if (editalData.textos_exigidos && Array.isArray(editalData.textos_exigidos) && editalData.textos_exigidos.length > 0) {
+                tiposBase = editalData.textos_exigidos;
                 setTiposTextoDisponiveis(editalData.textos_exigidos);
-                // Selecionar o primeiro tipo por padrão
                 setTextoSelecionado(editalData.textos_exigidos[0]);
               } else {
-                // Fallback para tipos padrão se o edital não tiver textos_exigidos
-                setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+                setTiposTextoDisponiveis(tiposPadrao);
                 setTextoSelecionado('justificativa');
               }
             } else {
-              // Edital não encontrado, usar tipos padrão
-              setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+              setTiposTextoDisponiveis(tiposPadrao);
               setTextoSelecionado('justificativa');
             }
           } catch (error) {
             console.error('Erro ao buscar edital:', error);
-            // Em caso de erro, usar tipos padrão
-            setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+            setTiposTextoDisponiveis(tiposPadrao);
             setTextoSelecionado('justificativa');
           }
         } else {
-          // Projeto sem edital, usar tipos padrão
-          setTiposTextoDisponiveis(['justificativa', 'objetivos', 'metodologia', 'resultados_esperados', 'cronograma', 'orcamento']);
+          setTiposTextoDisponiveis(tiposPadrao);
           setTextoSelecionado('justificativa');
         }
         
-        // Carregar textos gerados se existirem
-        if (projetoData.textos_gerados) {
-          setTextos(projetoData.textos_gerados);
-        }
+        // Carregar textos gerados e restaurar categorias personalizadas (chaves que não são do edital)
+        const textosGerados = projetoData.textos_gerados || {};
+        setTextos(textosGerados);
+        const customKeys = Object.keys(textosGerados).filter((k) => !tiposBase.includes(k));
+        setCategoriasCustom(customKeys);
         
         setLoading(false);
         
@@ -225,6 +221,18 @@ const GerarTextos = () => {
     
     fetchProjeto();
   }, [id, navigate, user]);
+
+  // Analytics: etapa "Gerar Textos" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = useRef(false);
+  useEffect(() => {
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'gerar_textos',
+      });
+    }
+  }, [id, projeto]);
 
   const salvarNoFirestore = async (tipo: TextoTipo, texto: string) => {
     if (!id) {
@@ -395,7 +403,11 @@ const GerarTextos = () => {
       console.log('[DEBUG] Preparando para enviar requisição...');
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
-      
+      trackTextGenerationStarted({
+        projectId: id!,
+        textType: tipoMapeado,
+      });
+
       console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
       console.log('[DEBUG] Request data keys:', Object.keys(requestData));
       
@@ -403,7 +415,7 @@ const GerarTextos = () => {
       let response;
       try {
         console.log('[DEBUG] Tentando fetch para Firebase Function...');
-        response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarTextosProjeto', {
+        response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
@@ -469,8 +481,18 @@ const GerarTextos = () => {
               return newTexts;
             });
             await salvarNoFirestore(tipo, fullTextData);
+            setTextoSelecionado(tipo);
             setGerando(null); // Clear loading state after successful update
-            await deduzirCreditoGerarTexto();
+            trackTextGenerationCompleted({
+              projectId: id!,
+              textType: tipoMapeado,
+              durationSeconds: (Date.now() - startTime) / 1000,
+              textLength: fullTextData.length,
+                  });
+            setTimeout(() => {
+              const el = document.getElementById('pedidos-alteracao-texto');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 400);
             return true; // Indica sucesso
           }
         } else {
@@ -568,8 +590,18 @@ const GerarTextos = () => {
             }
           }
           
+          setTextoSelecionado(tipo);
           setGerando(null);
-          await deduzirCreditoGerarTexto();
+          trackTextGenerationCompleted({
+            projectId: id!,
+            textType: tipoMapeado,
+            durationSeconds: (Date.now() - startTime) / 1000,
+            textLength: fullText.length,
+              });
+          setTimeout(() => {
+            const el = document.getElementById('pedidos-alteracao-texto');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 400);
           return true;
           
         } catch (error) {
@@ -621,29 +653,10 @@ const GerarTextos = () => {
     }
   };
 
-  const deduzirCreditoGerarTexto = async () => {
-    if (!user) return;
-    try {
-      const db = getFirestore();
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-        await updateDoc(userRef, { creditos: increment(-1) });
-        setCreditos((c) => Math.max(0, c - 1));
-      }
-    } catch (e) {
-      console.error('Erro ao descontar crédito:', e);
-    }
-  };
-
   const handleGerarTexto = async (tipo: string) => {
     if (!tipo) return;
     if (gerando) return;
 
-    if (!isPremium && (creditos ?? 0) < 1) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
 
     setMostrarCaixaTexto(true);
     setGerando(tipo);
@@ -667,10 +680,13 @@ const GerarTextos = () => {
     if (!key || !textos[key]) return;
     try {
       await navigator.clipboard.writeText(textos[key]);
-      alert('Texto copiado para a área de transferência!');
+      toast.success('Texto copiado', {
+        description: 'O conteúdo foi copiado para a área de transferência.',
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Erro ao copiar texto:', error);
-      alert('Erro ao copiar texto');
+      toast.error('Erro ao copiar texto');
     }
   };
 
@@ -807,10 +823,10 @@ const GerarTextos = () => {
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
                 <Button
                   size="lg"
-                  onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                  onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Próximo: Criar Orçamento <span className="ml-2 opacity-90">→</span>
+                  Próximo: Criar Cronograma <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>
@@ -865,7 +881,7 @@ const GerarTextos = () => {
             <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
               <div className="p-4 border-b min-w-0">
                 <h2 className="text-lg font-semibold text-gray-800">Gerar Textos</h2>
-                <p className="text-sm text-gray-500 mt-1 break-words">Para cada tipo, use o botão para gerar com IA (1 crédito por texto) ou escreva na caixa.</p>
+                <p className="text-sm text-gray-500 mt-1 break-words">Para cada tipo, use o botão para gerar com IA ou escreva na caixa.</p>
               </div>
 
               <div className="p-4 space-y-8">
@@ -900,7 +916,7 @@ const GerarTextos = () => {
                               Gerando...
                             </>
                           ) : (
-                            <>Criar Texto <span className="opacity-90 font-normal text-sm">(1 crédito)</span></>
+                            <>Criar Texto</>
                           )}
                         </Button>
                         {isOrcamento && textos[tipo] && rubricas.length > 0 && (
@@ -957,37 +973,27 @@ const GerarTextos = () => {
                           </div>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
 
-                <button
-                  type="button"
-                  onClick={() => setMostrarInputCategoria(true)}
-                  className="w-full p-4 rounded-xl border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5 text-oraculo-purple font-medium flex items-center justify-center gap-2"
-                >
-                  <FileText className="h-5 w-5" />
-                  + Categoria Personalizada
-                </button>
-              </div>
-
-              {/* Sugestão para alterar texto (aplica ao tipo focado / selecionado) */}
-              {textoSelecionado && textos[textoSelecionado] && (
-                <div className="p-4 border-t bg-gray-50">
-                  <div className="p-4 bg-white border rounded-lg">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      Dê uma sugestão para a IA alterar o texto &quot;{textoSelecionado.replace(/_/g, ' ')}&quot;
-                    </h3>
-                    <textarea
-                      className="w-full border-2 border-gray-300 rounded-lg px-5 py-4 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[100px] text-gray-800 leading-relaxed resize-y mb-4"
-                      value={sugestaoTexto}
-                      onChange={(e) => setSugestaoTexto(e.target.value)}
-                      placeholder="Ex: Adicione mais detalhes sobre o cronograma..."
-                      disabled={aplicandoSugestao}
-                    />
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={async () => {
+                      {/* Pedidos de alteração — colado à caixa do texto deste tipo */}
+                      {textoSelecionado === tipo && textos[tipo] && (
+                        <div id="pedidos-alteracao-texto" className="mt-3 pt-3 border-t border-oraculo-purple/20 scroll-mt-4">
+                          <h3 className="text-base font-bold text-gray-900 mb-1">
+                            Pedidos de alteração de texto
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Descreva o que deseja alterar no texto &quot;{titulo}&quot; e clique em Aplicar.
+                          </p>
+                          <textarea
+                            className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-oraculo-purple focus:border-oraculo-purple transition min-h-[100px] text-gray-800 text-sm leading-relaxed resize-y mb-3"
+                            value={sugestaoTexto}
+                            onChange={(e) => setSugestaoTexto(e.target.value)}
+                            placeholder="Ex: Adicione mais detalhes / Torne mais objetivo / Inclua menção à acessibilidade..."
+                            disabled={aplicandoSugestao}
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
                           if (!sugestaoTexto.trim()) {
                             alert('Digite uma sugestão antes de aplicar.');
                             return;
@@ -1011,7 +1017,7 @@ const GerarTextos = () => {
                                 console.error('Erro ao buscar portfolio:', err);
                               }
                             }
-                            const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+                            const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
                             const response = await fetch(endpoint, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -1043,7 +1049,7 @@ const GerarTextos = () => {
                                     const parsed = JSON.parse(data);
                                     if (parsed.content) {
                                       novoTexto += parsed.content;
-                                      setTextos(prev => ({ ...prev, [textoSelecionado]: novoTexto }));
+                                      setTextos(prev => ({ ...prev, [textoSelecionado]: removerContextoPortfolioDaResposta(novoTexto) }));
                                     }
                                   } catch {
                                     // ignorar
@@ -1051,7 +1057,8 @@ const GerarTextos = () => {
                                 }
                               }
                             }
-                            if (id && novoTexto.trim()) await salvarNoFirestore(textoSelecionado as TextoTipo, novoTexto);
+                            const textoLimpo = removerContextoPortfolioDaResposta(novoTexto);
+                            if (id && textoLimpo.trim()) await salvarNoFirestore(textoSelecionado as TextoTipo, textoLimpo);
                             setSugestaoTexto('');
                           } catch (e) {
                             console.error('Erro ao processar sugestão:', e);
@@ -1071,22 +1078,34 @@ const GerarTextos = () => {
                         ) : (
                           'Aplicar Sugestão'
                         )}
-                      </Button>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarInputCategoria(true)}
+                  className="w-full p-4 rounded-xl border-2 border-dashed border-oraculo-purple hover:border-oraculo-purple/70 transition-all bg-oraculo-purple/5 text-oraculo-purple font-medium flex items-center justify-center gap-2"
+                >
+                  <FileText className="h-5 w-5" />
+                  + Categoria Personalizada
+                </button>
+              </div>
             </div>
             
-            {/* Próximo passo: Criar Orçamento — responsivo */}
+            {/* Próximo passo: Criar Cronograma — responsivo */}
             <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
               <Button
                 size="lg"
-                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
               >
-                Próximo: Criar Orçamento <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+                Próximo: Criar Cronograma <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
               </Button>
             </div>
           </div>
@@ -1112,14 +1131,28 @@ const GerarTextos = () => {
             </div>
             <div className="flex gap-3">
               <Button
-                onClick={() => {
-                  if (categoriaPersonalizada.trim()) {
-                    const novaCategoria = categoriaPersonalizada.trim();
-                    setCategoriasCustom([...categoriasCustom, novaCategoria]);
-                    setTextoSelecionado(novaCategoria);
-                    setTextos({ ...textos, [novaCategoria]: '' });
-                    setCategoriaPersonalizada('');
-                    setMostrarInputCategoria(false);
+                onClick={async () => {
+                  if (!categoriaPersonalizada.trim()) return;
+                  const novaCategoria = categoriaPersonalizada.trim();
+                  const novosTextos = { ...textos, [novaCategoria]: '' };
+                  setCategoriasCustom([...categoriasCustom, novaCategoria]);
+                  setTextoSelecionado(novaCategoria);
+                  setTextos(novosTextos);
+                  setCategoriaPersonalizada('');
+                  setMostrarInputCategoria(false);
+                  // Persistir no backend para a categoria aparecer ao recarregar
+                  if (id) {
+                    try {
+                      const db = getFirestore();
+                      const projetoRef = doc(db, 'projetos', id);
+                      await updateDoc(projetoRef, {
+                        textos_gerados: novosTextos,
+                        atualizado_em: serverTimestamp(),
+                      });
+                    } catch (err) {
+                      console.error('Erro ao salvar categoria personalizada:', err);
+                      toast.error('Categoria adicionada na tela, mas não foi possível salvar. Tente novamente.');
+                    }
                   }
                 }}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"

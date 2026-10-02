@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -6,23 +6,64 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown } from 'lucide-react';
+import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
+import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 import * as XLSX from 'xlsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
+import {
+  limparRubricasOrfas,
+  sugerirVinculosRubricasEtapas,
+} from '@/lib/vinculoCronogramaOrcamento';
+
+// Dev: proxy Vite. Produção: rewrite do Firebase Hosting para a função (mesma origem, sem CORS)
+const GERAR_CRONOGRAMA_URL = '/api/gerarCronogramaIA';
+
+export type MacroEtapa = 'pre_producao' | 'producao' | 'divulgacao' | 'pos_producao';
+
+export const MACRO_ETAPAS: { value: MacroEtapa; label: string }[] = [
+  { value: 'pre_producao', label: 'Pré-produção' },
+  { value: 'producao', label: 'Produção' },
+  { value: 'divulgacao', label: 'Divulgação' },
+  { value: 'pos_producao', label: 'Pós-produção' },
+];
+
+/** Ordem de exibição na lista: pré, produção, pós, divulgação (etapas concomitantes podem estar em qualquer ordem dentro da mesma fase) */
+const ORDEM_MACRO_LISTA: MacroEtapa[] = ['pre_producao', 'producao', 'pos_producao', 'divulgacao'];
+function ordenarEtapasPorFase(etapas: EtapaCronograma[]): EtapaCronograma[] {
+  return [...etapas].sort((a, b) => {
+    const fa = a.macroEtapa || 'producao';
+    const fb = b.macroEtapa || 'producao';
+    const ia = ORDEM_MACRO_LISTA.indexOf(fa);
+    const ib = ORDEM_MACRO_LISTA.indexOf(fb);
+    if (ia !== ib) return ia - ib;
+    return (a.inicio || '').localeCompare(b.inicio || '');
+  });
+}
+
+export function getMacroEtapaLabel(value: MacroEtapa | undefined): string {
+  return MACRO_ETAPAS.find((m) => m.value === value)?.label ?? 'Produção';
+}
 
 export interface EtapaCronograma {
   id: string;
   etapa: string;
   inicio: string;
   fim: string;
+  macroEtapa?: MacroEtapa;
+  /** Nomes das rubricas do orçamento associadas a esta etapa */
+  rubricasAssociadas?: string[];
 }
 
 interface ProjetoDocument {
   id: string;
   nome?: string;
-  cronograma?: { etapas?: EtapaCronograma[]; atualizado_em?: unknown };
+  cronograma?: { etapas?: EtapaCronograma[]; atualizado_em?: unknown; duracaoMeses?: number };
+  orcamento?: { rubricas?: { id?: string; nome?: string }[] };
   [key: string]: unknown;
 }
 
@@ -37,31 +78,28 @@ const CriarCronograma = () => {
   const [etapas, setEtapas] = useState<EtapaCronograma[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [gerandoCronograma, setGerandoCronograma] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
-  const [creditos, setCreditos] = useState<number>(0);
+  const [sugestoesCronograma, setSugestoesCronograma] = useState('');
+  const [processandoAlteracoes, setProcessandoAlteracoes] = useState(false);
+  const [etapasAnteriores, setEtapasAnteriores] = useState<EtapaCronograma[]>([]);
+  const [duracaoProjetoMeses, setDuracaoProjetoMeses] = useState<number | ''>('');
+  const [expandedEtapaId, setExpandedEtapaId] = useState<string | null>(null);
+  const [abaCronograma, setAbaCronograma] = useState('etapas');
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-  const currentStep = 5;
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const currentStep = 4;
 
-  // Carregar premium e créditos (sem plano: 3 créditos para gerar cronograma)
+  // Analytics: etapa "Criar Cronograma" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
+  const stepViewedRef = React.useRef(false);
   useEffect(() => {
-    const checkAccess = async () => {
-      if (!user) return;
-      try {
-        const db = getFirestore();
-        const userRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          setIsPremium(d?.isPremium === true);
-          setCreditos(typeof d?.creditos === 'number' ? d.creditos : 0);
-        }
-      } catch (e) {
-        console.error('Erro ao verificar acesso:', e);
-      }
-    };
-    checkAccess();
-  }, [user]);
+    if (id && projeto && !stepViewedRef.current) {
+      stepViewedRef.current = true;
+      trackProjectStepViewed({
+        projectId: id,
+        step: 'criar_cronograma',
+        });
+    }
+  }, [id, projeto]);
+
 
   useEffect(() => {
     const fetchProjeto = async () => {
@@ -79,7 +117,13 @@ const CriarCronograma = () => {
           const data = { id: projetoSnap.id, ...projetoSnap.data() } as ProjetoDocument;
           setProjeto(data);
           const etapasSalvas = data.cronograma?.etapas ?? [];
-          setEtapas(Array.isArray(etapasSalvas) ? etapasSalvas.map((e: EtapaCronograma) => ({ ...e, id: e.id || gerarId() })) : []);
+          setEtapas(Array.isArray(etapasSalvas) ? etapasSalvas.map((e: EtapaCronograma) => ({
+            ...e,
+            id: e.id || gerarId(),
+            macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
+          })) : []);
+          const dur = data.cronograma?.duracaoMeses;
+          setDuracaoProjetoMeses(typeof dur === 'number' && dur >= 1 ? dur : '');
         }
       } catch (error) {
         console.error('Erro ao carregar projeto:', error);
@@ -93,7 +137,7 @@ const CriarCronograma = () => {
 
   const adicionarEtapa = () => {
     const hoje = new Date().toISOString().slice(0, 10);
-    setEtapas((prev) => [...prev, { id: gerarId(), etapa: '', inicio: hoje, fim: hoje }]);
+    setEtapas((prev) => [{ id: gerarId(), etapa: '', inicio: hoje, fim: hoje, macroEtapa: 'producao' }, ...prev]);
   };
 
   const removerEtapa = (etapaId: string) => {
@@ -106,24 +150,60 @@ const CriarCronograma = () => {
     );
   };
 
-  const CREDITOS_CRONOGRAMA = 3;
+  const toggleRubricaEtapa = (etapaId: string, rubricaNome: string) => {
+    setEtapas((prev) =>
+      prev.map((e) => {
+        if (e.id !== etapaId) return e;
+        const atuais = e.rubricasAssociadas || [];
+        const jaAssociada = atuais.includes(rubricaNome);
+        return { ...e, rubricasAssociadas: jaAssociada ? atuais.filter((x) => x !== rubricaNome) : [...atuais, rubricaNome] };
+      })
+    );
+  };
+
+  const rubricasOrcamento = projeto?.orcamento?.rubricas ?? [];
+  const nomesRubricas = rubricasOrcamento.map((r) => r.nome || '').filter(Boolean);
+  const rubricasParaVinculo = rubricasOrcamento
+    .filter((r) => (r.nome || '').trim())
+    .map((r, i) => ({ id: r.id || `r-${i}-${r.nome}`, nome: (r.nome || '').trim() }));
+
+  const aplicarSugestaoVinculos = () => {
+    if (!rubricasParaVinculo.length) {
+      toast.info('Salve o orçamento com rubricas antes de sugerir vínculos.');
+      return;
+    }
+    const sugeridas = sugerirVinculosRubricasEtapas(etapas, rubricasParaVinculo);
+    setEtapas(sugeridas as EtapaCronograma[]);
+    toast.success('Vínculos sugeridos — revise na aba Orçamento × Cronograma.');
+    setAbaCronograma('vinculos');
+  };
+
+  /** Lista de etapas ordenada só para exibição: pré → produção → pós → divulgação (concomitantes mantidas) */
+  const etapasOrdenadas = useMemo(() => ordenarEtapasPorFase(etapas), [etapas]);
 
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
-    if (!isPremium && (creditos ?? 0) < CREDITOS_CRONOGRAMA) {
-      navigate('/cadastro-premium?motivo=creditos_insuficientes');
-      return;
-    }
     setGerandoCronograma(true);
+    const startTime = Date.now();
+    trackTextGenerationStarted({
+      projectId: id,
+      textType: 'cronograma',
+    });
     try {
-      const res = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/gerarCronogramaIA', {
+      const duracaoMeses = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : undefined;
+      const res = await fetch(GERAR_CRONOGRAMA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projetoId: id, userId: user.uid }),
+        body: JSON.stringify({ projetoId: id, userId: user.uid, duracaoMeses }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      const data = text ? (() => { try { return JSON.parse(text); } catch { return {}; } })() : {};
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao gerar cronograma');
+        if (res.status === 503) {
+          throw new Error('Serviço temporariamente indisponível (cold start). Aguarde alguns segundos e tente novamente. Em local: use o emulador (veja README ou .env.example).');
+        }
+        const serverMsg = data.error || data.message || (res.status === 500 ? text?.slice(0, 200) : null);
+        throw new Error(serverMsg || `Erro ao gerar cronograma (${res.status})`);
       }
       const etapasGeradas = Array.isArray(data.etapas) ? data.etapas : [];
       if (etapasGeradas.length === 0) {
@@ -133,23 +213,87 @@ const CriarCronograma = () => {
       setEtapas(etapasGeradas.map((e: Omit<EtapaCronograma, 'id'>) => ({
         ...e,
         id: gerarId(),
+        macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
+        rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
-      if (!isPremium) {
-        try {
-          const db = getFirestore();
-          const userRef = doc(db, 'usuarios', user.uid);
-          await updateDoc(userRef, { creditos: increment(-CREDITOS_CRONOGRAMA) });
-          setCreditos((c) => Math.max(0, c - CREDITOS_CRONOGRAMA));
-        } catch (e) {
-          console.error('Erro ao descontar créditos cronograma:', e);
-        }
-      }
+      trackTextGenerationCompleted({
+        projectId: id,
+        textType: 'cronograma',
+        durationSeconds: (Date.now() - startTime) / 1000,
+        textLength: etapasGeradas.length,
+        });
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Erro ao gerar cronograma com IA.');
+      const isNetworkError = err instanceof TypeError && (err.message === 'Failed to fetch' || err.message?.includes('fetch'));
+      let msg: string;
+      if (isNetworkError) {
+        msg = import.meta.env.DEV
+          ? 'Em local, inicie o emulador: em outro terminal execute "cd functions && npm run serve" e tente novamente.'
+          : 'Não foi possível conectar ao servidor. Verifique sua internet ou se a função está publicada.';
+      } else {
+        msg = err instanceof Error ? err.message : 'Erro ao gerar cronograma com IA.';
+      }
+      toast.error(msg, { duration: 8000 });
     } finally {
       setGerandoCronograma(false);
+    }
+  };
+
+  const processarAlteracoesCronograma = async () => {
+    if (!id || !user || !sugestoesCronograma.trim() || etapas.length === 0) {
+      toast.error('Preencha as sugestões e tenha ao menos uma etapa no cronograma.');
+      return;
+    }
+    setProcessandoAlteracoes(true);
+    try {
+      const etapasAtuais = etapas.map((e) => ({
+        etapa: e.etapa,
+        inicio: e.inicio,
+        fim: e.fim,
+        rubricasAssociadas: e.rubricasAssociadas ?? [],
+      }));
+      const duracaoMeses = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : undefined;
+      const res = await fetch(GERAR_CRONOGRAMA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projetoId: id,
+          userId: user.uid,
+          etapasAtuais,
+          sugestoes: sugestoesCronograma.trim(),
+          duracaoMeses,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao aplicar alterações');
+      }
+      const etapasGeradas = Array.isArray(data.etapas) ? data.etapas : [];
+      if (etapasGeradas.length === 0) {
+        toast.info('A IA não retornou etapas. Tente novamente ou edite manualmente.');
+        return;
+      }
+      setEtapasAnteriores([...etapas]);
+      setEtapas(etapasGeradas.map((e: Omit<EtapaCronograma, 'id'>) => ({
+        ...e,
+        id: gerarId(),
+        macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
+        rubricasAssociadas: e.rubricasAssociadas ?? [],
+      })));
+      setSugestoesCronograma('');
+      toast.success('Alterações aplicadas. Aprove ou volte ao estado anterior.');
+    } catch (err) {
+      console.error(err);
+      const isNetworkError = err instanceof TypeError && (err.message === 'Failed to fetch' || (err as Error).message?.includes?.('fetch'));
+      const msg = isNetworkError
+        ? (import.meta.env.DEV
+            ? 'Em local, inicie o emulador: em outro terminal execute "cd functions && npm run serve".'
+            : 'Não foi possível conectar ao servidor. Verifique sua internet ou se a função está publicada.')
+        : (err instanceof Error ? err.message : 'Erro ao aplicar alterações no cronograma.');
+      toast.error(msg, { duration: 8000 });
+    } finally {
+      setProcessandoAlteracoes(false);
     }
   };
 
@@ -170,9 +314,16 @@ const CriarCronograma = () => {
     try {
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
+      const duracaoMesesToSave = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : null;
+      const nomesValidos = new Set(nomesRubricas.map((n) => n.trim()));
+      const etapasLimpas = limparRubricasOrfas(etapas, nomesValidos) as EtapaCronograma[];
+      if (nomesValidos.size > 0 && JSON.stringify(etapasLimpas) !== JSON.stringify(etapas)) {
+        setEtapas(etapasLimpas);
+      }
       await updateDoc(projetoRef, {
         cronograma: {
-          etapas,
+          etapas: etapasLimpas,
+          ...(duracaoMesesToSave != null && { duracaoMeses: duracaoMesesToSave }),
           atualizado_em: serverTimestamp(),
         },
       });
@@ -197,6 +348,7 @@ const CriarCronograma = () => {
       toast.error('Adicione ao menos uma etapa para exportar.');
       return;
     }
+    const etapasParaExport = ordenarEtapasPorFase(etapasValidas);
     const html = `
       <!DOCTYPE html>
       <html>
@@ -217,16 +369,17 @@ const CriarCronograma = () => {
           <table>
             <thead>
               <tr>
+                <th>Fase</th>
                 <th>Etapa</th>
                 <th>Início</th>
                 <th>Fim</th>
               </tr>
             </thead>
             <tbody>
-              ${etapasValidas
+              ${etapasParaExport
                 .map(
                   (e) =>
-                    `<tr><td>${(e.etapa || '').replace(/</g, '&lt;')}</td><td>${formatarDataPtBr(e.inicio)}</td><td>${formatarDataPtBr(e.fim)}</td></tr>`
+                    `<tr><td>${getMacroEtapaLabel(e.macroEtapa).replace(/</g, '&lt;')}</td><td>${(e.etapa || '').replace(/</g, '&lt;')}</td><td>${formatarDataPtBr(e.inicio)}</td><td>${formatarDataPtBr(e.fim)}</td></tr>`
                 )
                 .join('')}
             </tbody>
@@ -250,7 +403,8 @@ const CriarCronograma = () => {
       toast.error('Adicione ao menos uma etapa para exportar.');
       return;
     }
-    const rows = [['Etapa', 'Início', 'Fim'], ...etapasValidas.map((e) => [e.etapa || '', e.inicio || '', e.fim || ''])];
+    const etapasParaExport = ordenarEtapasPorFase(etapasValidas);
+    const rows = [['Fase', 'Etapa', 'Início', 'Fim'], ...etapasParaExport.map((e) => [getMacroEtapaLabel(e.macroEtapa), e.etapa || '', e.inicio || '', e.fim || ''])];
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Cronograma');
@@ -259,8 +413,12 @@ const CriarCronograma = () => {
     toast.success('Planilha exportada.');
   };
 
-  // Gantt: calcular intervalo total e posição de cada barra
+  // Gantt: etapas com datas, ordenadas por macro (pré → produção → pós → divulgação) para exibir agrupadas
   const etapasComDatas = etapas.filter((e) => e.inicio && e.fim && e.etapa.trim());
+  const etapasComDatasOrdenadas = useMemo(
+    () => ordenarEtapasPorFase(etapas.filter((e) => e.inicio && e.fim && e.etapa.trim())),
+    [etapas]
+  );
   const todasDatas = etapasComDatas.flatMap((e) => [new Date(e.inicio).getTime(), new Date(e.fim).getTime()]);
   const minTime = todasDatas.length ? Math.min(...todasDatas) : Date.now();
   const maxTime = todasDatas.length ? Math.max(...todasDatas) : Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -318,10 +476,10 @@ const CriarCronograma = () => {
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
                 <Button
                   size="lg"
-                  onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
+                  onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Próxima etapa: Documentos de Inscrição <span className="ml-2 opacity-90">→</span>
+                  Próximo: Criar Orçamento <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>
@@ -342,8 +500,9 @@ const CriarCronograma = () => {
                             `/projeto/${id}`,
                             `/projeto/${id}/alterar-com-ia`,
                             `/projeto/${id}/gerar-textos`,
-                            `/projeto/${id}/criar-orcamento`,
                             `/projeto/${id}/criar-cronograma`,
+                            `/projeto/${id}/criar-orcamento`,
+                            `/projeto/${id}/equipe`,
                             `/projeto/${id}/documentos-inscricao`,
                             `/projeto/${id}/preencher-anexos`,
                           ];
@@ -383,16 +542,21 @@ const CriarCronograma = () => {
               </div>
             </div>
 
-            {/* Formulário de etapas */}
+            {/* Cronograma: etapas + vínculo com orçamento */}
             <Card className="bg-white shadow-lg border-2 border-gray-200 mb-6 md:mb-8">
-              <CardHeader className="pb-4 px-4 md:px-6 pt-4 md:pt-6">
+              <Tabs value={abaCronograma} onValueChange={setAbaCronograma} className="w-full">
+              <CardHeader className="pb-4 px-4 md:px-6 pt-4 md:pt-6 space-y-4">
                 <div className="flex flex-col gap-4">
                   <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
                     <Calendar className="h-5 w-5 md:h-6 md:w-6 text-oraculo-blue flex-shrink-0" />
-                    Etapas do cronograma
+                    Cronograma do projeto
                   </CardTitle>
+                  <TabsList className="grid w-full max-w-md grid-cols-2">
+                    <TabsTrigger value="etapas">Etapas</TabsTrigger>
+                    <TabsTrigger value="vinculos">Orçamento × Cronograma</TabsTrigger>
+                  </TabsList>
                   <p className="text-sm text-gray-600">
-                    A opção &quot;Criar com IA&quot; gera etapas com base no orçamento, nos textos do projeto e no prazo do edital.
+                    Cada etapa deve estar associada a uma macro etapa (Pré-produção, Produção, Divulgação ou Pós-produção). Atribua a fase na coluna &quot;Fase&quot; da tabela.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -410,7 +574,6 @@ const CriarCronograma = () => {
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
                           Criar com IA
-                          <span className="ml-1.5 text-white/80 font-normal text-sm">(3 créditos)</span>
                         </>
                       )}
                     </Button>
@@ -426,11 +589,14 @@ const CriarCronograma = () => {
                   </div>
                 </div>
               </CardHeader>
+              <TabsContent value="etapas" className="mt-0">
               <CardContent className="space-y-4 px-4 md:px-6 pb-4 md:pb-6">
                 <div className="overflow-x-auto -mx-2 md:mx-0">
-                  <table className="w-full min-w-[520px]">
+                  <table className="w-full min-w-[600px]">
                     <thead>
                       <tr className="border-b text-left text-xs md:text-sm text-gray-600">
+                        <th className="pb-2 pr-1 w-9" aria-label="Expandir" />
+                        <th className="pb-2 pr-2">Fase</th>
                         <th className="pb-2 pr-2">Etapa</th>
                         <th className="pb-2 pr-2">Início</th>
                         <th className="pb-2 pr-2">Fim</th>
@@ -440,49 +606,111 @@ const CriarCronograma = () => {
                     <tbody>
                       {etapas.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-6 text-center text-gray-500 text-sm">
-                            Nenhuma etapa. Clique em &quot;Nova etapa&quot; para adicionar.
+                          <td colSpan={6} className="py-6 text-center text-gray-500 text-sm">
+                            Nenhuma etapa. Selecione a macro etapa e clique em &quot;Nova etapa&quot; para adicionar.
                           </td>
                         </tr>
                       ) : (
-                        etapas.map((e) => (
-                          <tr key={e.id} className="border-b border-gray-100">
-                            <td className="py-2 pr-2">
-                              <Input
-                                placeholder="Ex: Produção, Divulgação..."
-                                value={e.etapa}
-                                onChange={(ev) => atualizarEtapa(e.id, 'etapa', ev.target.value)}
-                                className="min-w-0 w-full max-w-[200px]"
-                              />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <Input
-                                type="date"
-                                value={e.inicio}
-                                onChange={(ev) => atualizarEtapa(e.id, 'inicio', ev.target.value)}
-                                className="min-w-0 w-full max-w-[140px]"
-                              />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <Input
-                                type="date"
-                                value={e.fim}
-                                onChange={(ev) => atualizarEtapa(e.id, 'fim', ev.target.value)}
-                                className="min-w-0 w-full max-w-[140px]"
-                              />
-                            </td>
-                            <td className="py-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removerEtapa(e.id)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
+                        etapasOrdenadas.map((e) => (
+                          <React.Fragment key={e.id}>
+                            <tr className="border-b border-gray-100">
+                              <td className="py-2 pr-1 w-9 align-top">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-gray-500 hover:text-oraculo-blue"
+                                  onClick={() => setExpandedEtapaId((id) => (id === e.id ? null : e.id))}
+                                  aria-expanded={expandedEtapaId === e.id}
+                                >
+                                  {expandedEtapaId === e.id ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </td>
+                              <td className="py-2 pr-2 align-top">
+                                <Select
+                                  value={e.macroEtapa || 'producao'}
+                                  onValueChange={(v) => atualizarEtapa(e.id, 'macroEtapa', v)}
+                                >
+                                  <SelectTrigger className="h-9 w-full min-w-[130px] max-w-[150px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {MACRO_ETAPAS.map((m) => (
+                                      <SelectItem key={m.value} value={m.value}>
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="py-2 pr-2 min-w-0 md:min-w-[280px]">
+                                <Input
+                                  placeholder="Ex: Contratação de equipe..."
+                                  value={e.etapa}
+                                  onChange={(ev) => atualizarEtapa(e.id, 'etapa', ev.target.value)}
+                                  className="min-w-0 w-full max-w-[200px] md:max-w-[380px]"
+                                />
+                              </td>
+                              <td className="py-2 pr-2">
+                                <Input
+                                  type="date"
+                                  value={e.inicio}
+                                  onChange={(ev) => atualizarEtapa(e.id, 'inicio', ev.target.value)}
+                                  className="min-w-0 w-full max-w-[140px] md:max-w-[105px]"
+                                />
+                              </td>
+                              <td className="py-2 pr-2">
+                                <Input
+                                  type="date"
+                                  value={e.fim}
+                                  onChange={(ev) => atualizarEtapa(e.id, 'fim', ev.target.value)}
+                                  className="min-w-0 w-full max-w-[140px] md:max-w-[105px]"
+                                />
+                              </td>
+                              <td className="py-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removerEtapa(e.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                            {expandedEtapaId === e.id && (
+                              <tr className="border-b border-gray-100 bg-gray-50/70">
+                                <td colSpan={6} className="px-4 py-3">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">Rubricas associadas à etapa</div>
+                                  {nomesRubricas.length === 0 ? (
+                                    <p className="text-gray-500 text-sm">Nenhuma rubrica ainda — o orçamento vem na próxima etapa. Depois de criá-lo, volte aqui para associar rubricas ou regere o cronograma.</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-3">
+                                      {nomesRubricas.map((nome) => {
+                                        const associada = (e.rubricasAssociadas || []).includes(nome);
+                                        return (
+                                          <label key={nome} className="flex items-center gap-2 cursor-pointer text-sm">
+                                            <input
+                                              type="checkbox"
+                                              checked={associada}
+                                              onChange={() => toggleRubricaEtapa(e.id, nome)}
+                                              className="rounded border-gray-300 text-oraculo-blue focus:ring-oraculo-blue"
+                                            />
+                                            <span className={associada ? 'text-gray-900 font-medium' : 'text-gray-600'}>{nome}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         ))
                       )}
                     </tbody>
@@ -515,8 +743,95 @@ const CriarCronograma = () => {
                     <span className="truncate">Exportar XLSX</span>
                   </Button>
                   </div>
+                {/* Aprovar ou reverter após alterações */}
+                {etapasAnteriores.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-oraculo-purple/20 flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-gray-600">Alterações aplicadas ao cronograma.</span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => {
+                          setEtapasAnteriores([]);
+                          toast.success('Alteração aprovada.');
+                        }}
+                        className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                      >
+                        Aprovar alteração
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEtapas([...etapasAnteriores]);
+                          setEtapasAnteriores([]);
+                          toast.success('Voltou ao estado anterior.');
+                        }}
+                        className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        Voltar ao estado anterior
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
+              </TabsContent>
+              <TabsContent value="vinculos" className="mt-0">
+                <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
+                  <VinculoCronogramaOrcamentoPainel
+                    etapas={etapas}
+                    rubricas={rubricasParaVinculo}
+                    onEtapasChange={(next) => setEtapas(next as EtapaCronograma[])}
+                    onSugerirVinculos={rubricasParaVinculo.length ? aplicarSugestaoVinculos : undefined}
+                    emptyRubricasMessage="O orçamento ainda não tem rubricas. Conclua a etapa Criar Orçamento e volte aqui, ou associe manualmente quando existirem rubricas salvas."
+                  />
+                  <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
+                    <Button
+                      onClick={salvarCronograma}
+                      disabled={salvando || etapas.length === 0}
+                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                    >
+                      {salvando ? 'Salvando…' : 'Salvar cronograma e vínculos'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </TabsContent>
+              </Tabs>
             </Card>
+
+            {/* Sugestões de alteração do cronograma — em cima do estado atual */}
+            {etapas.length > 0 && (
+              <Card className="bg-white shadow border-2 border-oraculo-purple/30 mb-6 md:mb-8">
+                <CardHeader className="pb-2 px-4 md:px-6 pt-4 md:pt-6">
+                  <CardTitle className="text-base md:text-lg">Sugestões de alteração do cronograma</CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Descreva o que deseja alterar no cronograma atual e clique em Aplicar. As alterações serão aplicadas em cima das etapas atuais.
+                  </p>
+                </CardHeader>
+                <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
+                  <textarea
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-oraculo-purple focus:border-oraculo-purple min-h-[100px] text-gray-800 text-sm resize-y mb-3"
+                    value={sugestoesCronograma}
+                    onChange={(e) => setSugestoesCronograma(e.target.value)}
+                    placeholder="Ex: Adicione uma etapa de pré-produção entre planejamento e produção / Estenda a etapa de divulgação em 2 semanas / Renomeie a etapa X para Y..."
+                    disabled={processandoAlteracoes}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={processarAlteracoesCronograma}
+                      disabled={processandoAlteracoes || !sugestoesCronograma.trim()}
+                      className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white"
+                    >
+                      {processandoAlteracoes ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Aplicando...
+                        </>
+                      ) : (
+                        'Aplicar alterações'
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Gantt */}
             {etapasComDatas.length > 0 && (
@@ -551,9 +866,9 @@ const CriarCronograma = () => {
                           })}
                         </div>
                       </div>
-                      {/* Barras por etapa */}
+                      {/* Barras por etapa (ordenadas por macro: pré, produção, pós, divulgação) */}
                       <div className="space-y-2">
-                        {etapasComDatas.map((e) => {
+                        {etapasComDatasOrdenadas.map((e) => {
                           const startMs = new Date(e.inicio).getTime();
                           const endMs = new Date(e.fim).getTime();
                           const left = ((startMs - minTime) / rangeMs) * 100;

@@ -26,10 +26,11 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
-  'Preencher Anexos'
+  'Preencher Anexos',
 ];
 const currentStep: number = 1; // Avaliar com IA
 
@@ -1171,10 +1172,11 @@ const Projeto = () => {
       `/projeto/${id}`,
       `/projeto/${id}/alterar-com-ia`,
       `/projeto/${id}/gerar-textos`,
-      `/projeto/${id}/criar-orcamento`,
       `/projeto/${id}/criar-cronograma`,
+      `/projeto/${id}/criar-orcamento`,
+      `/projeto/${id}/equipe`,
       `/projeto/${id}/documentos-inscricao`,
-      `/projeto/${id}/preencher-anexos`
+      `/projeto/${id}/preencher-anexos`,
     ];
     
     if (routes[stepIndex]) {

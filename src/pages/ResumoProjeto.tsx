@@ -37,8 +37,9 @@ const STEPS = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
   'Preencher Anexos',
 ];
@@ -82,8 +83,9 @@ const ResumoProjeto = () => {
           !!(data.analise_ia && String(data.analise_ia).trim().length > 0),
           !!(data.analise_ia && String(data.analise_ia).trim().length > 0),
           !!(data.textos_gerados && Object.keys(data.textos_gerados).length > 0),
-          !!(data.orcamento?.rubricas && data.orcamento.rubricas.length > 0),
           !!(data.cronograma?.etapas && data.cronograma.etapas.length > 0),
+          !!(data.orcamento?.rubricas && data.orcamento.rubricas.length > 0),
+          !!(data.equipe?.alocacoes && data.equipe.alocacoes.length > 0),
           !!(data.documentos_inscricao && data.documentos_inscricao.length > 0 && data.documentos_inscricao.some((d) => d?.url)),
           false,
         ];
@@ -105,10 +107,11 @@ const ResumoProjeto = () => {
       1: `/projeto/${id}`,
       2: `/projeto/${id}/alterar-com-ia`,
       3: `/projeto/${id}/gerar-textos`,
-      4: `/projeto/${id}/criar-orcamento`,
-      5: `/projeto/${id}/criar-cronograma`,
-      6: `/projeto/${id}/documentos-inscricao`,
-      7: `/projeto/${id}/preencher-anexos`,
+      4: `/projeto/${id}/criar-cronograma`,
+      5: `/projeto/${id}/criar-orcamento`,
+      6: `/projeto/${id}/equipe`,
+      7: `/projeto/${id}/documentos-inscricao`,
+      8: `/projeto/${id}/preencher-anexos`,
     };
     return routes[index] ?? '#';
   };
