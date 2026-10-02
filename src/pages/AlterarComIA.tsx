@@ -16,8 +16,9 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
   'Preencher Anexos'
 ];

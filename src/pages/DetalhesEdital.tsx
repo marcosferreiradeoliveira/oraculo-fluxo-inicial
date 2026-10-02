@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
+import { getEditaisDb } from '@/lib/editaisDb';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -75,7 +76,7 @@ const DetalhesEdital = () => {
       }
       
       try {
-        const editalRef = doc(db, 'editais', id);
+        const editalRef = doc(getEditaisDb(), 'editais', id);
         const editalSnap = await getDoc(editalRef);
         
         if (editalSnap.exists()) {

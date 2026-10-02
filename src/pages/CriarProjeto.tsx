@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc, increment } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, updateDoc, query, where, increment } from 'firebase/firestore';
+import { getEditaisDb, getEditaisWriteDb } from '@/lib/editaisDb';
+import { ensureUsuarioFirestore } from '@/lib/ensureUsuarioFirestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
 import { Link } from 'react-router-dom';
 import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trackAnalysisFailed } from '@/lib/analytics';
-import { Brain, Loader2, Mic, Square } from 'lucide-react';
+import { Brain, Loader2, Mic, Square, ChevronLeft, FolderOpen, Layers, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import {
+  CRITERIOS_GERAIS,
+  NOME_CRITERIOS_GERAIS,
+  inferirTipoProjeto,
+  type TipoProjeto,
+} from '@/lib/criteriosAvaliacao';
+import { camposNotaParaFirestore } from '@/lib/extrairNotasCriterios';
 
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 const MICROFONE_POPUP_KEY = 'criar-projeto-microfone-popup-visto';
@@ -43,8 +52,9 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
   'Preencher Anexos'
 ];
@@ -58,10 +68,8 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
     const userDocRef = doc(db, 'usuarios', userId);
     const userDoc = await getDoc(userDocRef);
     if (!userDoc.exists()) {
-      return {
-        podeCriar: false,
-        mensagem: 'Usuário não encontrado. Por favor, faça login novamente.',
-      };
+      // Doc será criado por ensureUsuarioFirestore antes de chegar aqui; fallback permissivo (IS).
+      return { podeCriar: true, mensagem: '' };
     }
     return { podeCriar: true, mensagem: '' };
   } catch (error) {
@@ -86,29 +94,22 @@ const dicasProjetos = [
   "✅ Dica: Certifique-se de que todos os documentos exigidos pelo edital estão completos e corretos antes do envio."
 ];
 
-/** Critérios gerais de avaliação de projetos culturais (usados quando nenhum edital é selecionado) */
-const CRITERIOS_GERAIS = `Critérios gerais de avaliação de projetos culturais:
-
-1. RELEVÂNCIA CULTURAL E ARTÍSTICA – Pertinência do projeto para a área cultural; contribuição para a diversidade e para o fortalecimento das expressões culturais.
-
-2. VIABILIDADE TÉCNICA E FINANCEIRA – Coerência entre objetivos, metodologia, cronograma e orçamento; capacidade de execução da proposta.
-
-3. QUALIFICAÇÃO DA EQUIPE – Experiência e competências dos responsáveis; adequação do perfil à natureza do projeto.
-
-4. IMPACTO SOCIAL E DEMOCRATIZAÇÃO – Efeitos esperados na comunidade; ampliação do acesso à cultura e à participação cultural.
-
-5. INOVAÇÃO E DIVERSIDADE – Contribuição para a inovação no campo cultural; valorização da diversidade cultural e das expressões regionais.
-
-6. SUSTENTABILIDADE – Potencial de continuidade e legado do projeto após o período de apoio.
-
-7. COMUNICAÇÃO E DIVULGAÇÃO – Estratégias de divulgação e de registro do projeto; alcance e visibilidade.`;
-
 /** Formata nome do edital: primeira letra maiúscula, resto minúscula */
 const formatarNomeEdital = (s: string) => {
   if (!s || typeof s !== 'string') return s;
   const t = s.trim();
   if (!t) return s;
   return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+};
+
+type ProjetoResumo = {
+  id: string;
+  nome?: string;
+  descricao?: string;
+  edital_associado?: string;
+  edital_id?: string;
+  tipo_projeto?: TipoProjeto;
+  data_criacao?: { toDate?: () => Date };
 };
 
 const CriarProjeto = () => {
@@ -136,6 +137,20 @@ const CriarProjeto = () => {
   const [checkingLimit, setCheckingLimit] = useState(true);
   const [searchParams] = useSearchParams();
   const editalIdParam = searchParams.get('edital');
+  const modoParam = searchParams.get('modo');
+  const abrirFormularioDireto =
+    Boolean(editalIdParam) || modoParam === 'mae' || modoParam === 'edital';
+  const [pageView, setPageView] = useState<'hub' | 'form'>(() =>
+    abrirFormularioDireto ? 'form' : 'hub'
+  );
+  const [tipoProjeto, setTipoProjeto] = useState<TipoProjeto>(() => {
+    if (editalIdParam || modoParam === 'edital') return 'edital';
+    if (modoParam === 'mae') return 'mae';
+    return 'edital';
+  });
+  const [projetosUsuario, setProjetosUsuario] = useState<ProjetoResumo[]>([]);
+  const [loadingProjetosHub, setLoadingProjetosHub] = useState(false);
+  const [projetoMaeOrigemId, setProjetoMaeOrigemId] = useState('');
   
   // Estados para análise IA
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
@@ -194,8 +209,8 @@ const CriarProjeto = () => {
 
   // Função para buscar textos do edital e selecionados
   const fetchEditalESelecionados = async (editalNome: string) => {
-    const db = getFirestore();
-    const editalQuery = query(collection(db, 'editais'), where('nome', '==', editalNome));
+    const editaisDb = getEditaisDb();
+    const editalQuery = query(collection(editaisDb, 'editais'), where('nome', '==', editalNome));
     const editalSnap = await getDocs(editalQuery);
     if (!editalSnap.empty) {
       const editalDoc = editalSnap.docs[0].data();
@@ -270,7 +285,7 @@ const CriarProjeto = () => {
         dadosConsolidados.texto_selecionados = editalResult.texto_selecionados;
       } else {
         dadosConsolidados.criterios = CRITERIOS_GERAIS;
-        dadosConsolidados.nome_edital = 'Critérios gerais de avaliação de projetos culturais';
+        dadosConsolidados.nome_edital = NOME_CRITERIOS_GERAIS;
       }
 
       if (!dadosConsolidados.criterios || dadosConsolidados.criterios.trim() === '') {
@@ -308,8 +323,8 @@ const CriarProjeto = () => {
         setAnalisando(false);
         const isFailedFetch = networkErr instanceof TypeError && networkErr.message === 'Failed to fetch';
         if (isFailedFetch) {
-          const dica = import.meta.env.VITE_FUNCTIONS_BASE_URL
-            ? ' O app está apontando para o emulador local. Suba o emulador com: firebase emulators:start --only functions (ou remova VITE_FUNCTIONS_BASE_URL do .env para usar as functions em produção).'
+          const dica = import.meta.env.VITE_FUNCTIONS_USE_EMULATOR === '1'
+            ? ' Emulador ativo: suba com firebase emulators:start --only functions ou tire VITE_FUNCTIONS_USE_EMULATOR do .env.local.'
             : ' Verifique sua conexão ou tente novamente em alguns instantes.';
           throw new Error('Não foi possível conectar ao servidor de análise.' + dica);
         }
@@ -331,92 +346,130 @@ const CriarProjeto = () => {
         throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
       }
       
+      const dbStream = getFirestore();
+      const projetoRef = doc(dbStream, 'projetos', projetoIdParam);
+      await updateDoc(projetoRef, {
+        analise_ia_completa: false,
+        data_atualizacao: serverTimestamp(),
+      });
+
       // Resposta aceita: navegar para a página do projeto para acompanhar o streaming
       navigate(`/projeto/${projetoIdParam}?streaming=true`);
-      
-      // Processar stream
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let fullContent = '';
+      let streamFinished = false;
       let jaEscreveuPrimeiroChunk = false;
-      
+      let pendingPartialSave: string | null = null;
+      let streamEncerrado = false;
+
+      const flushPartialToFirestore = async (text: string, immediate = false) => {
+        if (!text || streamEncerrado) return;
+        pendingPartialSave = text;
+        const run = async () => {
+          if (streamEncerrado) return;
+          const snapshot = pendingPartialSave;
+          if (!snapshot) return;
+          pendingPartialSave = null;
+          await updateDoc(projetoRef, {
+            analise_ia: snapshot,
+            analise_ia_completa: false,
+            data_atualizacao: serverTimestamp(),
+          });
+        };
+        if (immediate) {
+          clearTimeout((window as unknown as { __analiseUpdateTimeout?: ReturnType<typeof setTimeout> }).__analiseUpdateTimeout);
+          await run();
+          return;
+        }
+        clearTimeout((window as unknown as { __analiseUpdateTimeout?: ReturnType<typeof setTimeout> }).__analiseUpdateTimeout);
+        (window as unknown as { __analiseUpdateTimeout?: ReturnType<typeof setTimeout> }).__analiseUpdateTimeout = setTimeout(() => {
+          void run();
+        }, 200);
+      };
+
+      const finalizeAnalise = async (text: string) => {
+        streamEncerrado = true;
+        clearTimeout((window as unknown as { __analiseUpdateTimeout?: ReturnType<typeof setTimeout> }).__analiseUpdateTimeout);
+        pendingPartialSave = null;
+        const updatePayload: Record<string, unknown> = {
+          analise_ia: text,
+          analise_ia_completa: true,
+          primeira_analise_completa: true,
+          etapa_atual: 2,
+          data_atualizacao: serverTimestamp(),
+        };
+        const notaCampos = camposNotaParaFirestore(text);
+        if (notaCampos) Object.assign(updatePayload, notaCampos);
+        await updateDoc(projetoRef, updatePayload);
+        try {
+          trackAnalysisCompleted({ projectId: projetoIdParam });
+        } catch (err) {
+          console.error('Erro ao trackear conclusão da análise:', err);
+        }
+      };
+
+      const handleStreamPayload = async (data: { content?: string; done?: boolean; fullContent?: string }) => {
+        if (data.content) {
+          fullContent += data.content;
+          if (!jaEscreveuPrimeiroChunk) {
+            jaEscreveuPrimeiroChunk = true;
+            await flushPartialToFirestore(fullContent, true);
+          } else {
+            await flushPartialToFirestore(fullContent);
+          }
+        }
+        if (data.done) {
+          fullContent = data.fullContent ?? fullContent;
+          streamFinished = true;
+          await finalizeAnalise(fullContent);
+          setMostrarAnalise(false);
+          setAnalisando(false);
+          setLoading(false);
+        }
+      };
+
       if (!reader) {
         throw new Error('Stream não disponível');
       }
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        
+
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.content) {
-                fullContent += data.content;
-                
-                // Atualizar análise no Firestore: primeiro write imediato (página Projeto exibe conteúdo); demais debounced 200ms
-                if (projetoIdParam && fullContent.length > 0) {
-                  const db = getFirestore();
-                  const ref = doc(db, 'projetos', projetoIdParam);
-                  if (!jaEscreveuPrimeiroChunk) {
-                    jaEscreveuPrimeiroChunk = true;
-                    await updateDoc(ref, {
-                      analise_ia: fullContent,
-                      data_atualizacao: serverTimestamp()
-                    });
-                  } else {
-                    clearTimeout((window as any).__analiseUpdateTimeout);
-                    (window as any).__analiseUpdateTimeout = setTimeout(async () => {
-                      await updateDoc(ref, {
-                        analise_ia: fullContent,
-                        data_atualizacao: serverTimestamp()
-                      });
-                    }, 200);
-                  }
-                }
-              }
-              
-              if (data.done) {
-                // Salvar análise final no Firestore
-                if (projetoIdParam) {
-                  const db = getFirestore();
-                  const ref = doc(db, 'projetos', projetoIdParam);
-                  await updateDoc(ref, {
-                    analise_ia: data.fullContent || fullContent,
-                    data_atualizacao: serverTimestamp()
-                  });
-                  
-                  // Track analysis completed
-                  try {
-                    const userRef = doc(db, 'usuarios', user.uid);
-                    const userSnap = await getDoc(userRef);
-                    const userData = userSnap.exists() ? userSnap.data() : {};
-                    
-                    trackAnalysisCompleted({
-                      projectId: projetoIdParam,
-                    });
-                  } catch (err) {
-                    console.error('Erro ao trackear conclusão da análise:', err);
-                  }
-                }
-                
-                setMostrarAnalise(false);
-                setAnalisando(false);
-                setLoading(false);
-                return;
-              }
-            } catch (e) {
-              console.error('Erro ao processar chunk:', e);
-            }
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            await handleStreamPayload(data);
+            if (streamFinished) break;
+          } catch (e) {
+            console.error('Erro ao processar chunk:', e);
           }
         }
+        if (streamFinished) break;
+      }
+
+      if (!streamFinished && buffer.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.slice(6));
+          await handleStreamPayload(data);
+        } catch {
+          /* buffer incompleto */
+        }
+      }
+
+      if (!streamFinished && fullContent.trim()) {
+        await flushPartialToFirestore(fullContent, true);
+      }
+      if (streamFinished) {
+        return;
       }
     } catch (e: any) {
       console.error('Erro ao analisar projeto:', e);
@@ -449,8 +502,8 @@ const CriarProjeto = () => {
 
   useEffect(() => {
     const fetchEditais = async () => {
-      const db = getFirestore();
-      const snap = await getDocs(collection(db, 'editais'));
+      const editaisDb = getEditaisDb();
+      const snap = await getDocs(collection(editaisDb, 'editais'));
       const now = new Date();
       
       const editaisFiltrados = snap.docs
@@ -488,7 +541,7 @@ const CriarProjeto = () => {
       const editalIdFromUrl = searchParams.get('edital');
       let listaFinal = editaisFiltrados;
       if (editalIdFromUrl && !editaisFiltrados.some(e => e.id === editalIdFromUrl)) {
-        const ref = doc(db, 'editais', editalIdFromUrl);
+        const ref = doc(getEditaisDb(), 'editais', editalIdFromUrl);
         const docSnap = await getDoc(ref);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -529,8 +582,60 @@ const CriarProjeto = () => {
   useEffect(() => {
     if (!editalIdParam || editais.length === 0) return;
     const naLista = editais.find(e => e.id === editalIdParam);
-    if (naLista?.nome) setEditalAssociado(naLista.nome);
+    if (naLista?.nome) {
+      setEditalAssociado(naLista.nome);
+      setTipoProjeto('edital');
+      setPageView('form');
+    }
   }, [editalIdParam, editais]);
+
+  useEffect(() => {
+    const precisaLista =
+      pageView === 'hub' || (pageView === 'form' && tipoProjeto === 'edital');
+    if (!precisaLista) return;
+    const user = auth.currentUser;
+    if (!user) {
+      setProjetosUsuario([]);
+      return;
+    }
+    setLoadingProjetosHub(true);
+    const db = getFirestore();
+    const q = query(collection(db, 'projetos'), where('user_id', '==', user.uid));
+    getDocs(q)
+      .then((snap) => {
+        const list: ProjetoResumo[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<ProjetoResumo, 'id'>),
+        }));
+        list.sort((a, b) => {
+          const ta = a.data_criacao?.toDate?.()?.getTime() ?? 0;
+          const tb = b.data_criacao?.toDate?.()?.getTime() ?? 0;
+          return tb - ta;
+        });
+        setProjetosUsuario(list);
+      })
+      .finally(() => setLoadingProjetosHub(false));
+  }, [pageView, tipoProjeto]);
+
+  const projetosMae = projetosUsuario.filter((p) => inferirTipoProjeto(p) === 'mae');
+
+  const aplicarProjetoMaeComoBase = (maeId: string) => {
+    setProjetoMaeOrigemId(maeId);
+    const mae = projetosMae.find((p) => p.id === maeId);
+    if (mae?.descricao?.trim()) {
+      setDescricao((prev) => (prev.trim() ? prev : mae.descricao!.trim()));
+    }
+  };
+
+  const iniciarFormulario = (tipo: TipoProjeto) => {
+    setTipoProjeto(tipo);
+    if (tipo === 'mae') {
+      setEditalAssociado('');
+      setShowUploadEdital(false);
+      setProjetoMaeOrigemId('');
+    }
+    setPageView('form');
+  };
 
   const SILENCE_STOP_MS = 5000; // parar após 5 segundos de silêncio
 
@@ -697,7 +802,7 @@ const CriarProjeto = () => {
 
     try {
       setUploading(true);
-      const db = getFirestore();
+      const writeDb = getEditaisWriteDb();
       let arquivoUrl = '';
 
       if (novoEdital.arquivo) {
@@ -713,7 +818,7 @@ const CriarProjeto = () => {
         data_criacao: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, 'editais'), editalData);
+      const docRef = await addDoc(collection(writeDb, 'editais'), editalData);
       
       // Adiciona o novo edital à lista de editais
       const novoEditalCompleto = {
@@ -748,9 +853,6 @@ const CriarProjeto = () => {
     e.preventDefault();
     setErro('');
     
-    console.log('Iniciando criação do projeto...');
-    console.log('Dados do formulário:', { nome, descricao, editalAssociado });
-    
     // Validações básicas
     if (!nome.trim()) {
       setErro('Nome do projeto é obrigatório.');
@@ -763,12 +865,17 @@ const CriarProjeto = () => {
       setLoading(false);
       return;
     }
+
+    if (tipoProjeto === 'edital' && !showUploadEdital && !editalAssociado.trim()) {
+      setErro('Selecione um edital ou crie um projeto base (mãe) sem edital.');
+      setLoading(false);
+      return;
+    }
     
     let editalId = '';
     
     // Se estiver no modo de upload de novo edital, salva o edital primeiro
     if (showUploadEdital) {
-      console.log('Modo upload de edital ativado');
       const sucesso = await salvarNovoEdital();
       if (!sucesso) return;
       
@@ -776,13 +883,10 @@ const CriarProjeto = () => {
       if (editais.length > 0) {
         editalId = editais[editais.length - 1].id;
       }
-    } else if (editalAssociado) {
-      console.log('Edital selecionado:', editalAssociado);
-      // Se um edital existente foi selecionado, pega o ID
+    } else if (tipoProjeto === 'edital' && editalAssociado) {
       const editalSelecionado = editais.find(e => e.nome === editalAssociado);
       if (editalSelecionado) {
         editalId = editalSelecionado.id;
-        console.log('ID do edital encontrado:', editalId);
       }
     }
     
@@ -797,7 +901,7 @@ const CriarProjeto = () => {
         return;
       }
       
-      console.log('Usuário logado:', user.uid);
+      await ensureUsuarioFirestore(user);
       
       // Verificar limite de projetos antes de criar
       const verificacaoLimite = await verificarLimiteProjetos(user.uid);
@@ -807,39 +911,36 @@ const CriarProjeto = () => {
         return;
       }
       
-      console.log(`Limite verificado: ${verificacaoLimite.projetosAtivos}/${verificacaoLimite.limite} projetos criados`);
       setEtapaAtualIA(0); // Salvando projeto
-      console.log('Salvando projeto no Firestore...');
       // Salva no Firestore
       const db = getFirestore();
-      const projetoData: any = {
+      const projetoData: Record<string, unknown> = {
         nome,
         descricao,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
         user_id: user.uid,
-        etapa_atual: 1, // já vai para Avaliar com IA
+        etapa_atual: 1,
+        tipo_projeto: tipoProjeto,
       };
       
-      console.log('Dados do projeto a serem salvos:', projetoData);
-      
-      // Adiciona a referência ao edital se existir
-      if (editalId) {
+      if (tipoProjeto === 'edital' && editalId) {
         projetoData.edital_id = editalId;
         projetoData.edital_associado = editalAssociado;
+        if (projetoMaeOrigemId) {
+          projetoData.projeto_mae_id = projetoMaeOrigemId;
+        }
       }
       
-      console.log('Salvando projeto no Firestore...');
       const docRef = await addDoc(collection(db, 'projetos'), projetoData);
-      console.log('Projeto criado com ID:', docRef.id);
       
       const userRef = doc(db, 'usuarios', user.uid);
-      await updateDoc(userRef, { projetos_criados_count: increment(1) });
+      await setDoc(userRef, { projetos_criados_count: increment(1) }, { merge: true });
       
       // Track project created
       trackProjectCreated({
         projectId: docRef.id,
-        hasEdital: !!editalId,
+        hasEdital: tipoProjeto === 'edital' && !!editalId,
       });
 
       // Evento para Tag Manager / Analytics: project_created (configurar conversão no GTM com esse evento)
@@ -853,10 +954,19 @@ const CriarProjeto = () => {
       setProjetoId(docRef.id);
       // Não fazer setLoading(false) aqui, pois a análise vai continuar
       // O loading será desabilitado quando a análise terminar ou houver erro
-      await analisarComIA(nome, descricao, editalAssociado || null, docRef.id);
-    } catch (err) {
+      const editalParaAnalise =
+        tipoProjeto === 'edital' ? editalAssociado || null : null;
+      await analisarComIA(nome, descricao, editalParaAnalise, docRef.id);
+    } catch (err: unknown) {
       console.error('Erro ao criar projeto:', err);
-      setErro(`Erro ao criar projeto: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+      const code = (err as { code?: string })?.code;
+      if (code === 'permission-denied') {
+        setErro(
+          'Sem permissão no Firestore (projeto oraculo-is). Saia e entre de novo; se persistir, publique as rules: firebase deploy --only firestore:rules --project oraculo-is'
+        );
+      } else {
+        setErro(`Erro ao criar projeto: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+      }
       setLoading(false);
     }
   };
@@ -1018,15 +1128,141 @@ const CriarProjeto = () => {
               <Loader2 className="h-10 w-10 text-oraculo-blue animate-spin" />
               <p className="text-gray-600 font-medium">Verificando...</p>
             </div>
+          ) : pageView === 'hub' ? (
+          <div className="w-full max-w-5xl mx-auto min-w-0 space-y-8">
+            <div>
+              <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">Criar projeto</h1>
+              <p className="text-gray-600 text-sm md:text-base">
+                Continue um projeto que já existe ou crie um novo — base (mãe) para desenvolver a ideia, ou já vinculado a um edital.
+              </p>
+            </div>
+
+            <section className="bg-white rounded-xl shadow-md border border-gray-200 p-4 md:p-8">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                <FolderOpen className="h-5 w-5 text-oraculo-blue" />
+                Usar projeto existente
+              </h2>
+              {loadingProjetosHub ? (
+                <div className="flex items-center gap-2 text-gray-600 py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-oraculo-blue" />
+                  Carregando seus projetos…
+                </div>
+              ) : projetosUsuario.length === 0 ? (
+                <p className="text-gray-600 text-sm">Você ainda não tem projetos. Crie o primeiro abaixo.</p>
+              ) : (
+                <ul className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                  {projetosUsuario.map((p) => {
+                    const tipo = inferirTipoProjeto(p);
+                    return (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/projeto/${p.id}`)}
+                          className="w-full text-left rounded-lg border border-gray-200 hover:border-oraculo-blue/50 hover:bg-oraculo-blue/5 px-4 py-3 transition"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="font-semibold text-gray-900">{p.nome || 'Sem nome'}</span>
+                            <span
+                              className={`text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full ${
+                                tipo === 'mae'
+                                  ? 'bg-violet-100 text-violet-800'
+                                  : 'bg-oraculo-blue/10 text-oraculo-blue'
+                              }`}
+                            >
+                              {tipo === 'mae' ? 'Projeto base' : 'Para edital'}
+                            </span>
+                          </div>
+                          {tipo === 'edital' && p.edital_associado && (
+                            <p className="text-xs text-gray-500">{formatarNomeEdital(p.edital_associado)}</p>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section className="bg-white rounded-xl shadow-md border border-gray-200 p-4 md:p-8">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-2">
+                <FilePlus2 className="h-5 w-5 text-oraculo-purple" />
+                Criar novo projeto
+              </h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Projeto <strong>base (mãe)</strong> é avaliado com critérios gerais culturais e pode virar versões para editais depois.
+                Projeto <strong>para edital</strong> já nasce alinhado a um edital aberto.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => iniciarFormulario('mae')}
+                  className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-white p-6 text-left hover:border-violet-400 transition shadow-sm"
+                >
+                  <Layers className="h-8 w-8 text-violet-600 mb-3" />
+                  <h3 className="font-bold text-gray-900 mb-1">Projeto base (mãe)</h3>
+                  <p className="text-sm text-gray-600">
+                    Desenvolva a ideia sem edital. Avaliação com critérios gerais de projetos culturais.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => iniciarFormulario('edital')}
+                  className="rounded-xl border-2 border-oraculo-blue/30 bg-gradient-to-br from-oraculo-blue/5 to-white p-6 text-left hover:border-oraculo-blue transition shadow-sm"
+                >
+                  <FilePlus2 className="h-8 w-8 text-oraculo-blue mb-3" />
+                  <h3 className="font-bold text-gray-900 mb-1">Projeto para edital</h3>
+                  <p className="text-sm text-gray-600">
+                    Escolha o edital e submeta a proposta já no contexto certo para captação.
+                  </p>
+                </button>
+              </div>
+            </section>
+          </div>
           ) : (
           <div className="w-full max-w-5xl mx-auto min-w-0">
+            {!editalIdParam && (
+              <button
+                type="button"
+                onClick={() => setPageView('hub')}
+                className="flex items-center gap-1 text-sm text-oraculo-blue hover:underline mb-4"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Voltar às opções
+              </button>
+            )}
             <div className="mb-4 md:mb-8">
               <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2 break-words">
-                Criar Novo Projeto
+                {tipoProjeto === 'mae' ? 'Novo projeto base (mãe)' : 'Novo projeto para edital'}
               </h1>
               <p className="text-gray-600 text-sm md:text-base break-words">
-                Preencha os detalhes do seu projeto cultural para começar a usar o Oráculo AI.
+                {tipoProjeto === 'mae'
+                  ? 'Descreva sua ideia cultural. A IA avalia com critérios gerais — depois você pode derivar versões para editais.'
+                  : 'Preencha os detalhes e escolha o edital. A avaliação usa os critérios oficiais desse edital.'}
               </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => iniciarFormulario('mae')}
+                  className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                    tipoProjeto === 'mae'
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'border-gray-300 text-gray-600 hover:border-violet-400'
+                  }`}
+                >
+                  Projeto base
+                </button>
+                <button
+                  type="button"
+                  onClick={() => iniciarFormulario('edital')}
+                  className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                    tipoProjeto === 'edital'
+                      ? 'bg-oraculo-blue text-white border-oraculo-blue'
+                      : 'border-gray-300 text-gray-600 hover:border-oraculo-blue'
+                  }`}
+                >
+                  Para edital
+                </button>
+              </div>
             </div>
 
             {/* Barra de progresso - no mobile só etapas 1, 2, 3 e "..."; no desktop todas */}
@@ -1072,7 +1308,9 @@ const CriarProjeto = () => {
                 <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
               </h2>
               <p className="text-gray-700 text-sm md:text-base mb-0 leading-relaxed">
-                Preencha os detalhes abaixo e clique em &quot;Avaliar com IA&quot;. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
+                {tipoProjeto === 'mae'
+                  ? 'Clique em Avaliar com IA para uma avaliação rigorosa com critérios gerais de projetos culturais (relevância, viabilidade, impacto, equipe e mais). Ideal para amadurecer a ideia antes de escolher editais.'
+                  : 'O Oráculo analisa seu projeto como um avaliador, com os critérios do edital escolhido, referências de selecionados e boas práticas de projetos culturais.'}
               </p>
             </div>
 
@@ -1090,31 +1328,64 @@ const CriarProjeto = () => {
                       required
                     />
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
-                      <label className="block text-sm font-medium text-gray-700">Edital associado</label>
-                      <button
-                        type="button"
-                        onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
-                        className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium self-start"
-                      >
-                        Cadastrar novo edital
-                      </button>
+                  {tipoProjeto === 'edital' && (
+                    <>
+                      {projetosMae.length > 0 && (
+                        <div className="min-w-0">
+                          <label className="block text-sm font-medium mb-1 text-gray-700">
+                            Basear em projeto mãe (opcional)
+                          </label>
+                          <select
+                            className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
+                            value={projetoMaeOrigemId}
+                            onChange={(e) => aplicarProjetoMaeComoBase(e.target.value)}
+                          >
+                            <option value="">Não usar projeto base</option>
+                            {projetosMae.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.nome || 'Projeto base'}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Reutiliza a descrição do projeto mãe se o campo abaixo estiver vazio.
+                          </p>
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
+                          <label className="block text-sm font-medium text-gray-700">Edital associado</label>
+                          <button
+                            type="button"
+                            onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
+                            className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium self-start"
+                          >
+                            Cadastrar novo edital
+                          </button>
+                        </div>
+                        <select
+                          className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
+                          value={editalAssociado}
+                          onChange={e => setEditalAssociado(e.target.value)}
+                          required={tipoProjeto === 'edital'}
+                        >
+                          <option value="">Selecione um edital</option>
+                          {editais.map((edital) => (
+                            <option key={edital.id} value={edital.nome}>
+                              {formatarNomeEdital(edital.nome)} - {edital.orgao}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  {tipoProjeto === 'mae' && (
+                    <div className="rounded-lg border border-violet-200 bg-violet-50/80 px-4 py-3 text-sm text-violet-900">
+                      Este projeto não fica preso a um edital. A avaliação usa{' '}
+                      <strong>critérios gerais culturais</strong>. Quando quiser submeter a um edital, crie um
+                      &quot;Projeto para edital&quot; e opcionalmente baseie no projeto mãe.
                     </div>
-                    
-                    <select
-                      className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
-                      value={editalAssociado}
-                      onChange={e => setEditalAssociado(e.target.value)}
-                    >
-                      <option value="">Selecione um edital</option>
-                      {editais.map((edital) => (
-                        <option key={edital.id} value={edital.nome}>
-                          {formatarNomeEdital(edital.nome)} - {edital.orgao}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  )}
                   <div className="min-w-0">
                     <label className="block text-sm font-medium mb-1 text-gray-700">Descrição do projeto</label>
                     <div className="flex flex-col gap-3">

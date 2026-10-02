@@ -37,6 +37,7 @@ import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
 import PreencherAnexos from './pages/PreencherAnexos';
 import CriarOrcamento from './pages/CriarOrcamento';
 import CriarCronograma from './pages/CriarCronograma';
+import ProjetoEquipe from './pages/ProjetoEquipe';
 import DocumentosInscricao from './pages/DocumentosInscricao';
 import ResumoProjeto from './pages/ResumoProjeto';
 import Termos from './pages/Termos';
@@ -107,6 +108,7 @@ const App = () => (
           <Route path="/projeto/:id/gerar-textos" element={<ProtectedRoute><GerarTextos /></ProtectedRoute>} />
           <Route path="/projeto/:id/criar-orcamento" element={<ProtectedRoute><CriarOrcamento /></ProtectedRoute>} />
           <Route path="/projeto/:id/criar-cronograma" element={<ProtectedRoute><CriarCronograma /></ProtectedRoute>} />
+          <Route path="/projeto/:id/equipe" element={<ProtectedRoute><ProjetoEquipe /></ProtectedRoute>} />
           <Route path="/projeto/:id/documentos-inscricao" element={<ProtectedRoute><DocumentosInscricao /></ProtectedRoute>} />
           <Route path="/projeto/:id/preencher-anexos" element={<ProtectedRoute><PreencherAnexos /></ProtectedRoute>} />
           <Route path="/projeto/:id/resumo" element={<ProtectedRoute><ResumoProjeto /></ProtectedRoute>} />

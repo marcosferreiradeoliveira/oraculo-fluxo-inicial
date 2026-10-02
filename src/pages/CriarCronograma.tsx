@@ -13,6 +13,12 @@ import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 import * as XLSX from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
+import {
+  limparRubricasOrfas,
+  sugerirVinculosRubricasEtapas,
+} from '@/lib/vinculoCronogramaOrcamento';
 
 // Dev: proxy Vite. Produção: rewrite do Firebase Hosting para a função (mesma origem, sem CORS)
 const GERAR_CRONOGRAMA_URL = '/api/gerarCronogramaIA';
@@ -56,7 +62,8 @@ export interface EtapaCronograma {
 interface ProjetoDocument {
   id: string;
   nome?: string;
-  cronograma?: { etapas?: EtapaCronograma[]; atualizado_em?: unknown };
+  cronograma?: { etapas?: EtapaCronograma[]; atualizado_em?: unknown; duracaoMeses?: number };
+  orcamento?: { rubricas?: { id?: string; nome?: string }[] };
   [key: string]: unknown;
 }
 
@@ -76,9 +83,10 @@ const CriarCronograma = () => {
   const [etapasAnteriores, setEtapasAnteriores] = useState<EtapaCronograma[]>([]);
   const [duracaoProjetoMeses, setDuracaoProjetoMeses] = useState<number | ''>('');
   const [expandedEtapaId, setExpandedEtapaId] = useState<string | null>(null);
+  const [abaCronograma, setAbaCronograma] = useState('etapas');
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-  const currentStep = 5;
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const currentStep = 4;
 
   // Analytics: etapa "Criar Cronograma" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
   const stepViewedRef = React.useRef(false);
@@ -153,8 +161,22 @@ const CriarCronograma = () => {
     );
   };
 
-  const rubricasOrcamento = (projeto?.orcamento as { rubricas?: { nome?: string; id?: string }[] } | undefined)?.rubricas ?? [];
+  const rubricasOrcamento = projeto?.orcamento?.rubricas ?? [];
   const nomesRubricas = rubricasOrcamento.map((r) => r.nome || '').filter(Boolean);
+  const rubricasParaVinculo = rubricasOrcamento
+    .filter((r) => (r.nome || '').trim())
+    .map((r, i) => ({ id: r.id || `r-${i}-${r.nome}`, nome: (r.nome || '').trim() }));
+
+  const aplicarSugestaoVinculos = () => {
+    if (!rubricasParaVinculo.length) {
+      toast.info('Salve o orçamento com rubricas antes de sugerir vínculos.');
+      return;
+    }
+    const sugeridas = sugerirVinculosRubricasEtapas(etapas, rubricasParaVinculo);
+    setEtapas(sugeridas as EtapaCronograma[]);
+    toast.success('Vínculos sugeridos — revise na aba Orçamento × Cronograma.');
+    setAbaCronograma('vinculos');
+  };
 
   /** Lista de etapas ordenada só para exibição: pré → produção → pós → divulgação (concomitantes mantidas) */
   const etapasOrdenadas = useMemo(() => ordenarEtapasPorFase(etapas), [etapas]);
@@ -293,9 +315,14 @@ const CriarCronograma = () => {
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
       const duracaoMesesToSave = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : null;
+      const nomesValidos = new Set(nomesRubricas.map((n) => n.trim()));
+      const etapasLimpas = limparRubricasOrfas(etapas, nomesValidos) as EtapaCronograma[];
+      if (nomesValidos.size > 0 && JSON.stringify(etapasLimpas) !== JSON.stringify(etapas)) {
+        setEtapas(etapasLimpas);
+      }
       await updateDoc(projetoRef, {
         cronograma: {
-          etapas,
+          etapas: etapasLimpas,
           ...(duracaoMesesToSave != null && { duracaoMeses: duracaoMesesToSave }),
           atualizado_em: serverTimestamp(),
         },
@@ -449,10 +476,10 @@ const CriarCronograma = () => {
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
                 <Button
                   size="lg"
-                  onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
+                  onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Próxima etapa: Documentos de Inscrição <span className="ml-2 opacity-90">→</span>
+                  Próximo: Criar Orçamento <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>
@@ -473,8 +500,9 @@ const CriarCronograma = () => {
                             `/projeto/${id}`,
                             `/projeto/${id}/alterar-com-ia`,
                             `/projeto/${id}/gerar-textos`,
-                            `/projeto/${id}/criar-orcamento`,
                             `/projeto/${id}/criar-cronograma`,
+                            `/projeto/${id}/criar-orcamento`,
+                            `/projeto/${id}/equipe`,
                             `/projeto/${id}/documentos-inscricao`,
                             `/projeto/${id}/preencher-anexos`,
                           ];
@@ -514,14 +542,19 @@ const CriarCronograma = () => {
               </div>
             </div>
 
-            {/* Formulário de etapas */}
+            {/* Cronograma: etapas + vínculo com orçamento */}
             <Card className="bg-white shadow-lg border-2 border-gray-200 mb-6 md:mb-8">
-              <CardHeader className="pb-4 px-4 md:px-6 pt-4 md:pt-6">
+              <Tabs value={abaCronograma} onValueChange={setAbaCronograma} className="w-full">
+              <CardHeader className="pb-4 px-4 md:px-6 pt-4 md:pt-6 space-y-4">
                 <div className="flex flex-col gap-4">
                   <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
                     <Calendar className="h-5 w-5 md:h-6 md:w-6 text-oraculo-blue flex-shrink-0" />
-                    Etapas do cronograma
+                    Cronograma do projeto
                   </CardTitle>
+                  <TabsList className="grid w-full max-w-md grid-cols-2">
+                    <TabsTrigger value="etapas">Etapas</TabsTrigger>
+                    <TabsTrigger value="vinculos">Orçamento × Cronograma</TabsTrigger>
+                  </TabsList>
                   <p className="text-sm text-gray-600">
                     Cada etapa deve estar associada a uma macro etapa (Pré-produção, Produção, Divulgação ou Pós-produção). Atribua a fase na coluna &quot;Fase&quot; da tabela.
                   </p>
@@ -556,6 +589,7 @@ const CriarCronograma = () => {
                   </div>
                 </div>
               </CardHeader>
+              <TabsContent value="etapas" className="mt-0">
               <CardContent className="space-y-4 px-4 md:px-6 pb-4 md:pb-6">
                 <div className="overflow-x-auto -mx-2 md:mx-0">
                   <table className="w-full min-w-[600px]">
@@ -654,7 +688,7 @@ const CriarCronograma = () => {
                                 <td colSpan={6} className="px-4 py-3">
                                   <div className="text-sm font-medium text-gray-700 mb-2">Rubricas associadas à etapa</div>
                                   {nomesRubricas.length === 0 ? (
-                                    <p className="text-gray-500 text-sm">Nenhuma rubrica no orçamento do projeto. Crie o orçamento em &quot;Criar Orçamento&quot; para associar rubricas às etapas.</p>
+                                    <p className="text-gray-500 text-sm">Nenhuma rubrica ainda — o orçamento vem na próxima etapa. Depois de criá-lo, volte aqui para associar rubricas ou regere o cronograma.</p>
                                   ) : (
                                     <div className="flex flex-wrap gap-3">
                                       {nomesRubricas.map((nome) => {
@@ -738,6 +772,28 @@ const CriarCronograma = () => {
                   </div>
                 )}
               </CardContent>
+              </TabsContent>
+              <TabsContent value="vinculos" className="mt-0">
+                <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
+                  <VinculoCronogramaOrcamentoPainel
+                    etapas={etapas}
+                    rubricas={rubricasParaVinculo}
+                    onEtapasChange={(next) => setEtapas(next as EtapaCronograma[])}
+                    onSugerirVinculos={rubricasParaVinculo.length ? aplicarSugestaoVinculos : undefined}
+                    emptyRubricasMessage="O orçamento ainda não tem rubricas. Conclua a etapa Criar Orçamento e volte aqui, ou associe manualmente quando existirem rubricas salvas."
+                  />
+                  <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
+                    <Button
+                      onClick={salvarCronograma}
+                      disabled={salvando || etapas.length === 0}
+                      className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white"
+                    >
+                      {salvando ? 'Salvando…' : 'Salvar cronograma e vínculos'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </TabsContent>
+              </Tabs>
             </Card>
 
             {/* Sugestões de alteração do cronograma — em cima do estado atual */}

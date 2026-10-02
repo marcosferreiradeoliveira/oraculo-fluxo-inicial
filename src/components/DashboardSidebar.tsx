@@ -14,9 +14,11 @@ import {
   X,
   Plus,
   PlayCircle,
+  FolderKanban,
   ExternalLink,
   Calendar,
-  LogOut
+  LogOut,
+  Building2,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
@@ -29,15 +31,19 @@ type MenuItem = {
   menuItem: string; // canonical: "inicio" | "editais" | "perfil" | etc
   external?: boolean;
   outline?: boolean;
+  /** Ancora na home (ex.: fornecedores) */
+  homeHash?: string;
 };
 
 const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
+  { title: 'Fornecedores', url: '/', icon: Building2, menuItem: 'fornecedores', homeHash: 'fornecedores' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },
+  { title: 'Gerenciador de Projetos', url: 'https://gerenciadeprojeto-is.web.app/', icon: FolderKanban, menuItem: 'gerenciador_projetos', external: true, outline: true },
 ];
 
 export function DashboardSidebar() {
@@ -161,11 +167,17 @@ export function DashboardSidebar() {
                   </a>
                 ) : (
                   <NavLink
-                    to={item.url}
-                    onClick={() => trackMenuIntent({ menu_item: item.menuItem, destination: item.url, cta_type: 'nav_link' })}
+                    to={item.homeHash ? { pathname: '/', hash: item.homeHash } : item.url}
+                    onClick={() =>
+                      trackMenuIntent({
+                        menu_item: item.menuItem,
+                        destination: item.homeHash ? `/#${item.homeHash}` : item.url,
+                        cta_type: 'nav_link',
+                      })
+                    }
                     className={({ isActive }) =>
                       `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-                        isActive
+                        isActive && !item.homeHash
                           ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
                           : item.outline
                           ? 'border-2 border-[#FFCB05]/40 hover:border-[#FFCB05] hover:bg-white/10'

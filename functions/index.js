@@ -7,6 +7,11 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const functions = require("firebase-functions");
 const { createGeminiClient } = require("./geminiClient");
+const {
+  inferirDuracaoMesesCronograma,
+  resumoCronogramaParaOrcamento,
+  instrucoesOrcamentoAlinhadoCronograma,
+} = require("./cronogramaDuracao");
 const cors = require("cors")({ origin: true });
 const admin = require("firebase-admin");
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
@@ -198,10 +203,15 @@ ${userPortfolio ? `**PORTFOLIO E EXPERIÊNCIAS DO PROPONENTE (contexto adicional
    - O portfolio pode ser considerado apenas como contexto adicional para sugestões sobre capacidade de execução
 
 5. **NOTA ESTIMADA (0-100)**: Atribua uma nota justificada considerando PRINCIPALMENTE o TEXTO DO PROJETO e os CRITÉRIOS ESPECÍFICOS DO EDITAL fornecidos acima. 
-   - Use APENAS os critérios e pontuações especificados na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS"
-   - Se os critérios especificarem pontuações individuais, respeite essas pontuações
-   - Se os critérios não especificarem pesos, distribua a pontuação de forma proporcional entre os critérios listados
-   - NÃO use critérios genéricos como "Viabilidade e capacidade de execução", "Qualidade técnica e inovação", "Impacto cultural e relevância" - use APENAS os critérios fornecidos acima
+   - Use APENAS os critérios listados em "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS" (mesmos nomes, mesma ordem).
+   - Se os critérios do edital indicarem pontuação máxima por item, use exatamente esses tetos; se não indicarem, divida 100 pontos de forma proporcional entre todos os critérios.
+   - OBRIGATÓRIO: para CADA critério do edital, inclua UMA linha de pontuação neste formato exato (facilita leitura automática):
+     * 1. [Nome exato do critério]: [pontos obtidos],[decimal] / [pontos máximos],[decimal]
+     Exemplo: * 1. Relevância cultural e artística: 7,0 / 14,3
+   - Depois das linhas por critério, inclua um parágrafo curto "Como a nota foi calculada:" explicando que a NOTA FINAL é a soma das pontuações obtidas (ou a conversão proporcional para 0-100, se aplicável).
+   - Encerre SEMPRE com a linha: NOTA FINAL: [soma ou equivalente] / 100
+   - Em seguida, o parágrafo **Conclusão da Avaliação** completo. Nunca pare no meio de uma frase.
+   - NÃO use critérios genéricos inventados; NÃO omita a pontuação numérica por critério.
 
 Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no TEXTO DO PROJETO e APENAS nos critérios específicos do edital fornecidos na seção "CRITÉRIOS DO EDITAL QUE DEVEM SER AVALIADOS" acima.`;
 
@@ -235,7 +245,7 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
           },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 4000, // Aumentado para garantir análise completa com todas as sugestões
+        max_tokens: 8192,
         temperature: 0.3,
         stream: true,
       });
@@ -265,7 +275,7 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
         },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 2000,
+      max_tokens: 8192,
       temperature: 0.3,
     });
     
@@ -554,24 +564,37 @@ exports.gerarTextosProjeto = onRequest(
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Trava: evitar loop / uso excessivo — 1 geração por (user, projeto, tipo) a cada 30s
+    // Trava: 1 geração por (user, projeto, tipo) a cada 30s — exceto refinamentos 2/3 do mesmo "Gerar orçamento"
+    const refinementAttempt = Math.min(
+      3,
+      Math.max(1, Number(req.body.refinementAttempt) || 1)
+    );
+    const orcamentoGeracaoId = String(req.body.orcamentoGeracaoId || '').trim();
+    const skipCooldownOrcamentoRefino =
+      tipo === 'orcamento' &&
+      refinementAttempt > 1 &&
+      refinementAttempt <= 3 &&
+      orcamentoGeracaoId.length >= 8;
+
     const TEXTO_COOLDOWN_MS = 30 * 1000;
     const textoLockId = `texto_${userId || 'anon'}_${projetoId}_${String(tipo).slice(0, 50)}`;
     const textoLockRef = db.collection('locks').doc(textoLockId);
-    const textoLockSnap = await textoLockRef.get();
     const textoNow = Date.now();
-    if (textoLockSnap.exists) {
-      const lockedUntil = textoLockSnap.data().lockedUntil;
-      if (lockedUntil && lockedUntil > textoNow) {
-        const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
-        return res.status(429).json({
-          error: 'Aguarde antes de gerar novamente',
-          retryAfterSeconds: secLeft,
-          message: `Aguarde ${secLeft} segundos antes de gerar este texto novamente.`
-        });
+    if (!skipCooldownOrcamentoRefino) {
+      const textoLockSnap = await textoLockRef.get();
+      if (textoLockSnap.exists) {
+        const lockedUntil = textoLockSnap.data().lockedUntil;
+        if (lockedUntil && lockedUntil > textoNow) {
+          const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
+          return res.status(429).json({
+            error: 'Aguarde antes de gerar novamente',
+            retryAfterSeconds: secLeft,
+            message: `Aguarde ${secLeft} segundos antes de gerar este texto novamente.`
+          });
+        }
       }
+      await textoLockRef.set({ lockedUntil: textoNow + TEXTO_COOLDOWN_MS });
     }
-    await textoLockRef.set({ lockedUntil: textoNow + TEXTO_COOLDOWN_MS });
     
     // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
     let equipeBio = dadosProjeto.equipeBio || '';
@@ -637,6 +660,14 @@ REGRA CRÍTICA DE FORMATAÇÃO:
 - O texto deve estar em formato de texto puro, sem qualquer marcação especial
 `;
 
+    const minimoRubricasOrcamento = (teto) => {
+      if (!teto || teto <= 0) return 15;
+      if (teto <= 10000) return 8;
+      if (teto <= 50000) return 12;
+      if (teto <= 150000) return 15;
+      return 18;
+    };
+
     if (tipo === 'orcamento') {
       // Buscar teto do orçamento dos dados do projeto ou do prompt
       let tetoMaximo = dadosProjeto.teto || 0;
@@ -644,11 +675,10 @@ REGRA CRÍTICA DE FORMATAÇÃO:
       // Tentar extrair do prompt se não estiver nos dados do projeto
       if (!tetoMaximo || tetoMaximo === 0) {
         if (prompt) {
-          // Tentar múltiplos padrões para encontrar o teto no prompt
-          const padrao1 = prompt.match(/teto.*?R\$\s*([\d.,]+)/i);
-          const padrao2 = prompt.match(/R\$\s*([\d.,]+)/i);
-          const padraoTeto = padrao1 || padrao2;
-          
+          const padraoTeto =
+            prompt.match(/TETO\s+M[AÁ]XIMO[^R]*R\$\s*([\d.,]+)/i) ||
+            prompt.match(/VALOR\s+TOTAL\s+DO\s+OR[CÇ]AMENTO[^R]*R\$\s*([\d.,]+)/i) ||
+            prompt.match(/teto[^R]{0,40}R\$\s*([\d.,]+)/i);
           if (padraoTeto) {
             const valorStr = padraoTeto[1].replace(/\./g, '').replace(',', '.');
             tetoMaximo = parseFloat(valorStr) || 0;
@@ -667,6 +697,23 @@ REGRA CRÍTICA DE FORMATAÇÃO:
       } else {
         // Geração do ZERO: criar orçamento completo desde o início
         const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+        const minRubricas = minimoRubricasOrcamento(tetoMaximo);
+        const teto20pct = tetoMaximo > 0 ? Math.round(tetoMaximo * 0.2) : 0;
+        const cronogramaProjeto = dadosProjeto.cronograma || {};
+        const duracaoMesesCron = inferirDuracaoMesesCronograma(cronogramaProjeto);
+        const resumoCron = resumoCronogramaParaOrcamento(cronogramaProjeto);
+        const blocoCronogramaOrcamento = resumoCron
+          ? `
+
+ALINHAMENTO COM CRONOGRAMA (OBRIGATÓRIO):
+${instrucoesOrcamentoAlinhadoCronograma(duracaoMesesCron)}
+
+${resumoCron}
+
+Distribua custos de acordo com as etapas e o prazo acima. Rubricas de locação/aluguel/mensalidade devem refletir a quantidade de meses do cronograma (${duracaoMesesCron}), não apenas 1 mês.
+
+`
+          : '';
         promptEspecifico = `Você é um especialista em elaboração de orçamentos para projetos culturais. 
 Crie um orçamento COMPLETO, DETALHADO E ABRANGENTE para o projeto cultural descrito abaixo.
 
@@ -728,6 +775,9 @@ ou
 Nome da Rubrica - R$ valor
 ou
 Nome da Rubrica (unidade: tipo) - R$ valor
+ou (preferido para locações mensais)
+Nome da Rubrica (unidade: mês, quantidade: N): R$ valor
+(onde N = número de meses cobertos e R$ = valor TOTAL da linha)
 
 IMPORTANTE SOBRE VALORES - USE VALORES BEM REDONDOS:
 - NUNCA use centavos. Todos os valores devem ser múltiplos inteiros.
@@ -748,15 +798,20 @@ Exemplos de valores redondos:
 
 ${instrucoesFormatacao}
 
-${tetoMaximo > 0 ? `TETO MÁXIMO DO ORÇAMENTO (OBRIGATÓRIO): R$ ${tetoFormatado}
+${tetoMaximo > 0 ? `VALOR TOTAL DO ORÇAMENTO (OBRIGATÓRIO — USE O VALOR CHEIO): R$ ${tetoFormatado}
 
-REGRA CRÍTICA: A soma total de TODAS as rubricas DEVE ser IGUAL ou MENOR que R$ ${tetoFormatado}. 
-IMPORTANTE: 
-- Distribua o valor total entre as rubricas de forma coerente e realista com as necessidades do projeto
-- NÃO ultrapasse o teto máximo sob nenhuma circunstância
-- Calcule cuidadosamente para que o total não exceda R$ ${tetoFormatado}
-- Se necessário, ajuste os valores das rubricas para respeitar o limite máximo\n\n` : ''}
+REGRA CRÍTICA: A soma de TODAS as rubricas DEVE ser EXATAMENTE R$ ${tetoFormatado} (nem um real a mais, nem deixar valor ocioso).
+- Distribua TODO o valor entre as rubricas de forma coerente com o projeto
+- Com teto de R$ ${tetoFormatado}, use valores compatíveis (ex.: faixa típica por rubrica entre R$ ${Math.max(50, Math.round(tetoMaximo / 25))} e R$ ${Math.round(tetoMaximo / 2)})
+- NÃO use valores de projetos grandes (dezenas de milhares) se o teto for baixo
+- Cada linha: só o valor TOTAL da rubrica em R$ (se houver unitário × quantidade, o último R$ da linha é o que vale)\n\n` : ''}
 
+QUANTIDADE E DETALHAMENTO (OBRIGATÓRIO):
+- Mínimo de ${minRubricas} rubricas (linhas). Respostas com menos de ${minRubricas} linhas estão INCORRETAS.
+- PROIBIDO resumir o orçamento em 3–5 verbas amplas (ex.: só "Direção Artística", "Direção de Produção", "Produção Executiva").
+- Separe despesas: equipe/artistas por função, locação de espaço, equipamentos (som, luz, vídeo), materiais, transporte, hospedagem, divulgação, assessoria, licenças/ECAD/alvarás, seguros, contabilidade/administração, acessibilidade (Libras etc.) quando aplicável.
+${tetoMaximo > 0 ? `- Nenhuma rubrica isolada acima de ~20% do teto (≈ R$ ${teto20pct.toLocaleString('pt-BR')}); divida em itens menores.\n` : ''}
+${blocoCronogramaOrcamento}
 DADOS DO PROJETO (USE ESTES DADOS PARA CRIAR O ORÇAMENTO):
 Nome: ${nomeProjeto}
 ${resumoProjeto ? `Resumo: ${resumoProjeto}\n` : ''}
@@ -772,11 +827,13 @@ IMPORTANTE:
 - NÃO crie justificativas, explicações ou observações. Apenas liste as rubricas com nome e valor.
 - NÃO inclua texto explicativo entre as rubricas. Apenas as rubricas, uma por linha.
 
-${tetoMaximo > 0 ? `O orçamento DEVE respeitar rigorosamente o teto máximo de R$ ${tetoFormatado}. A soma de todas as rubricas não pode ultrapassar este valor. Distribua o valor total de forma coerente entre TODAS as rubricas necessárias.` : ''}
+${tetoMaximo > 0 ? `O orçamento DEVE totalizar EXATAMENTE R$ ${tetoFormatado}. Distribua o valor cheio entre TODAS as rubricas necessárias.` : ''}
 
 Lembre-se: texto puro, sem asteriscos, sem markdown, sem símbolos de formatação.
 Formate cada rubrica como: "Nome da Rubrica: R$ X.XXX,XX" ou "Nome da Rubrica - R$ X.XXX,XX" ou "Nome da Rubrica (unidade: tipo) - R$ X.XXX,XX".
 Liste UMA rubrica por linha.
+
+Antes de finalizar, confira: pelo menos ${minRubricas} linhas, soma exata do teto, sem verbas genéricas demais.
 
 Gere o orçamento COMPLETO agora:`;
       }
@@ -827,19 +884,24 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     
+    const orcamentoMinRubricas =
+      tipo === 'orcamento'
+        ? minimoRubricasOrcamento(Number(dadosProjeto.teto) || 0)
+        : 15;
     const orcamentoAlteracoes = tipo === 'orcamento' && orcamentoAtualEnviado && promptAlteracoesEnviado;
     const systemOrcamento = orcamentoAlteracoes
       ? 'Você é um especialista em orçamentos para projetos culturais. O usuário enviou um ORÇAMENTO ATUAL e SUGESTÕES DE ALTERAÇÕES. Sua tarefa é devolver SOMENTE o orçamento atualizado: aplique as alterações pedidas EM CIMA do orçamento atual. NÃO gere um orçamento do zero. Mantenha rubricas que não forem citadas nas sugestões; altere, remova ou adicione apenas o que as sugestões pedirem. Respeite o teto máximo. Formato: texto puro, uma rubrica por linha (Nome: R$ valor ou Nome - R$ valor), sem markdown.'
       : (tipo === 'orcamento'
-        ? 'Você é um especialista em orçamentos para projetos culturais. Crie orçamentos detalhados, realistas e bem estruturados baseados EXCLUSIVAMENTE nos dados do projeto fornecido. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito.'
+        ? `Você é um especialista em orçamentos para projetos culturais. Crie orçamentos DETALHADOS com NO MÍNIMO ${orcamentoMinRubricas} rubricas (linhas), baseados EXCLUSIVAMENTE nos dados do projeto. Respostas com apenas 3–5 verbas genéricas (ex.: só Coordenação, Produção Executiva, Assistência) estão ERRADAS. CRÍTICO: texto puro, sem markdown. NÃO invente outros projetos.`
         : 'Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere textos claros, objetivos e bem estruturados baseados EXCLUSIVAMENTE na descrição do projeto fornecida. CRÍTICO: O texto gerado deve estar em FORMATO DE TEXTO PURO. NÃO use asteriscos (**), NÃO use markdown (##, ###, *), NÃO use símbolos de formatação. Use apenas texto simples, quebras de linha e listas numeradas simples (1., 2., 3.) se necessário. NÃO invente novos projetos - use apenas o projeto descrito. NÃO use apenas o portfolio como base.');
+    const maxTokensGeracao = tipo === 'orcamento' ? 8192 : 2000;
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemOrcamento },
         { role: 'user', content: promptFinal },
       ],
-      max_tokens: 2000,
+      max_tokens: maxTokensGeracao,
       temperature: 0.3,
       stream: true,
     });
@@ -1043,12 +1105,13 @@ Retorne somente o array JSON atualizado:`;
         console.log('[gerarCronogramaIA] Modo alterações: aplicando sugestões em cima do cronograma atual');
       } else {
         const nomesRubricas = rubricas.map((r) => String(r.nome || r.rubrica || '').trim()).filter(Boolean);
-        const rubricasTexto = rubricas.length > 0
+        const temOrcamento = nomesRubricas.length > 0;
+        const rubricasTexto = temOrcamento
           ? rubricas.map((r) => `- ${r.nome || r.rubrica || 'Rubrica'}: R$ ${Number(r.total || r.valor || 0).toLocaleString('pt-BR')}`).join('\n')
-          : 'Orçamento não informado ou vazio.';
-        const listaNomesRubricasParaPrompt = nomesRubricas.length > 0
+          : 'Orçamento ainda não foi criado neste projeto. Derive as etapas da descrição e dos textos do projeto (metodologia, atividades, equipe, divulgação, produção). Use rubricasAssociadas: [] em todas as etapas.';
+        const listaNomesRubricasParaPrompt = temOrcamento
           ? `Lista EXATA de nomes de rubricas (use estes nomes em "rubricasAssociadas"): ${JSON.stringify(nomesRubricas)}`
-          : '';
+          : 'Não há rubricas ainda: em cada etapa use "rubricasAssociadas": [].';
 
         const textosResumo = Object.keys(textosGerados).length > 0
           ? Object.entries(textosGerados)
@@ -1059,12 +1122,12 @@ Retorne somente o array JSON atualizado:`;
 
         prompt = `Você é um especialista em planejamento de projetos culturais para editais e leis de incentivo.
 
-Com base nos dados do projeto, no ORÇAMENTO GERADO (rubricas abaixo) e nos textos, gere um CRONOGRAMA de etapas em JSON.
+Com base nos dados do projeto${temOrcamento ? ', no ORÇAMENTO (rubricas abaixo)' : ''} e nos textos, gere um CRONOGRAMA de etapas em JSON.
 
 NÍVEL DE DETALHAMENTO – OBRIGATÓRIO:
 - NÃO gere apenas 4 macro etapas (pré-produção, produção, pós-produção, prestação de contas). Isso é insuficiente.
-- Gere entre 10 e 20 etapas, com nível intermediário de detalhe: cada rubrica ou grupo lógico de rubricas do orçamento deve refletir em uma ou mais etapas concretas (ex.: contratações, licenciamentos, locações, ensaios, gravação, divulgação, montagem, sessões, desmontagem, documentação, prestação de contas).
-- Use os NOMES e a NATUREZA das rubricas do orçamento para batizar e definir as etapas (ex.: se há rubrica "Locação de equipamento de som", crie etapa como "Locação e instalação de som"; se há "Divulgação", crie "Campanha de divulgação" ou "Produção de material de divulgação"). Não invente rubricas; derive as etapas do orçamento e dos textos.
+- Gere entre 10 e 20 etapas, com nível intermediário de detalhe${temOrcamento ? ': cada rubrica ou grupo lógico de rubricas do orçamento deve refletir em uma ou mais etapas concretas' : ': derive atividades concretas dos textos do projeto (contratações, licenciamentos, locações, ensaios, gravação, divulgação, montagem, apresentações, desmontagem, documentação, prestação de contas)'}.
+${temOrcamento ? '- Use os NOMES e a NATUREZA das rubricas do orçamento para batizar e definir as etapas. Não invente rubricas; derive as etapas do orçamento e dos textos.' : '- O orçamento será criado depois; foque em etapas coerentes com a metodologia descrita nos textos.'}
 - Não seja excessivamente detalhado (evite dezenas de etapas de um dia); cada etapa deve ter duração razoável (semanas ou poucos meses).
 
 BOAS PRÁTICAS (estrutura em fases, mas desdobradas em etapas concretas):
@@ -1096,7 +1159,7 @@ DADOS DO PROJETO:
 Nome: ${nomeProjeto}
 ${descricaoProjeto ? `Descrição/Resumo:\n${descricaoProjeto.slice(0, 2000)}\n` : ''}
 
-ORÇAMENTO GERADO DO PROJETO – RUBRICAS (derive as etapas do cronograma a partir destas rubricas; crie etapas concretas que correspondam às atividades/despesas listadas):
+${temOrcamento ? 'ORÇAMENTO DO PROJETO – RUBRICAS (derive etapas a partir destas rubricas):' : 'ORÇAMENTO:'}
 ${rubricasTexto}
 ${tetoOrcamento ? `Teto total: R$ ${tetoOrcamento.toLocaleString('pt-BR')}` : ''}
 
@@ -1112,21 +1175,38 @@ Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macro
 
       const openai = getAI();
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gemini-3.8-flash',
         messages: [
           { role: 'system', content: systemContent },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 1500,
+        max_tokens: 8192,
         temperature: 0.3,
       });
 
       const content = completion.choices?.[0]?.message?.content?.trim() || '';
       let etapas = [];
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
+      const extrairArrayJson = (raw) => {
+        if (!raw) return null;
+        let s = raw.trim();
+        const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fence) s = fence[1].trim();
+        const start = s.indexOf('[');
+        if (start === -1) return null;
+        let depth = 0;
+        for (let i = start; i < s.length; i++) {
+          if (s[i] === '[') depth += 1;
+          else if (s[i] === ']') {
+            depth -= 1;
+            if (depth === 0) return s.slice(start, i + 1);
+          }
+        }
+        return null;
+      };
+      const jsonStr = extrairArrayJson(content);
+      if (jsonStr) {
         try {
-          etapas = JSON.parse(jsonMatch[0]);
+          etapas = JSON.parse(jsonStr);
           if (!Array.isArray(etapas)) etapas = [];
           const macroValidos = ['pre_producao', 'producao', 'divulgacao', 'pos_producao'];
           etapas = etapas
@@ -1156,8 +1236,10 @@ Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macro
             });
           }
         } catch (parseErr) {
-          console.error('[gerarCronogramaIA] Erro ao parsear JSON:', parseErr);
+          console.error('[gerarCronogramaIA] Erro ao parsear JSON:', parseErr, content.slice(0, 500));
         }
+      } else if (content) {
+        console.warn('[gerarCronogramaIA] Resposta sem array JSON:', content.slice(0, 400));
       }
 
       return res.status(200).json({ etapas });

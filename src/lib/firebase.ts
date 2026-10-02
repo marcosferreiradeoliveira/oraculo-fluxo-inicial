@@ -42,8 +42,6 @@ export const firebaseInit = () => {
       const profile = import.meta.env.VITE_FIREBASE_PROFILE || '—';
       console.info('[Firebase]', profile, firebaseConfig.projectId, firebaseConfig.authDomain);
     }
-    console.log('Firebase initialized successfully');
-    
     // Initialize services
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -57,12 +55,9 @@ export const firebaseInit = () => {
         if (analyticsSupported) {
           try {
             analytics = getAnalytics(app);
-            console.log('Firebase Analytics initialized');
           } catch (error) {
             console.error('Firebase Analytics initialization error:', error);
           }
-        } else {
-          console.log('Firebase Analytics not supported in this environment');
         }
       };
       // Initialize after a short delay to prevent blocking the main thread
@@ -76,7 +71,6 @@ export const firebaseInit = () => {
         // connectAuthEmulator(auth, 'http://localhost:9099');
         // connectFirestoreEmulator(db, 'localhost', 8081);
         // connectStorageEmulator(storage, 'localhost', 9199');
-        console.log('Firebase running in development mode');
       } catch (error) {
         console.error('Firebase emulator connection error:', error);
       }

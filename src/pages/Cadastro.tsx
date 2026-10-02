@@ -3,8 +3,8 @@ import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { getFirestore, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { trackLoginSuccess } from '@/lib/analytics';
+import { ensureUsuarioFirestore } from '@/lib/ensureUsuarioFirestore';
 import logo from '@/assets/logo.png';
 
 const Cadastro = () => {
@@ -39,15 +39,9 @@ const Cadastro = () => {
       trackLoginSuccess({ tipoLogin: 'email' });
 
       try {
-        const db = getFirestore();
-        const userDocRef = doc(db, 'usuarios', cred.user.uid);
-        const timestamp = serverTimestamp();
-        await updateDoc(userDocRef, {
-          lastLoginAt: timestamp,
-          ultimo_login: timestamp,
-        });
+        await ensureUsuarioFirestore(cred.user);
       } catch (updateError) {
-        console.warn('Erro ao atualizar último login:', updateError);
+        console.warn('Erro ao sincronizar perfil Firestore:', updateError);
       }
 
       navigate(resolveTarget());

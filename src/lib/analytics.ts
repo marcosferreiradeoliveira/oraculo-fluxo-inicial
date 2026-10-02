@@ -371,6 +371,7 @@ const MENU_INTENT_MAP: Record<string, string> = {
   perfil: 'intent_view_perfil',
   suporte: 'intent_view_support',
   prestacao_contas: 'intent_external_prestacao',
+  gerenciador_projetos: 'intent_external_gerenciador_projetos',
   login: 'intent_login',
 };
 
@@ -686,7 +687,6 @@ export const identifyMixpanelUser = (userId: string, userProperties?: {
         });
       }
       
-      console.log('[Mixpanel] Usuário identificado:', userId);
     } catch (error) {
       console.error('[Mixpanel] Erro ao identificar usuário:', error);
     }

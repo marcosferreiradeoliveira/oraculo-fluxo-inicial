@@ -96,7 +96,7 @@ function createGeminiClient(apiKey) {
             ...(systemInstruction ? { systemInstruction } : {}),
             generationConfig: {
               // Modelos Gemini 3 usam tokens de "thinking"; valores baixos devolvem texto vazio
-              maxOutputTokens: Math.max(Number(max_tokens) || 2048, 1024),
+              maxOutputTokens: Math.min(Math.max(Number(max_tokens) || 8192, 1024), 8192),
               temperature,
             },
           });

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getFirestore, collection, getDocs, query, where, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
+import { getEditaisDb } from '@/lib/editaisDb';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -11,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Brain, Loader2, Check, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { AnaliseMarkdown } from '@/components/analise/AnaliseMarkdown';
+import { NotasCriteriosPainel } from '@/components/analise/NotasCriteriosPainel';
 
 const dicasProjetos = [
   "💡 Dica: Seja específico e detalhado na descrição do seu projeto. Quanto mais informações você fornecer, melhor será a avaliação.",
@@ -56,8 +59,9 @@ const steps = [
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
   'Preencher Anexos'
 ];
@@ -81,36 +85,6 @@ const formatarTextoParaExibicao = (texto: string): string => {
   return limparMarkdown(texto);
 };
 
-/** Quebra o texto da análise em seções com título (1. ADEQUAÇÃO..., 2. PONTOS FORTES..., 3. PONTOS FRACOS...) para exibir títulos formatados */
-const parsearSecoesAnalise = (texto: string): Array<{ titulo?: string; conteudo: string }> => {
-  if (!texto || !texto.trim()) return [];
-  const limpo = limparMarkdown(texto).trim();
-  // Split por início de seção numerada: newline seguido de "1. ", "2. ", etc.
-  const partes = limpo.split(/\n(?=\d+\.\s)/);
-  const titulosConhecidos = [
-    /^(\d+\.\s*)?ADEQUAÇÃO\s+AOS\s+CRITÉRIOS\s+DO\s+EDITAL/i,
-    /^(\d+\.\s*)?PONTOS\s+FORTES\s+DO\s+PROJETO/i,
-    /^(\d+\.\s*)?PONTOS\s+FRACOS\s+E\s+GAPS/i,
-    /^(\d+\.\s*)?SUGESTÕES\s+DE\s+MELHORIA/i,
-    /^(\d+\.\s*)?NOTA\s+ESTIMADA/i,
-  ];
-  const resultado: Array<{ titulo?: string; conteudo: string }> = [];
-  for (let i = 0; i < partes.length; i++) {
-    const bloco = partes[i].trim();
-    if (!bloco) continue;
-    const primeiraLinha = bloco.split('\n')[0]?.trim() || '';
-    const resto = bloco.includes('\n') ? bloco.slice(bloco.indexOf('\n') + 1).trim() : '';
-    const ehTitulo = titulosConhecidos.some((r) => r.test(primeiraLinha));
-    if (ehTitulo && primeiraLinha) {
-      const tituloLimpo = primeiraLinha.replace(/^\d+\.\s*/, '').replace(/[:.]\s*$/, '').trim();
-      resultado.push({ titulo: tituloLimpo, conteudo: resto });
-    } else {
-      resultado.push({ conteudo: bloco });
-    }
-  }
-  return resultado;
-};
-
 // Função para extrair sugestões (igual Projeto.tsx)
 const extrairSugestoes = (analiseTexto: string): string[] => {
   let matches: string[] = [];
@@ -122,7 +96,7 @@ const extrairSugestoes = (analiseTexto: string): string[] => {
     .replace(/###?\s*\d+\.\s*PONTOS\s+FRACOS.*?(?=###?\s*\d+\.|$)/is, '')
     .replace(/###?\s*\d+\.\s*ADEQUAÇÃO.*?(?=###?\s*\d+\.|$)/is, '');
   
-  const padrao1 = /(?:^|\n)[-•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-•]\s*Sugestão:|$)/gis;
+  const padrao1 = /(?:^|\n)[-*•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-*•]\s*Sugestão:|$)/gis;
   let match;
   while ((match = padrao1.exec(textoLimpo)) !== null) {
     const sugestao = limparMarkdown(match[1].trim());
@@ -287,7 +261,7 @@ const AvaliarProjeto = () => {
 
   const fetchEditalData = async (editalNome: string) => {
     const db = getFirestore();
-    const q = query(collection(db, 'editais'), where('nome', '==', editalNome));
+    const q = query(collection(getEditaisDb(), 'editais'), where('nome', '==', editalNome));
     const snap = await getDocs(q);
     if (!snap.empty) {
       const d = snap.docs[0].data();
@@ -303,7 +277,7 @@ const AvaliarProjeto = () => {
   useEffect(() => {
     const fetchEditais = async () => {
       const db = getFirestore();
-      const snap = await getDocs(collection(db, 'editais'));
+      const snap = await getDocs(collection(getEditaisDb(), 'editais'));
       const now = new Date();
       const editaisFiltrados = snap.docs
         .map((d) => {
@@ -326,7 +300,7 @@ const AvaliarProjeto = () => {
         });
       let listaFinal = editaisFiltrados;
       if (editalIdParam && !editaisFiltrados.some((e) => e.id === editalIdParam)) {
-        const ref = doc(db, 'editais', editalIdParam);
+        const ref = doc(getEditaisDb(), 'editais', editalIdParam);
         const docSnap = await getDoc(ref);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -823,8 +797,9 @@ const AvaliarProjeto = () => {
         `/projeto/${docRef.id}`,
         `/projeto/${docRef.id}/alterar-com-ia`,
         `/projeto/${docRef.id}/gerar-textos`,
-        `/projeto/${docRef.id}/criar-orcamento`,
         `/projeto/${docRef.id}/criar-cronograma`,
+        `/projeto/${docRef.id}/criar-orcamento`,
+        `/projeto/${docRef.id}/equipe`,
         `/projeto/${docRef.id}/documentos-inscricao`,
         `/projeto/${docRef.id}/preencher-anexos`
       ];
@@ -1277,75 +1252,15 @@ const AvaliarProjeto = () => {
                     </div>
                     <div className="bg-white border-2 border-gray-200 rounded-b-xl shadow-xl overflow-hidden">
                       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-                        {/* Nota Estimada - Card Especial */}
-                        {(() => {
-                          const notaPattern = /Nota:\s*(\d+)\/(\d+)\.?/gi;
-                          const notas: Array<{ obtida: number; maxima: number }> = [];
-                          let match;
-                          while ((match = notaPattern.exec(analiseConteudo)) !== null) {
-                            const obtida = parseInt(match[1]);
-                            const maxima = parseInt(match[2]);
-                            if (!isNaN(obtida) && !isNaN(maxima) && maxima > 0) {
-                              notas.push({ obtida, maxima });
-                            }
+                        <NotasCriteriosPainel
+                          analiseTexto={analiseConteudo}
+                          variant="demo"
+                          rodapeCard={
+                            <p className="mt-6 text-white/90 text-sm md:text-base font-medium">
+                              Esta é a mesma análise que você receberá no seu projeto real.
+                            </p>
                           }
-                          let notaGlobal = 0;
-                          let notaMaximaTotal = 0;
-                          if (notas.length > 0) {
-                            const somaObtidas = notas.reduce((acc, n) => acc + n.obtida, 0);
-                            const somaMaximas = notas.reduce((acc, n) => acc + n.maxima, 0);
-                            notaGlobal = Math.round((somaObtidas / somaMaximas) * 100);
-                            notaMaximaTotal = somaMaximas;
-                          } else {
-                            const notaSection = analiseConteudo.match(/5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i);
-                            if (notaSection && notaSection[1]) {
-                              notaGlobal = parseInt(notaSection[1]);
-                              notaMaximaTotal = 100;
-                            } else {
-                              const patterns = [/Nota estimada.*?:\s*(\d+)/i, /Nota estimada.*?\):\s*(\d+)/i];
-                              for (const pattern of patterns) {
-                                const m = analiseConteudo.match(pattern);
-                                if (m && m[1]) {
-                                  const nota = parseInt(m[1]);
-                                  if (nota >= 0 && nota <= 100) {
-                                    notaGlobal = nota;
-                                    notaMaximaTotal = 100;
-                                    break;
-                                  }
-                                }
-                              }
-                            }
-                          }
-                          if (notaGlobal === 0 && notaMaximaTotal === 0) return null;
-                          return (
-                            <div className="bg-gradient-to-r from-oraculo-blue/85 to-oraculo-purple/85 rounded-2xl p-8 text-white text-center mb-8">
-                              <div className="flex items-center justify-center mb-4">
-                                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                                  <span className="text-3xl font-bold">📊</span>
-                                </div>
-                              </div>
-                              <h3 className="text-2xl font-bold mb-2">Nota Estimada</h3>
-                              <div className="text-6xl font-black mb-4">{notaGlobal}</div>
-                              <div className="text-lg opacity-90">
-                                de {notaMaximaTotal} pontos
-                                {notas.length > 0 && (
-                                  <span className="block text-sm mt-1 opacity-75">
-                                    ({notas.reduce((acc, n) => acc + n.obtida, 0)}/{notaMaximaTotal} pontos obtidos)
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-4 w-full bg-white/20 rounded-full h-3">
-                                <div 
-                                  className="bg-white rounded-full h-3 transition-all duration-1000 ease-out"
-                                  style={{ width: `${notaGlobal}%` }}
-                                ></div>
-                              </div>
-                              <p className="mt-6 text-white/90 text-sm md:text-base font-medium">
-                                Esta é a mesma análise que você receberá no seu projeto real.
-                              </p>
-                            </div>
-                          );
-                        })()}
+                        />
 
                         {/* Bloco separado: conclusão + próximo passo — só após a nota aparecer */}
                         {!analisando && (
@@ -1389,25 +1304,7 @@ const AvaliarProjeto = () => {
                           </div>
                         )}
 
-                        {/* Conteúdo da análise formatado — seções com títulos (2. PONTOS FORTES, 3. PONTOS FRACOS, etc.) */}
-                        <div className="prose prose-sm max-w-none text-gray-700 space-y-8">
-                          {parsearSecoesAnalise(removerSugestoesDoTexto(analiseConteudo)).map((sec, idx) => (
-                            <div key={idx}>
-                              {sec.titulo && (
-                                <div className="border-b-2 border-gray-300 pb-3 mb-4">
-                                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 uppercase tracking-tight">
-                                    {sec.titulo}
-                                  </h2>
-                                </div>
-                              )}
-                              {sec.conteudo ? (
-                                <pre className="whitespace-pre-wrap font-sans text-sm md:text-base leading-relaxed text-gray-700 mt-2">
-                                  {sec.conteudo}
-                                </pre>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
+                        <AnaliseMarkdown content={analiseConteudo} className="text-sm md:text-base" />
 
                         {/* Sugestões de Melhoria */}
                         {sugestoes.length > 0 && (
@@ -1417,15 +1314,20 @@ const AvaliarProjeto = () => {
                                 Sugestões de Melhoria
                               </h2>
                             </div>
-                            {sugestoes.map((sugestao, idx) => (
+                            {sugestoes.map((sugestao, idx) => {
+                              const textoSugestao = limparMarkdown(
+                                sugestao.replace(/^Sugestão:\s*/i, '').trim()
+                              );
+                              return (
                               <div key={`sugestao-${idx}`} className={`bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 shadow-sm mb-4 ${aprovacoes[idx] ? 'border-green-500 bg-green-50/50' : 'border-oraculo-blue'}`}>
                                 <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1">
-                                    <div className="text-base text-gray-800 leading-relaxed">
-                                      <span className={`text-lg font-medium ${aprovacoes[idx] ? 'text-green-700' : 'text-gray-800'}`}>
-                                        💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
-                                      </span>
-                                    </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-oraculo-blue mb-2">
+                                      Sugestão {idx + 1}
+                                    </p>
+                                    <p className={`text-base leading-relaxed ${aprovacoes[idx] ? 'text-green-800' : 'text-gray-800'}`}>
+                                      {textoSugestao}
+                                    </p>
                                   </div>
                                   <Button
                                     size="sm"
@@ -1454,7 +1356,8 @@ const AvaliarProjeto = () => {
                                   </Button>
                                 </div>
                               </div>
-                            ))}
+                            );
+                            })}
                           </>
                         )}
                       </div>

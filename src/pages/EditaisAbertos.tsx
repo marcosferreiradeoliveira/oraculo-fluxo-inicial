@@ -3,7 +3,8 @@ import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, deleteDoc, getDoc, getFirestore } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { auth } from '../lib/firebase';
+import { getEditaisDb, getEditaisWriteDb, isEditaisCatalogExternal } from '@/lib/editaisDb';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,7 @@ const EditaisAbertos = () => {
         setLoading(true);
         
         // Fetch Editais - apenas os que ainda não encerraram
-        const editaisSnapshot = await getDocs(collection(db, "editais"));
+        const editaisSnapshot = await getDocs(collection(getEditaisDb(), 'editais'));
         const editais: Edital[] = [];
         const now = new Date();
         
@@ -120,7 +121,11 @@ const EditaisAbertos = () => {
   const handleDeleteEdital = async (editalId: string) => {
     if (window.confirm('Tem certeza que deseja excluir este edital?')) {
       try {
-        await deleteDoc(doc(db, 'editais', editalId));
+        if (isEditaisCatalogExternal()) {
+          toast.error('Edital vem do catálogo Oráculo Cultural — não pode excluir daqui.');
+          return;
+        }
+        await deleteDoc(doc(getEditaisWriteDb(), 'editais', editalId));
         setEditaisAbertos(editaisAbertos.filter(edital => edital.id !== editalId));
         toast.success('Edital excluído com sucesso!');
       } catch (error) {

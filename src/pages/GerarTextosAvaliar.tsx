@@ -35,7 +35,7 @@ export default function GerarTextosAvaliar() {
   const [gerando, setGerando] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 3;
   const totalVisible = 5;
   const startIndex = Math.max(0, Math.min(currentStep - 2, steps.length - totalVisible));

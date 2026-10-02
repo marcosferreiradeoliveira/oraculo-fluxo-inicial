@@ -36,3 +36,30 @@ npm run build:culturalapp
 ## Vite
 
 Com `--mode oraculo-is`, o Vite carrega `.env.oraculo-is` (prioridade sobre `.env` genérico).
+
+## Cloud Functions em dev
+
+Por padrão o front chama **produção** (`https://us-central1-<project>.cloudfunctions.net`), mesmo com `npm run dev`.
+
+Para usar o emulador, em `.env.local`:
+
+```bash
+VITE_FUNCTIONS_USE_EMULATOR=1
+VITE_FUNCTIONS_BASE_URL=http://127.0.0.1:5001/oraculo-is/us-central1
+```
+
+Depois: `firebase emulators:start --only functions`
+
+## Catálogo de editais em outro projeto
+
+No **Oraculo-IS**, `.env.oraculo-is` pode definir:
+
+```bash
+VITE_EDITAIS_CATALOG=culturalapp
+```
+
+O app continua autenticando em **oraculo-is**, mas **lê** a coleção `editais` do **culturalapp-fb9b0** (branch roxo), onde as rules permitem leitura pública. Projetos e usuários ficam em oraculo-is; novos editais cadastrados pelo app vão para oraculo-is (`getEditaisWriteDb`).
+
+Para usar só editais locais: remova `VITE_EDITAIS_CATALOG` ou use `VITE_EDITAIS_CATALOG=local`.
+
+Alternativas de longo prazo: Cloud Function de sync, ou um único Firestore compartilhado.

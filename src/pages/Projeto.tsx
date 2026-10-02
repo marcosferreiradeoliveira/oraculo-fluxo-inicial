@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, deleteField, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -20,14 +20,33 @@ import {
   trackSuggestionApplied
 } from '@/lib/analytics';
 import { toast } from 'sonner';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { AnaliseMarkdown } from '@/components/analise/AnaliseMarkdown';
+import { NotasCriteriosPainel } from '@/components/analise/NotasCriteriosPainel';
+import {
+  CRITERIOS_GERAIS,
+  NOME_CRITERIOS_GERAIS,
+  inferirTipoProjeto,
+} from '@/lib/criteriosAvaliacao';
+import { camposNotaParaFirestore } from '@/lib/extrairNotasCriterios';
+
+/** Streaming só encerra com flag explícita; fallback para projetos já salvos antes do campo existir. */
+function analiseMarcadaComoCompleta(data: { analise_ia?: string; analise_ia_completa?: boolean }): boolean {
+  if (data.analise_ia_completa === true) return true;
+  if (data.analise_ia_completa === false) return false;
+  const texto = data.analise_ia?.trim() || '';
+  if (!texto) return false;
+  return /NOTA FINAL\s*:\s*\d+/i.test(texto) && /Conclusão da Avaliação/i.test(texto);
+}
 
 const steps = [
   'Criar Projeto',
   'Avaliar com IA',
   'Alterar com IA',
   'Gerar Textos',
-  'Criar Orçamento',
   'Criar Cronograma',
+  'Criar Orçamento',
+  'Equipe',
   'Documentos de Inscrição',
   'Preencher Anexos'
 ];
@@ -82,7 +101,7 @@ const extrairSugestoes = (analiseTexto: string): string[] => {
     .replace(/###?\s*\d+\.\s*ADEQUAÇÃO.*?(?=###?\s*\d+\.|$)/is, '');
   
   // Padrão 1: "Sugestão:" ou "- Sugestão:" no início da linha (testa TODOS os matches, não apenas o primeiro)
-  const padrao1 = /(?:^|\n)[-•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-•]\s*Sugestão:|$)/gis;
+  const padrao1 = /(?:^|\n)[-*•]\s*Sugestão:\s*(.+?)(?=\n\n|\n[-*•]\s*Sugestão:|$)/gis;
   let match;
   while ((match = padrao1.exec(textoLimpo)) !== null) {
     const sugestao = limparMarkdown(match[1].trim());
@@ -315,15 +334,20 @@ const Projeto = () => {
             setSugestoes(matches);
             setAprovacoes(Array(matches.length).fill(false));
             
-            // Se a análise parece completa (tem mais de 500 caracteres e termina com pontuação), considerar concluída
-            if (data.analise_ia.length > 500 && /[.!?]$/.test(data.analise_ia.trim().slice(-10))) {
+            // Só encerra streaming quando o backend/cliente marcar análise como completa
+            if (analiseMarcadaComoCompleta(data)) {
               setAnalisando(false);
+              setStreamingAnaliseContent('');
               setStatusIA('Análise concluída!');
               setSubEtapasIA([]);
-              if (etapaAtual < 2) setEtapaAtual(2);
-              
-              // Remover parâmetro streaming da URL
+              if (typeof data.etapa_atual === 'number' && data.etapa_atual >= 2) {
+                setEtapaAtual(data.etapa_atual);
+              } else if (etapaAtual < 2) {
+                setEtapaAtual(2);
+              }
               navigate(`/projeto/${id}`, { replace: true });
+            } else if (data.analise_ia) {
+              setStreamingAnaliseContent(data.analise_ia);
             }
           }
         }
@@ -354,16 +378,19 @@ const Projeto = () => {
           
           // If analysis exists, process it
           if (data.analise_ia) {
+            if (data.analise_ia_completa !== false && data.nota_estimada == null) {
+              const notaCampos = camposNotaParaFirestore(data.analise_ia);
+              if (notaCampos) {
+                await updateDoc(ref, notaCampos);
+                Object.assign(data, notaCampos);
+              }
+            }
+
             setAnalise(data.analise_ia);
             setStatusIA('Análise carregada');
-            
-            // Extract suggestions using the new robust function
+
             const matches = extrairSugestoes(data.analise_ia);
-            console.log('Sugestões extraídas em Projeto.tsx:', matches);
-            console.log('Total de sugestões:', matches.length);
             setSugestoes(matches);
-            
-            // Initialize approvals
             setAprovacoes(Array(matches.length).fill(false));
           }
           
@@ -913,15 +940,23 @@ const Projeto = () => {
     
     // Processamento real: buscar edital e portfolio em paralelo (sem atrasos artificiais)
     try {
-      setStatusIA('Coletando dados do projeto e edital...');
-      setSubEtapasIA(['Lendo edital e critérios...']);
+      const tipoProjeto = inferirTipoProjeto(projeto);
+      const editalParaAnalise =
+        tipoProjeto === 'edital' && projeto.edital_associado ? projeto.edital_associado : '';
+
+      setStatusIA(
+        editalParaAnalise ? 'Coletando dados do projeto e edital...' : 'Coletando dados do projeto...'
+      );
+      setSubEtapasIA([
+        editalParaAnalise ? 'Lendo edital e critérios...' : 'Usando critérios gerais de projetos culturais...',
+      ]);
 
       const db = getFirestore();
       let dadosConsolidados = {
         texto_edital: '',
         criterios: '',
         texto_selecionados: '',
-        nome_edital: projeto.edital_associado || '',
+        nome_edital: editalParaAnalise || NOME_CRITERIOS_GERAIS,
         resumo_projeto: projeto.resumo || projeto.descricao?.slice(0, 2000) || '',
       };
 
@@ -930,7 +965,7 @@ const Projeto = () => {
         ? getDoc(doc(db, 'usuarios', user.uid)).then(snap => (snap.exists() ? (snap.data()?.portfolio || '') : ''))
         : Promise.resolve('');
       const [editalResult, portfolioTexto] = await Promise.all([
-        projeto.edital_associado ? fetchEditalESelecionados(projeto.edital_associado) : Promise.resolve(null),
+        editalParaAnalise ? fetchEditalESelecionados(editalParaAnalise) : Promise.resolve(null),
         portfolioPromise,
       ]);
 
@@ -938,6 +973,10 @@ const Projeto = () => {
         dadosConsolidados.texto_edital = editalResult.texto_edital;
         dadosConsolidados.criterios = editalResult.criterios;
         dadosConsolidados.texto_selecionados = editalResult.texto_selecionados;
+        dadosConsolidados.nome_edital = editalParaAnalise;
+      } else {
+        dadosConsolidados.criterios = CRITERIOS_GERAIS;
+        dadosConsolidados.nome_edital = NOME_CRITERIOS_GERAIS;
       }
 
       if (!dadosConsolidados.criterios || dadosConsolidados.criterios.trim() === '') {
@@ -947,7 +986,7 @@ const Projeto = () => {
       setStatusIA('Enviando para análise da IA...');
       setSubEtapasIA(['Aguardando resposta da IA...']);
       
-      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/avaliarProjetoIA';
+      const endpoint = `${getFunctionsBaseUrl()}/avaliarProjetoIA`;
       const payload = {
         projetoId: id,
         textoProjeto: dadosConsolidados.resumo_projeto,
@@ -964,6 +1003,26 @@ const Projeto = () => {
       setStreamingAnaliseContent('');
       setStatusIA('Recebendo análise em tempo real...');
       setSubEtapasIA(['A IA está escrevendo a análise...']);
+
+      const projetoRefStream = doc(db, 'projetos', id);
+      await updateDoc(projetoRefStream, {
+        analise_ia_completa: false,
+        nota_estimada: deleteField(),
+        nota_estimada_max: deleteField(),
+        notas_criterios: deleteField(),
+        data_atualizacao: serverTimestamp(),
+      });
+      setProjeto((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              analise_ia_completa: false,
+              nota_estimada: undefined,
+              nota_estimada_max: undefined,
+              notas_criterios: undefined,
+            }
+          : prev
+      );
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -1059,18 +1118,33 @@ const Projeto = () => {
         const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
         const jaTinhaAnalise = projetoData?.analise_ia;
 
-        const updateData: any = { analise_ia: analiseIA };
-        if (jaTinhaAnalise) {
+        const updateData: Record<string, unknown> = {
+          analise_ia: analiseIA,
+          analise_ia_completa: true,
+          data_atualizacao: serverTimestamp(),
+        };
+        const notaCampos = camposNotaParaFirestore(analiseIA);
+        if (notaCampos) {
+          Object.assign(updateData, notaCampos);
+        } else {
+          updateData.nota_estimada = deleteField();
+          updateData.nota_estimada_max = deleteField();
+          updateData.notas_criterios = deleteField();
+        }
+        if (!jaTinhaAnalise) {
           updateData.primeira_analise_completa = true;
           setPrimeiraAnaliseCompleta(true);
-        } else {
-          setPrimeiraAnaliseCompleta(false);
         }
 
         await updateDoc(ref, updateData);
 
         setStreamingAnaliseContent('');
-        setProjeto((prev: any) => ({ ...prev, analise_ia: analiseIA, primeira_analise_completa: updateData.primeira_analise_completa ?? prev?.primeira_analise_completa }));
+        setProjeto((prev: any) => ({
+          ...prev,
+          analise_ia: analiseIA,
+          primeira_analise_completa: updateData.primeira_analise_completa ?? prev?.primeira_analise_completa,
+          ...(notaCampos ?? {}),
+        }));
         const matches = extrairSugestoes(analiseIA);
         setSugestoes(matches);
         setAprovacoes(Array(matches.length).fill(false));
@@ -1127,8 +1201,9 @@ const Projeto = () => {
       `/projeto/${id}`,
       `/projeto/${id}/alterar-com-ia`,
       `/projeto/${id}/gerar-textos`,
-      `/projeto/${id}/criar-orcamento`,
       `/projeto/${id}/criar-cronograma`,
+      `/projeto/${id}/criar-orcamento`,
+      `/projeto/${id}/equipe`,
       `/projeto/${id}/documentos-inscricao`,
       `/projeto/${id}/preencher-anexos`
     ];
@@ -1537,10 +1612,13 @@ const Projeto = () => {
                     </div>
                     <div className="bg-white border-2 border-gray-200 rounded-b-xl shadow-xl overflow-hidden">
                       <div className="p-4 md:p-8 max-h-[70vh] overflow-y-auto">
-                        <pre className="whitespace-pre-wrap font-sans text-gray-800 text-sm md:text-base leading-relaxed">
-                          {streamingAnaliseContent || projeto?.analise_ia || '\u00A0'}
-                          <span className="inline-block w-2 h-4 bg-oraculo-blue animate-pulse align-middle ml-0.5" />
-                        </pre>
+                        <AnaliseMarkdown
+                          content={streamingAnaliseContent || projeto?.analise_ia || ''}
+                          className="prose-sm md:prose-base"
+                        />
+                        {analisando && (
+                          <span className="inline-block w-2 h-4 bg-oraculo-blue animate-pulse align-middle ml-0.5 mt-2" />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1554,498 +1632,18 @@ const Projeto = () => {
                     </div>
                     <div className="bg-white border-2 border-gray-200 rounded-b-xl shadow-xl overflow-hidden">
                       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-                        {/* Nota Estimada - Card Especial - SEMPRE VISÍVEL */}
-                        {(() => {
-                          // Extrair todas as notas no formato "Nota: X/Y" ou "Nota: X/Y."
-                          const notaPattern = /Nota:\s*(\d+)\/(\d+)\.?/gi;
-                          const notas: Array<{ obtida: number; maxima: number }> = [];
-                          let match;
-                          
-                          while ((match = notaPattern.exec(projeto.analise_ia)) !== null) {
-                            const obtida = parseInt(match[1]);
-                            const maxima = parseInt(match[2]);
-                            if (!isNaN(obtida) && !isNaN(maxima) && maxima > 0) {
-                              notas.push({ obtida, maxima });
-                            }
-                          }
-                          
-                          // Calcular nota global
-                          let notaGlobal = 0;
-                          let notaMaximaTotal = 0;
-                          
-                          if (notas.length > 0) {
-                            const somaObtidas = notas.reduce((acc, n) => acc + n.obtida, 0);
-                            const somaMaximas = notas.reduce((acc, n) => acc + n.maxima, 0);
-                            notaGlobal = Math.round((somaObtidas / somaMaximas) * 100);
-                            notaMaximaTotal = somaMaximas;
-                          }
-                          
-                          // Se não encontrou notas no formato X/Y, tenta buscar nota estimada direta
-                          if (notas.length === 0) {
-                            const notaSection = projeto.analise_ia.match(/5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i);
-                            if (notaSection && notaSection[1]) {
-                              notaGlobal = parseInt(notaSection[1]);
-                              notaMaximaTotal = 100;
-                            } else {
-                              const patterns = [
-                                /Nota estimada.*?:\s*(\d+)/i,
-                                /Nota estimada.*?\):\s*(\d+)/i,
-                              ];
-                              
-                              for (const pattern of patterns) {
-                                const match = projeto.analise_ia.match(pattern);
-                                if (match && match[1]) {
-                                  const nota = parseInt(match[1]);
-                                  if (nota >= 0 && nota <= 100) {
-                                    notaGlobal = nota;
-                                    notaMaximaTotal = 100;
-                                    break;
-                                  }
-                                }
-                              }
-                            }
-                          }
-                          
-                          // Só exibe se encontrou alguma nota
-                          if (notaGlobal === 0 && notaMaximaTotal === 0) return null;
-                          
-                          return (
-                            <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-2xl p-8 text-white text-center mb-8">
-                              <div className="flex items-center justify-center mb-4">
-                                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                                  <span className="text-3xl font-bold">📊</span>
-                                </div>
-                              </div>
-                              <h3 className="text-2xl font-bold mb-2">Nota Estimada</h3>
-                              <div className="text-6xl font-black mb-4">
-                                {notaGlobal}
-                              </div>
-                              <div className="text-lg opacity-90">
-                                de {notaMaximaTotal} pontos
-                                {notas.length > 0 && (
-                                  <span className="block text-sm mt-1 opacity-75">
-                                    ({notas.reduce((acc, n) => acc + n.obtida, 0)}/{notaMaximaTotal} pontos obtidos)
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-4 w-full bg-white/20 rounded-full h-3">
-                                <div 
-                                  className="bg-white rounded-full h-3 transition-all duration-1000 ease-out"
-                                  style={{ 
-                                    width: `${notaGlobal}%` 
-                                  }}
-                                ></div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                        
-                        {/* Extrair notas dos critérios para exibir sem blur */}
-                        {(() => {
-                          // Extrair notas dos critérios
-                          const criterios = [
-                            { nome: 'Adequação aos critérios do edital', peso: 40, pattern: /Adequação aos critérios do edital.*?(\d+)%.*?:\s*(\d+)/i },
-                            { nome: 'Viabilidade e capacidade de execução', peso: 30, pattern: /Viabilidade e capacidade de execução.*?(\d+)%.*?:\s*(\d+)/i },
-                            { nome: 'Qualidade técnica e inovação', peso: 20, pattern: /Qualidade técnica e inovação.*?(\d+)%.*?:\s*(\d+)/i },
-                            { nome: 'Impacto cultural e relevância', peso: 10, pattern: /Impacto cultural e relevância.*?(\d+)%.*?:\s*(\d+)/i }
-                          ];
-                          
-                          const criteriosComNotas = criterios.map(criterio => {
-                            const match = projeto.analise_ia.match(criterio.pattern);
-                            if (match && match[2]) {
-                              return {
-                                ...criterio,
-                                nota: parseInt(match[2]),
-                                notaMaxima: criterio.peso
-                              };
-                            }
-                            return null;
-                          }).filter(Boolean);
-                          
-                          if (criteriosComNotas.length === 0) return null;
-                          
-                          return (
-                            <div className="mb-8">
-                              {/* Grid de Critérios - SEM BLUR para mostrar as notas */}
-                              {criteriosComNotas.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {criteriosComNotas.map((criterio: any, idx) => {
-                                const percentual = (criterio.nota / criterio.notaMaxima) * 100;
-                                const cor = percentual >= 75 ? 'bg-green-500' : percentual >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-                                
-                                return (
-                                  <div key={idx} className="bg-white border-2 border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative min-w-0">
-                                    <div className="flex items-start justify-between gap-3 mb-3 min-w-0">
-                                      <div className="flex-1 min-w-0">
-                                        <h4 className="font-semibold text-gray-800 text-sm leading-tight break-words">{criterio.nome}</h4>
-                                        <p className="text-xs text-gray-500 mt-1">Peso: {criterio.peso}%</p>
-                                      </div>
-                                      <div className="flex-shrink-0 text-right w-12 md:w-auto">
-                                        <div className="text-xl md:text-2xl font-bold text-oraculo-blue">{criterio.nota}</div>
-                                        <div className="text-xs text-gray-500">de {criterio.notaMaxima}</div>
-                                      </div>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden min-w-0">
-                                      <div 
-                                        className={`${cor} h-2 rounded-full transition-all duration-500`}
-                                        style={{ width: `${percentual}%` }}
-                                      ></div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-600 text-right pr-0">
-                                      {percentual.toFixed(0)}% do peso máximo
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        <NotasCriteriosPainel
+                          analiseTexto={projeto.analise_ia}
+                          notaPersistida={{
+                            nota_estimada: projeto.nota_estimada,
+                            nota_estimada_max: projeto.nota_estimada_max,
+                            notas_criterios: projeto.notas_criterios,
+                          }}
+                        />
 
                         {/* Renderizar conteúdo da análise */}
-                          {(() => {
-                            // Primeiro remover sugestões do texto completo
-                            const textoSemSugestoes = removerSugestoesDoTexto(projeto.analise_ia);
-                            
-                            // Processar o texto da análise removendo markdown e seções já exibidas
-                            const textoProcessado = formatarTextoParaExibicao(textoSemSugestoes);
-                            console.log('[Projeto] Texto processado para exibição (sem sugestões):', textoProcessado.substring(0, 200));
-                            
-                            // Remover partes já exibidas (nota)
-                            let textoLimpo = textoProcessado;
-                            const linhas = textoLimpo.split('\n');
-                            const linhasFiltradas = linhas.filter(linha => {
-                              const linhaLower = linha.toLowerCase();
-                              return !linhaLower.includes('nota estimada');
-                            });
-                            textoLimpo = linhasFiltradas.join('\n');
-                            
-                            // Dividir texto em seções (parágrafos separados por \n\n)
-                            // Primeiro, vamos preservar seções numeradas que podem ter múltiplos parágrafos
-                            let secoesBrutas = textoLimpo.split('\n\n').filter(sec => sec.trim().length > 0);
-                            
-                            // Agrupar seções que pertencem a um mesmo item numerado
-                            const secoesAgrupadas: string[] = [];
-                            let secaoAtual = '';
-                            
-                            for (let i = 0; i < secoesBrutas.length; i++) {
-                              const sec = secoesBrutas[i].trim();
-                              const secLower = sec.toLowerCase();
-                              
-                              // Verificar se deve exibir esta seção
-                              const deveExibir = !secLower.includes('nota estimada') && 
-                                     !secLower.includes('sugestões de melhoria') &&
-                                     !secLower.includes('sugestoes de melhoria') &&
-                                     !secLower.match(/^sugest[ãa]o\s+\d+[:.]/i) &&
-                                     !secLower.match(/^\d+[\.\)]\s*sugest[ãa]o:/i);
-                              
-                              if (!deveExibir) continue;
-                              
-                              // Verificar se é início de nova seção numerada
-                              const isInicioNumerado = /^\d+[.)]\s/.test(sec);
-                              
-                              if (isInicioNumerado && secaoAtual) {
-                                // Se já temos uma seção acumulada, salvar ela e começar nova
-                                secoesAgrupadas.push(secaoAtual.trim());
-                                secaoAtual = sec;
-                              } else if (isInicioNumerado) {
-                                // Iniciar nova seção numerada
-                                secaoAtual = sec;
-                              } else if (secaoAtual && /^\d+[.)]\s/.test(secaoAtual)) {
-                                // Se estamos dentro de uma seção numerada, continuar acumulando
-                                secaoAtual += '\n\n' + sec;
-                              } else {
-                                // Seção normal (não numerada), adicionar diretamente
-                                if (secaoAtual) {
-                                  secoesAgrupadas.push(secaoAtual.trim());
-                                  secaoAtual = '';
-                                }
-                                secoesAgrupadas.push(sec);
-                              }
-                            }
-                            
-                            // Adicionar última seção se houver
-                            if (secaoAtual) {
-                              secoesAgrupadas.push(secaoAtual.trim());
-                            }
-                            
-                            const secoes = secoesAgrupadas;
-                            
-                            // Primeiras seções e resto (toda a análise visível)
-                            const primeirasSecoes = secoes.slice(0, 2);
-                            const restoSecoes = secoes.slice(2);
-                            
-                            // Função para renderizar uma seção
-                            const renderizarSecao = (section: string, index: number) => {
-                              const secaoLimpa = limparMarkdown(section);
-                              
-                              // Verificar se começa com título específico seguido de conteúdo na mesma seção
-                              // Padrão: "1. ADEQUAÇÃO..." ou "2. PONTOS FORTES..." seguido de \n ou \n\n e conteúdo
-                              // Primeiro tenta com \n\n, depois com \n
-                              let tituloComConteudo = secaoLimpa.trim().match(/^((\d+[.)]\s*)?(ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL|PONTOS FORTES DO PROJETO|PONTOS FRACOS E GAPS):?\s*)\n\n(.+)/is);
-                              let conteudoRestante = '';
-                              if (tituloComConteudo) {
-                                conteudoRestante = tituloComConteudo[4] || '';
-                              } else {
-                                tituloComConteudo = secaoLimpa.trim().match(/^((\d+[.)]\s*)?(ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL|PONTOS FORTES DO PROJETO|PONTOS FRACOS E GAPS):?\s*)\n([^\n].+)/is);
-                                if (tituloComConteudo) {
-                                  conteudoRestante = tituloComConteudo[4] || '';
-                                }
-                              }
-                              
-                              if (tituloComConteudo) {
-                                const [, , , tituloBase] = tituloComConteudo;
-                                const tituloLimpo = tituloBase.replace(/[:.]$/, '').trim();
-                                
-                                return (
-                                  <React.Fragment key={index}>
-                                    <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8 first:mt-0">
-                                      <h2 className="text-2xl font-bold text-gray-900 uppercase">
-                                        {tituloLimpo}
-                                      </h2>
-                                    </div>
-                                    {/* Renderizar o conteúdo restante */}
-                                    {conteudoRestante.split('\n\n').filter(s => s.trim()).map((subSec, subIdx) => 
-                                      renderizarSecao(subSec, index * 1000 + subIdx)
-                                    )}
-                                  </React.Fragment>
-                                );
-                              }
-                              
-                              // Títulos específicos que devem ser em negrito (quando são apenas o título, sem conteúdo)
-                              const tituloLimpo = secaoLimpa.trim().replace(/[:.]$/, '').trim();
-                              
-                              // Verificar se é um dos títulos específicos (verificação mais flexível)
-                              if (
-                                /^(\d+[.)]\s*)?ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL\s*$/i.test(tituloLimpo) ||
-                                /^(\d+[.)]\s*)?PONTOS FORTES DO PROJETO\s*$/i.test(tituloLimpo) ||
-                                /^(\d+[.)]\s*)?PONTOS FRACOS E GAPS\s*$/i.test(tituloLimpo) ||
-                                /^Sugestões de Melhoria\s*$/i.test(tituloLimpo)
-                              ) {
-                                const titulo = tituloLimpo.replace(/^\d+[.)]\s*/, '').trim();
-                                return (
-                                  <div key={index} className="border-b-2 border-gray-300 pb-4 mb-6 mt-8 first:mt-0">
-                                    <h2 className="text-2xl font-bold text-gray-900 uppercase">
-                                      {titulo}
-                                    </h2>
-                                  </div>
-                                );
-                              }
-                              
-                              // Verificar se é um cabeçalho de seção menor (uma linha em maiúsculas) - SEM negrito
-                              const isSectionHeader = secaoLimpa.trim().endsWith(':') && 
-                                                     /^[A-Z][A-Z\s]+:?\s*$/.test(secaoLimpa.trim());
-                              
-                              if (isSectionHeader) {
-                                return (
-                                  <div key={index} className="border-b border-gray-200 pb-3 mb-4 mt-6 first:mt-0">
-                                    <h3 className="text-xl text-gray-900">
-                                      {secaoLimpa.replace(/[:.]$/, '').trim()}
-                                    </h3>
-                                  </div>
-                                );
-                              }
-                              
-                              // Verificar se é um critério numerado (ex: "1. Relevância artístico-cultural da proposta (0 a 30 pontos):")
-                              const criterioMatch = secaoLimpa.trim().match(/^(\d+)[.)]\s*(.+?)\s*\([^)]+\):?\s*(.*)$/);
-                              if (criterioMatch) {
-                                const [, numero, tituloCriterio, conteudo] = criterioMatch;
-                                const linhasConteudo = conteudo.trim().split('\n').filter(l => l.trim());
-                                
-                                return (
-                                  <div key={index} className="mb-6">
-                                    <h4 className="text-lg font-bold text-gray-900 mb-3">
-                                      {numero}. {tituloCriterio.trim()}
-                                    </h4>
-                                    {linhasConteudo.length > 0 && (
-                                      <div className="text-gray-700 leading-relaxed text-base ml-4">
-                                        {linhasConteudo.map((line, lineIndex) => {
-                                          const linhaLimpa = line.trim();
-                                          if (!linhaLimpa) return null;
-                                          // Verificar se a linha termina com "Nota: X/Y"
-                                          const notaMatch = linhaLimpa.match(/^(.+?)\s*(Nota:\s*\d+\/\d+\.?)$/i);
-                                          if (notaMatch) {
-                                            return (
-                                              <p key={lineIndex} className={lineIndex > 0 ? 'mt-3' : ''}>
-                                                {notaMatch[1].trim()}{' '}
-                                                <span className="font-bold text-oraculo-blue">{notaMatch[2]}</span>
-                                              </p>
-                                            );
-                                          }
-                                          return (
-                                            <p key={lineIndex} className={lineIndex > 0 ? 'mt-3' : ''}>
-                                              {linhaLimpa}
-                                            </p>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              
-                              // Verificar se é um item numerado genérico
-                              const isNumberedItem = /^\d+[.)]\s/.test(secaoLimpa.trim());
-                              if (isNumberedItem) {
-                                const numero = secaoLimpa.match(/^\d+/)?.[0];
-                                const conteudo = secaoLimpa.replace(/^\d+[.)]\s*/, '').trim();
-                                const partes = conteudo.split(':');
-                                const titulo = partes[0].trim();
-                                const restoConteudo = partes.slice(1).join(':').trim();
-                                const tituloUpper = titulo.toUpperCase();
-                                const ehTituloPrincipal =
-                                  tituloUpper === 'ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL' ||
-                                  tituloUpper === 'PONTOS FORTES DO PROJETO' ||
-                                  tituloUpper === 'PONTOS FRACOS E GAPS' ||
-                                  tituloUpper === 'SUGESTÕES DE MELHORIA';
-                                if (ehTituloPrincipal) {
-                                  return (
-                                    <React.Fragment key={index}>
-                                      <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8 first:mt-0">
-                                        <h2 className="text-2xl font-bold text-gray-900 uppercase">
-                                          {numero}. {titulo}
-                                        </h2>
-                                      </div>
-                                      {restoConteudo && (
-                                        <div className="text-gray-700 leading-relaxed text-base mb-4 mt-2">
-                                          {restoConteudo.split('\n').map((line, lineIndex) => {
-                                            const linhaLimpa = line.trim();
-                                            if (!linhaLimpa) return null;
-                                            return (
-                                              <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
-                                                {linhaLimpa}
-                                              </p>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                }
-                                return (
-                                  <div key={index} className="mb-5">
-                                    <h4 className="text-lg font-bold text-gray-900 mb-2">
-                                      {numero}. {titulo}
-                                    </h4>
-                                    {restoConteudo && (
-                                      <div className="text-gray-700 leading-relaxed text-base ml-4">
-                                        {restoConteudo.split('\n').map((line, lineIndex) => {
-                                          const linhaLimpa = line.trim();
-                                          if (!linhaLimpa) return null;
-                                          return (
-                                            <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
-                                              {linhaLimpa}
-                                            </p>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              
-                              // Verificar se é uma lista com bullets
-                              const linhas = secaoLimpa.split('\n');
-                              const temBullets = linhas.some(l => /^[-•]\s/.test(l.trim()));
-                              if (temBullets) {
-                                return (
-                                  <div key={index} className="text-gray-700 leading-relaxed text-base mb-4">
-                                    {linhas.map((line, lineIndex) => {
-                                      const linhaLimpa = line.trim();
-                                      if (!linhaLimpa) return null;
-                                      const bulletMatch = linhaLimpa.match(/^[-•]\s*(.+?):\s*(.+)$/);
-                                      if (bulletMatch) {
-                                        return (
-                                          <p key={lineIndex} className={lineIndex > 0 ? 'mt-3' : 'mt-2'}>
-                                            <span className="font-bold text-gray-900">{bulletMatch[1]}:</span> {bulletMatch[2]}
-                                          </p>
-                                        );
-                                      }
-                                      return (
-                                        <p key={lineIndex} className={lineIndex > 0 ? 'mt-2' : ''}>
-                                          {linhaLimpa.replace(/^[-•]\s*/, '')}
-                                        </p>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              }
-                              
-                              // Conteúdo normal (parágrafo)
-                              return (
-                                <div key={index} className="text-gray-700 leading-relaxed text-base mb-4">
-                                  {secaoLimpa.split('\n').map((line, lineIndex) => {
-                                    const linhaLimpa = line.trim();
-                                    if (!linhaLimpa) return null;
-                                    return (
-                                      <p key={lineIndex} className={lineIndex > 0 ? 'mt-3' : ''}>
-                                        {linhaLimpa}
-                                      </p>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            };
-                            
-                            // Verificar se há seção "PONTOS FRACOS E GAPS" e encontrar o primeiro critério após ela
-                            let encontrouPontosFracos = false;
-                            let primeiroCriterioIndex = -1;
-                            
-                            const todasSecoes = [...primeirasSecoes, ...restoSecoes];
-                            for (let i = 0; i < todasSecoes.length; i++) {
-                              const secaoLimpaTeste = limparMarkdown(todasSecoes[i]).trim();
-                              if (/PONTOS FRACOS E GAPS/i.test(secaoLimpaTeste)) {
-                                encontrouPontosFracos = true;
-                              }
-                              if (encontrouPontosFracos && /^\d+[.)]\s*(.+?)\s*\([^)]+\)/.test(secaoLimpaTeste)) {
-                                primeiroCriterioIndex = i;
-                                break;
-                              }
-                            }
-                            
-                            return (
-                              <>
-                                {/* Primeiras seções - VISÍVEIS (se houver) */}
-                                {primeirasSecoes.map((section, index) => {
-                                  // Se este é o primeiro critério após PONTOS FRACOS, adicionar título antes
-                                  if (index === primeiroCriterioIndex && primeiroCriterioIndex < primeirasSecoes.length) {
-                                    return (
-                                      <React.Fragment key={`fragment-${index}`}>
-                                        <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
-                                          <h2 className="text-2xl font-bold text-gray-900">
-                                            Avaliação final
-                                          </h2>
-                                        </div>
-                                        {renderizarSecao(section, index)}
-                                      </React.Fragment>
-                                    );
-                                  }
-                                  return renderizarSecao(section, index);
-                                })}
-                                
-                                {/* Resto do conteúdo da análise (sem blur) */}
-                                <div className="relative">
-                                  <div>
-                                  {restoSecoes.map((section, index) => {
-                                    const idxGlobal = primeirasSecoes.length + index;
-                                    // Se este é o primeiro critério após PONTOS FRACOS, adicionar título antes
-                                    if (idxGlobal === primeiroCriterioIndex && primeiroCriterioIndex >= primeirasSecoes.length) {
-                                      return (
-                                        <React.Fragment key={`fragment-${idxGlobal}`}>
-                                          <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
-                                            <h2 className="text-2xl font-bold text-gray-900">
-                                              Avaliação final
-                                            </h2>
-                                          </div>
-                                          {renderizarSecao(section, idxGlobal)}
-                                        </React.Fragment>
-                                      );
-                                    }
-                                    return renderizarSecao(section, idxGlobal);
-                                  })}
-                                  
-                                  {/* Sugestões de Melhoria - Todas as sugestões */}
+                        <AnaliseMarkdown content={projeto.analise_ia} />
+
                         {sugestoes.length > 0 && (
                           <>
                             <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
@@ -2053,15 +1651,20 @@ const Projeto = () => {
                                 Sugestões de Melhoria
                               </h2>
                             </div>
-                            {sugestoes.map((sugestao, idx) => (
+                            {sugestoes.map((sugestao, idx) => {
+                              const textoSugestao = limparMarkdown(
+                                sugestao.replace(/^Sugestão:\s*/i, '').trim()
+                              );
+                              return (
                               <div key={`sugestao-${idx}`} className={`bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 shadow-sm mb-4 ${aprovacoes[idx] ? 'border-green-500 bg-green-50/50' : 'border-oraculo-blue'}`}>
                                 <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1">
-                                <div className="text-base text-gray-800 leading-relaxed">
-                                  <span className={`text-lg font-medium ${aprovacoes[idx] ? 'text-green-700' : 'text-gray-800'}`}>
-                                    💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
-                                  </span>
-                                </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-oraculo-blue mb-2">
+                                      Sugestão {idx + 1}
+                                    </p>
+                                    <p className={`text-base leading-relaxed ${aprovacoes[idx] ? 'text-green-800' : 'text-gray-800'}`}>
+                                      {textoSugestao}
+                                    </p>
                                   </div>
                                   <Button
                                     size="sm"
@@ -2090,14 +1693,10 @@ const Projeto = () => {
                                   </Button>
                                 </div>
                               </div>
-                            ))}
+                            );
+                            })}
                           </>
                         )}
-                                  </div>
-                                </div>
-                              </>
-                            );
-                          })()}
                       </div>
                       
                       {/* Campo para sugestão personalizada */}

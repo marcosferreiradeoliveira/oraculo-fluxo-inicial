@@ -37,8 +37,8 @@ const PreencherAnexos = () => {
   const [progress, setProgress] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-  const currentStep = 7;
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const currentStep = 8;
 
   // Analytics: etapa "Preencher Anexos" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
   const stepViewedRef = React.useRef(false);
@@ -323,8 +323,9 @@ const PreencherAnexos = () => {
                     `/projeto/${id}`,
                     `/projeto/${id}/alterar-com-ia`,
                     `/projeto/${id}/gerar-textos`,
-                    `/projeto/${id}/criar-orcamento`,
                     `/projeto/${id}/criar-cronograma`,
+                    `/projeto/${id}/criar-orcamento`,
+                    `/projeto/${id}/equipe`,
                     `/projeto/${id}/documentos-inscricao`,
                     `/projeto/${id}/preencher-anexos`,
                   ];

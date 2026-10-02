@@ -27,8 +27,8 @@ interface EditalDocument {
   [key: string]: unknown;
 }
 
-const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
-const currentStep = 6; // Documentos de Inscrição = bolinha 7
+const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
+const currentStep = 7;
 
 const DocumentosInscricao = () => {
   const { id } = useParams<{ id: string }>();
@@ -171,8 +171,9 @@ const DocumentosInscricao = () => {
                     `/projeto/${id}`,
                     `/projeto/${id}/alterar-com-ia`,
                     `/projeto/${id}/gerar-textos`,
-                    `/projeto/${id}/criar-orcamento`,
                     `/projeto/${id}/criar-cronograma`,
+                    `/projeto/${id}/criar-orcamento`,
+                    `/projeto/${id}/equipe`,
                     `/projeto/${id}/documentos-inscricao`,
                     `/projeto/${id}/preencher-anexos`,
                   ];
@@ -218,7 +219,7 @@ const DocumentosInscricao = () => {
 
             <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+                <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div className="min-w-0">
@@ -248,7 +249,7 @@ const DocumentosInscricao = () => {
                     ? 'Este edital não possui lista de documentação exigida cadastrada.'
                     : 'Associe um edital ao projeto para ver os documentos exigidos para inscrição.'}
                   <div className="mt-4">
-                    <Button variant="outline" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+                    <Button variant="outline" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                       Voltar ao Cronograma
                     </Button>
                   </div>
@@ -329,7 +330,7 @@ const DocumentosInscricao = () => {
             )}
 
             <div className="mt-6">
-              <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}>
+              <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(`/projeto/${id}/equipe`)}>
                 Voltar ao Cronograma
               </Button>
             </div>

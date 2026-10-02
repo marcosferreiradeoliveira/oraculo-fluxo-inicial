@@ -19,7 +19,6 @@ export function DashboardHeader() {
       await updateDoc(userDocRef, {
         nome_completo: nomeCompleto
       });
-      console.log('Campo nome_completo corrigido para:', nomeCompleto);
       return nomeCompleto;
     } catch (error) {
       console.error('Erro ao corrigir nome_completo:', error);
@@ -37,20 +36,8 @@ export function DashboardHeader() {
         // Forçar nova leitura sem cache
         const userDoc = await getDoc(userDocRef);
         
-        // Verificar se há múltiplos documentos para o mesmo UID
-        console.log('UID do usuário:', firebaseUser.uid);
-        console.log('Documento ID sendo lido:', userDocRef.id);
-        
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          console.log('Dados do usuário:', userData);
-          console.log('Nome completo raw:', userData.nome_completo);
-          console.log('Tipo do nome_completo:', typeof userData.nome_completo);
-          console.log('Nome completo length:', userData.nome_completo?.length);
-          console.log('Todas as chaves do documento:', Object.keys(userData));
-          console.log('Verificando se nome_completo existe:', 'nome_completo' in userData);
-          console.log('Valor exato do nome_completo:', JSON.stringify(userData.nome_completo));
-          
           identifyMixpanelUser(firebaseUser.uid, {
             email: firebaseUser.email || userData.email,
             name: userData.nome_completo || firebaseUser.displayName,
@@ -69,17 +56,14 @@ export function DashboardHeader() {
           // Buscar nome na collection usuarios
           if (userData.nome_completo && userData.nome_completo.trim()) {
             const primeiroNome = userData.nome_completo.trim().split(' ')[0];
-            console.log('Nome encontrado no Firestore:', primeiroNome);
             setNomeUsuario(primeiroNome);
           } else {
-            console.log('Nome completo vazio, corrigindo automaticamente...');
             const nomeCorrigido = await fixEmptyNomeCompleto(userDocRef, firebaseUser);
             const primeiroNome = nomeCorrigido.split(' ')[0];
             setNomeUsuario(primeiroNome);
           }
         } else {
           const displayName = firebaseUser.displayName ? firebaseUser.displayName.split(' ')[0] : 'usuário';
-          console.log('Usuário não encontrado no Firestore, usando displayName:', displayName);
           setNomeUsuario(displayName);
         }
       } else {

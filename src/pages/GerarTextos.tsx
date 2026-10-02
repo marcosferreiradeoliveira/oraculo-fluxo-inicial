@@ -87,7 +87,7 @@ const GerarTextos = () => {
   const isMounted = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Orçamento', 'Criar Cronograma', 'Documentos de Inscrição', 'Preencher Anexos'];
+  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
   const currentStep = 3; // Gerar Textos
   const totalVisible = 5;
   const startIndex = Math.max(0, Math.min(currentStep - 2, steps.length - totalVisible));
@@ -97,9 +97,10 @@ const GerarTextos = () => {
     if (index === 1) return id ? `/projeto/${id}` : '#';
     if (index === 2) return id ? `/projeto/${id}/alterar-com-ia` : '#';
     if (index === 3) return '#';
-    if (index === 4) return id ? `/projeto/${id}/criar-orcamento` : '#';
-    if (index === 5) return id ? `/projeto/${id}/criar-cronograma` : '#';
-    if (index === 6) return id ? `/projeto/${id}/documentos-inscricao` : '#';
+    if (index === 4) return id ? `/projeto/${id}/criar-cronograma` : '#';
+    if (index === 5) return id ? `/projeto/${id}/criar-orcamento` : '#';
+    if (index === 6) return id ? `/projeto/${id}/equipe` : '#';
+    if (index === 7) return id ? `/projeto/${id}/documentos-inscricao` : '#';
     return id ? `/projeto/${id}/preencher-anexos` : '#';
   };
 
@@ -822,10 +823,10 @@ const GerarTextos = () => {
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
                 <Button
                   size="lg"
-                  onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                  onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Próximo: Criar Orçamento <span className="ml-2 opacity-90">→</span>
+                  Próximo: Criar Cronograma <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>
@@ -1096,15 +1097,15 @@ const GerarTextos = () => {
               </div>
             </div>
             
-            {/* Próximo passo: Criar Orçamento — responsivo */}
+            {/* Próximo passo: Criar Cronograma — responsivo */}
             <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
               <Button
                 size="lg"
-                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
+                onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
               >
-                Próximo: Criar Orçamento <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+                Próximo: Criar Cronograma <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
               </Button>
             </div>
           </div>
