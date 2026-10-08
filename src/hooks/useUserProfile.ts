@@ -8,6 +8,9 @@ export type PremiumProjectSummary = {
   nome: string;
   editalLabel?: string;
   etapaAtual: number;
+  tipo_projeto?: 'mae' | 'edital';
+  edital_id?: string;
+  edital_associado?: string;
 };
 
 export type HomeDashboardMetrics = {
@@ -68,6 +71,11 @@ async function loadProjectMetrics(uid: string): Promise<HomeDashboardMetrics> {
         (typeof p.nome_edital === 'string' && p.nome_edital) ||
         undefined,
       etapaAtual: typeof p.etapa_atual === 'number' ? p.etapa_atual : 1,
+      tipo_projeto:
+        p.tipo_projeto === 'mae' || p.tipo_projeto === 'edital' ? p.tipo_projeto : undefined,
+      edital_id: typeof p.edital_id === 'string' ? p.edital_id : undefined,
+      edital_associado:
+        typeof p.edital_associado === 'string' ? p.edital_associado : undefined,
     })),
   };
 }

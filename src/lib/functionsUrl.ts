@@ -18,3 +18,7 @@ export function getFunctionsBaseUrl(): string {
   }
   return PRODUCTION_FUNCTIONS;
 }
+
+export function getAdicionarContatoBrevoUrl(): string {
+  return `${getFunctionsBaseUrl()}/adicionarContatoBrevo`;
+}

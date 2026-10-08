@@ -20,7 +20,7 @@ type DashboardPremiumHeroProps = {
   editalUrgente: EditalUrgenteInfo | null;
   onCriarProjeto: () => void;
   onVerEditais: () => void;
-  onContinuarProjeto: (projectId: string) => void;
+  onContinuarProjeto: (project: PremiumProjectSummary) => void;
   onAvaliarEditalUrgente: (editalId: string) => void;
 };
 
@@ -132,7 +132,7 @@ export function DashboardPremiumHero({
           <h2 className="text-sm font-semibold text-gray-900 mb-3">Continue de onde parou</h2>
           <ul className="space-y-2">
             {metrics.recentProjects.map((proj) => (
-              <ProjectRow key={proj.id} project={proj} onOpen={() => onContinuarProjeto(proj.id)} />
+              <ProjectRow key={proj.id} project={proj} onOpen={() => onContinuarProjeto(proj)} />
             ))}
           </ul>
         </div>

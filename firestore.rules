@@ -398,10 +398,24 @@ service cloud.firestore {
       allow update, delete: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
     }
 
+    function canAccessPortfolioEmpresa(empresaId) {
+      return isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId);
+    }
+
     match /portfolios/{portfolioId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null && canAccessPortfolioEmpresa(resource.data.empresaId))
+      );
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid
+        && request.resource.data.empresaId != null
+        && canAccessPortfolioEmpresa(request.resource.data.empresaId);
+      allow update, delete: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null && canAccessPortfolioEmpresa(resource.data.empresaId))
+      );
     }
 
     match /fornecedores/{fornecedorId} {

@@ -2,9 +2,23 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Regra temporária para teste - permitir tudo para usuários autenticados
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isReasonableUpload() {
+      return request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // PDFs importados, capas, anexos do edital
+    match /editais/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableUpload();
+    }
+
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isReasonableUpload();
     }
   }
 }

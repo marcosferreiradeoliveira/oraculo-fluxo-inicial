@@ -1,9 +1,117 @@
 /** Duração e resumo do cronograma (espelho de src/lib/cronogramaDuracao.ts). */
 
+function normalizarDataCronograma(raw) {
+  if (raw == null) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  const isoPrefix = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoPrefix) {
+    const y = isoPrefix[1];
+    const m = isoPrefix[2].padStart(2, '0');
+    const d = isoPrefix[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const br = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (br) {
+    const dd = br[1].padStart(2, '0');
+    const mm = br[2].padStart(2, '0');
+    return `${br[3]}-${mm}-${dd}`;
+  }
+
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return '';
+}
+
+function utcMsFromYmd(ymd) {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return Date.UTC(y, mo - 1, d);
+}
+
+/** Corrige pares invertidos (fim antes do início) — comum na saída da IA. */
+function corrigirInicioFimCronograma(inicio, fim) {
+  let ini = normalizarDataCronograma(inicio);
+  let f = normalizarDataCronograma(fim);
+  if (!ini && !f) return { inicio: '', fim: '' };
+  if (!ini) ini = f;
+  if (!f) f = ini;
+
+  let a = utcMsFromYmd(ini);
+  let b = utcMsFromYmd(f);
+  if (a == null || b == null) return { inicio: ini, fim: f };
+
+  if (b < a) {
+    const iniSw = f;
+    const fSw = ini;
+    const aSw = utcMsFromYmd(iniSw);
+    const bSw = utcMsFromYmd(fSw);
+    if (aSw != null && bSw != null && bSw >= aSw) {
+      return { inicio: iniSw, fim: fSw };
+    }
+    return { inicio: ini, fim: ini };
+  }
+  return { inicio: ini, fim: f };
+}
+
+function clampParDatasCronograma(inicio, fim, minYmd, maxYmd) {
+  const min = normalizarDataCronograma(minYmd);
+  const max = normalizarDataCronograma(maxYmd);
+  if (!min || !max) return corrigirInicioFimCronograma(inicio, fim);
+
+  let { inicio: ini, fim: f } = corrigirInicioFimCronograma(inicio, fim);
+  if (!ini || !f) return { inicio: ini, fim: f };
+
+  const minMs = utcMsFromYmd(min);
+  const maxMs = utcMsFromYmd(max);
+  let a = utcMsFromYmd(ini);
+  let b = utcMsFromYmd(f);
+  if (minMs == null || maxMs == null || a == null || b == null) {
+    return { inicio: ini, fim: f };
+  }
+
+  if (a < minMs) {
+    ini = min;
+    a = minMs;
+  }
+  if (b > maxMs) {
+    f = max;
+    b = maxMs;
+  }
+  if (b < a) {
+    f = ini;
+  }
+  return { inicio: ini, fim: f };
+}
+
+function sanitizarEtapasCronogramaGeradas(etapas, opts = {}) {
+  const { minYmd, maxYmd } = opts;
+  if (!Array.isArray(etapas)) return [];
+  return etapas.map((e) => {
+    const par =
+      minYmd && maxYmd
+        ? clampParDatasCronograma(e.inicio, e.fim, minYmd, maxYmd)
+        : corrigirInicioFimCronograma(e.inicio, e.fim);
+    return { ...e, inicio: par.inicio, fim: par.fim };
+  });
+}
+
 function parseDataIso(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const d = new Date(raw.slice(0, 10));
-  return Number.isNaN(d.getTime()) ? null : d.getTime();
+  const n = normalizarDataCronograma(raw);
+  if (!n) return null;
+  const ms = utcMsFromYmd(n);
+  return ms == null ? null : ms;
 }
 
 function inferirDuracaoMesesCronograma(cronograma) {
@@ -87,4 +195,8 @@ module.exports = {
   inferirDuracaoMesesCronograma,
   resumoCronogramaParaOrcamento,
   instrucoesOrcamentoAlinhadoCronograma,
+  normalizarDataCronograma,
+  corrigirInicioFimCronograma,
+  clampParDatasCronograma,
+  sanitizarEtapasCronogramaGeradas,
 };

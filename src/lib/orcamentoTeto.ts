@@ -1,3 +1,6 @@
+import type { CronogramaLike } from '@/lib/cronogramaDuracao';
+import { inferirMesesRubricaNoCronograma } from '@/lib/cronogramaDuracao';
+
 /** Cooldown da Cloud Function gerarTextosProjeto (30s) + margem. */
 export const ORCAMENTO_COOLDOWN_ENTRE_TENTATIVAS_SEC = 33;
 
@@ -106,6 +109,7 @@ export function arredondarValorOrcamento(valor: number, teto: number): number {
 }
 
 export type RubricaComTotal = {
+  nome?: string;
   total: number;
   valorUnitario?: number;
   quantidade?: number;
@@ -137,6 +141,18 @@ export function unidadeEhMes(unidade?: string): boolean {
   return u === 'mês' || u === 'mes' || u === 'meses';
 }
 
+/** Rubricas cujo total = qtd × meses (ou pessoas×meses) × valor unitário mensal. */
+export function unidadeUsaMesesDoCronograma(unidade?: string): boolean {
+  const u = (unidade || '').toLowerCase().trim();
+  return (
+    unidadeEhMes(u) ||
+    u === 'pessoa' ||
+    u === 'pessoas' ||
+    u === 'locação' ||
+    u === 'locacao'
+  );
+}
+
 /** Após ajuste ao teto, recalcula valor unitário a partir de qtd × qtd.un. × unit. = total. */
 export function repartirValorUnitarioNasRubricas<T extends RubricaComTotal>(
   rubricas: T[],
@@ -155,22 +171,29 @@ export function repartirValorUnitarioNasRubricas<T extends RubricaComTotal>(
 }
 
 /**
- * Rubricas mensais: quantidadeUnidade = meses (cronograma ou explícito na linha).
+ * Rubricas mensais / profissionais: quantidadeUnidade = meses no cronograma; valor unitário = mensal.
  */
 export function aplicarMesesCronogramaNasRubricas<T extends RubricaComTotal>(
   rubricas: T[],
   duracaoMeses: number,
-  teto: number
+  teto: number,
+  cronograma?: CronogramaLike | null
 ): T[] {
   const maxMeses = Math.max(1, Math.min(120, duracaoMeses));
   return rubricas.map((r) => {
-    if (!unidadeEhMes(r.unidade)) return r;
+    if (!unidadeUsaMesesDoCronograma(r.unidade)) return r;
     let meses = r.quantidadeUnidade ?? 1;
+    if (meses <= 1 && r.nome?.trim()) {
+      const porRubrica = inferirMesesRubricaNoCronograma(r.nome, cronograma);
+      if (porRubrica != null && porRubrica > 1) meses = porRubrica;
+    }
     if (meses <= 1) meses = maxMeses;
     meses = Math.max(1, Math.min(maxMeses, Math.round(meses)));
-    const q = r.quantidade ?? 1;
+    const q = Math.max(1, r.quantidade ?? 1);
+    const unidade =
+      r.unidade === 'pessoa' || r.unidade === 'pessoas' ? 'mês' : r.unidade;
     return repartirValorUnitarioNasRubricas(
-      [{ ...r, quantidadeUnidade: meses, quantidade: q }],
+      [{ ...r, unidade, quantidadeUnidade: meses, quantidade: q }],
       teto
     )[0];
   });
@@ -180,9 +203,10 @@ export function posProcessarRubricasGeradas<T extends RubricaComTotal>(
   rubricas: T[],
   teto: number,
   duracaoMeses: number,
-  opts?: { usarValorCheio?: boolean }
+  opts?: { usarValorCheio?: boolean; cronograma?: CronogramaLike | null }
 ): T[] {
-  let items = aplicarMesesCronogramaNasRubricas(rubricas, duracaoMeses, teto);
+  const cronograma = opts?.cronograma;
+  let items = aplicarMesesCronogramaNasRubricas(rubricas, duracaoMeses, teto, cronograma);
   items = ajustarRubricasAoTeto(items, teto, opts);
   return repartirValorUnitarioNasRubricas(items, teto);
 }

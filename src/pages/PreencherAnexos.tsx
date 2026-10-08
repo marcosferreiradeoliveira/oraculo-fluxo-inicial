@@ -10,6 +10,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackProjectStepViewed } from '@/lib/analytics';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
 
 interface ProjetoDocument {
   id: string;
@@ -223,15 +224,8 @@ const PreencherAnexos = () => {
     setProgress('Processando PDF com IA...');
 
     try {
-      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/preencherAnexoPDF';
-      
-      console.log('Enviando para processar:', {
-        pdfUrl: fileUrl,
-        nomeProjeto: projeto.nome,
-        userId: user.uid,
-        projetoId: id
-      });
-      
+      const endpoint = `${getFunctionsBaseUrl()}/preencherAnexoPDF`;
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -247,15 +241,15 @@ const PreencherAnexos = () => {
       });
 
       if (!response.ok) {
-        let errorData;
+        const raw = await response.text();
+        let errorData: { error?: string; message?: string } = {};
         try {
-          errorData = await response.json();
+          errorData = raw ? JSON.parse(raw) : {};
         } catch {
-          errorData = { error: `Erro ${response.status}`, message: 'Erro ao processar requisição' };
+          errorData = { message: raw?.slice(0, 300) || `Erro ${response.status}` };
         }
-        
-        const errorMessage = errorData.message || errorData.error || `Erro ${response.status}`;
-        console.error('Erro da API:', errorData);
+        const errorMessage =
+          errorData.message || errorData.error || `Erro ao processar PDF (${response.status})`;
         throw new Error(errorMessage);
       }
 

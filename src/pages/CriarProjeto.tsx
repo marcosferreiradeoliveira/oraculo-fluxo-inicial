@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
 import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, updateDoc, query, where, increment } from 'firebase/firestore';
-import { getEditaisDb, getEditaisWriteDb } from '@/lib/editaisDb';
+import { getEditaisDb, getEditaisWriteDb, fetchEditaisMergedDocs } from '@/lib/editaisDb';
 import { ensureUsuarioFirestore } from '@/lib/ensureUsuarioFirestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -21,7 +21,8 @@ import {
   type TipoProjeto,
 } from '@/lib/criteriosAvaliacao';
 import { camposNotaParaFirestore } from '@/lib/extrairNotasCriterios';
-
+import { projetoEntryPath } from '@/lib/projetoWizard';
+import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 const MICROFONE_POPUP_KEY = 'criar-projeto-microfone-popup-visto';
 
@@ -101,6 +102,13 @@ const formatarNomeEdital = (s: string) => {
   if (!t) return s;
   return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 };
+
+/** Projeto filho baseado na mãe: nome da mãe + nome do edital. */
+function buildNomeProjetoFilhoEdital(maeNome: string, editalNome: string): string {
+  const mae = maeNome.trim() || 'Projeto mãe';
+  const edital = editalNome.trim() || 'Edital';
+  return `${mae} — ${edital}`;
+}
 
 type ProjetoResumo = {
   id: string;
@@ -272,9 +280,7 @@ const CriarProjeto = () => {
       };
 
       // Buscar edital e portfolio em paralelo (sem delays)
-      const portfolioPromise = getDoc(doc(db, 'usuarios', user.uid)).then(snap =>
-        snap.exists() ? (snap.data()?.portfolio || '') : ''
-      );
+      const portfolioPromise = buscarPortfolioParaIA(user.uid);
       const editalPromise = editalNome ? fetchEditalESelecionados(editalNome) : Promise.resolve(null);
 
       const [editalResult, portfolioTexto] = await Promise.all([editalPromise, portfolioPromise]);
@@ -502,11 +508,10 @@ const CriarProjeto = () => {
 
   useEffect(() => {
     const fetchEditais = async () => {
-      const editaisDb = getEditaisDb();
-      const snap = await getDocs(collection(editaisDb, 'editais'));
+      const merged = await fetchEditaisMergedDocs();
       const now = new Date();
       
-      const editaisFiltrados = snap.docs
+      const editaisFiltrados = merged
         .map(d => ({
           id: d.id,
           ...d.data(),
@@ -541,8 +546,10 @@ const CriarProjeto = () => {
       const editalIdFromUrl = searchParams.get('edital');
       let listaFinal = editaisFiltrados;
       if (editalIdFromUrl && !editaisFiltrados.some(e => e.id === editalIdFromUrl)) {
-        const ref = doc(getEditaisDb(), 'editais', editalIdFromUrl);
-        const docSnap = await getDoc(ref);
+        let docSnap = await getDoc(doc(getEditaisDb(), 'editais', editalIdFromUrl));
+        if (!docSnap.exists()) {
+          docSnap = await getDoc(doc(getEditaisWriteDb(), 'editais', editalIdFromUrl));
+        }
         if (docSnap.exists()) {
           const data = docSnap.data();
           const extra = {
@@ -618,6 +625,14 @@ const CriarProjeto = () => {
   }, [pageView, tipoProjeto]);
 
   const projetosMae = projetosUsuario.filter((p) => inferirTipoProjeto(p) === 'mae');
+
+  const usarNomeAutomaticoMaeEdital = tipoProjeto === 'edital' && Boolean(projetoMaeOrigemId);
+  const nomeAutomaticoMaeEdital = usarNomeAutomaticoMaeEdital
+    ? buildNomeProjetoFilhoEdital(
+        projetosMae.find((p) => p.id === projetoMaeOrigemId)?.nome ?? '',
+        editalAssociado
+      )
+    : '';
 
   const aplicarProjetoMaeComoBase = (maeId: string) => {
     setProjetoMaeOrigemId(maeId);
@@ -853,9 +868,19 @@ const CriarProjeto = () => {
     e.preventDefault();
     setErro('');
     
-    // Validações básicas
-    if (!nome.trim()) {
-      setErro('Nome do projeto é obrigatório.');
+    const nomeFinal = usarNomeAutomaticoMaeEdital
+      ? buildNomeProjetoFilhoEdital(
+          projetosMae.find((p) => p.id === projetoMaeOrigemId)?.nome ?? '',
+          editalAssociado
+        )
+      : nome.trim();
+
+    if (!nomeFinal) {
+      setErro(
+        usarNomeAutomaticoMaeEdital
+          ? 'Selecione o edital para gerar o nome do projeto.'
+          : 'Nome do projeto é obrigatório.'
+      );
       setLoading(false);
       return;
     }
@@ -915,7 +940,7 @@ const CriarProjeto = () => {
       // Salva no Firestore
       const db = getFirestore();
       const projetoData: Record<string, unknown> = {
-        nome,
+        nome: nomeFinal,
         descricao,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
@@ -942,7 +967,6 @@ const CriarProjeto = () => {
         projectId: docRef.id,
         hasEdital: tipoProjeto === 'edital' && !!editalId,
       });
-
       // Evento para Tag Manager / Analytics: project_created (configurar conversão no GTM com esse evento)
       if (typeof (window as unknown as { gtag?: (a: string, b: string, c: object) => void }).gtag === 'function') {
         (window as unknown as { gtag: (a: string, b: string, c: object) => void }).gtag('event', 'project_created', {
@@ -950,13 +974,9 @@ const CriarProjeto = () => {
         });
       }
       
-      // Iniciar análise imediatamente na mesma tela
-      setProjetoId(docRef.id);
-      // Não fazer setLoading(false) aqui, pois a análise vai continuar
-      // O loading será desabilitado quando a análise terminar ou houver erro
-      const editalParaAnalise =
-        tipoProjeto === 'edital' ? editalAssociado || null : null;
-      await analisarComIA(nome, descricao, editalParaAnalise, docRef.id);
+      setLoading(false);
+      navigate(`/projeto/${docRef.id}?analisar=1`);
+      return;
     } catch (err: unknown) {
       console.error('Erro ao criar projeto:', err);
       const code = (err as { code?: string })?.code;
@@ -1157,7 +1177,7 @@ const CriarProjeto = () => {
                       <li key={p.id}>
                         <button
                           type="button"
-                          onClick={() => navigate(`/projeto/${p.id}`)}
+                          onClick={() => navigate(projetoEntryPath(p.id, p))}
                           className="w-full text-left rounded-lg border border-gray-200 hover:border-oraculo-blue/50 hover:bg-oraculo-blue/5 px-4 py-3 transition"
                         >
                           <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -1318,16 +1338,18 @@ const CriarProjeto = () => {
               <div className="p-4 md:p-8 min-w-0">
                 {/* Indicador de limite de projetos */}
                 <form onSubmit={handleSubmit} className="space-y-5 min-w-0">
-                  <div className="min-w-0">
-                    <label className="block text-sm font-medium mb-1 text-gray-700">Nome do projeto</label>
-                    <input
-                      type="text"
-                      className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
-                      value={nome}
-                      onChange={e => setNome(e.target.value)}
-                      required
-                    />
-                  </div>
+                  {tipoProjeto === 'mae' && (
+                    <div className="min-w-0">
+                      <label className="block text-sm font-medium mb-1 text-gray-700">Nome do projeto</label>
+                      <input
+                        type="text"
+                        className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
                   {tipoProjeto === 'edital' && (
                     <>
                       {projetosMae.length > 0 && (
@@ -1348,7 +1370,9 @@ const CriarProjeto = () => {
                             ))}
                           </select>
                           <p className="text-xs text-gray-500 mt-1">
-                            Reutiliza a descrição do projeto mãe se o campo abaixo estiver vazio.
+                            {projetoMaeOrigemId
+                              ? 'A descrição do projeto mãe preenche o campo abaixo se estiver vazio. O nome do novo projeto será gerado automaticamente.'
+                              : 'Reutiliza a descrição do projeto mãe se o campo abaixo estiver vazio.'}
                           </p>
                         </div>
                       )}
@@ -1357,16 +1381,16 @@ const CriarProjeto = () => {
                           <label className="block text-sm font-medium text-gray-700">Edital associado</label>
                           <button
                             type="button"
-                            onClick={() => window.open('https://extratordeeditais.web.app/', '_blank')}
+                            onClick={() => navigate('/gerenciar-editais')}
                             className="text-xs text-oraculo-blue hover:text-oraculo-blue/80 font-medium self-start"
                           >
-                            Cadastrar novo edital
+                            Importar edital
                           </button>
                         </div>
                         <select
                           className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
                           value={editalAssociado}
-                          onChange={e => setEditalAssociado(e.target.value)}
+                          onChange={(e) => setEditalAssociado(e.target.value)}
                           required={tipoProjeto === 'edital'}
                         >
                           <option value="">Selecione um edital</option>
@@ -1377,6 +1401,28 @@ const CriarProjeto = () => {
                           ))}
                         </select>
                       </div>
+                      {usarNomeAutomaticoMaeEdital ? (
+                        <div className="rounded-lg border border-oraculo-blue/20 bg-oraculo-blue/5 px-4 py-3 min-w-0">
+                          <p className="text-xs font-medium text-gray-600 mb-1">Nome do projeto (automático)</p>
+                          <p className="text-sm font-semibold text-gray-900 break-words">
+                            {nomeAutomaticoMaeEdital}
+                          </p>
+                          {!editalAssociado.trim() && (
+                            <p className="text-xs text-amber-700 mt-2">Selecione o edital para completar o nome.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="min-w-0">
+                          <label className="block text-sm font-medium mb-1 text-gray-700">Nome do projeto</label>
+                          <input
+                            type="text"
+                            className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
+                            value={nome}
+                            onChange={(e) => setNome(e.target.value)}
+                            required
+                          />
+                        </div>
+                      )}
                     </>
                   )}
                   {tipoProjeto === 'mae' && (

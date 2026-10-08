@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Brain, Loader2, Check, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
 import { AnaliseMarkdown } from '@/components/analise/AnaliseMarkdown';
 import { NotasCriteriosPainel } from '@/components/analise/NotasCriteriosPainel';
 
@@ -547,19 +548,7 @@ const AvaliarProjeto = () => {
     }, 300);
     
     try {
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
       
       const response = await fetch(ALTERAR_TEXTO_COM_IA_URL, {
         method: 'POST',
@@ -655,19 +644,7 @@ const AvaliarProjeto = () => {
     }, 300);
     
     try {
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
       
       const response = await fetch(ALTERAR_TEXTO_COM_IA_URL, {
         method: 'POST',

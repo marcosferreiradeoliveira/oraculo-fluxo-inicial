@@ -4,7 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, deleteDoc, getDoc, getFirestore } from 'firebase/firestore';
 import { auth } from '../lib/firebase';
-import { getEditaisDb, getEditaisWriteDb, isEditaisCatalogExternal } from '@/lib/editaisDb';
+import { getEditaisWriteDb, isEditaisCatalogExternal } from '@/lib/editaisDb';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ const EditaisAbertos = () => {
         setLoading(true);
         
         // Fetch Editais - apenas os que ainda não encerraram
-        const editaisSnapshot = await getDocs(collection(getEditaisDb(), 'editais'));
+        const editaisSnapshot = await getDocs(collection(getEditaisWriteDb(), 'editais'));
         const editais: Edital[] = [];
         const now = new Date();
         
@@ -135,21 +135,12 @@ const EditaisAbertos = () => {
     }
   };
 
-  const handleCadastrarEdital = async () => {
+  const handleCadastrarEdital = () => {
     if (!user) {
+      navigate('/cadastro?redirect=/gerenciar-editais');
       return;
     }
-
-    try {
-      const firestore = getFirestore();
-      const userRef = doc(firestore, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      window.open('https://extratordeeditais.web.app/', '_blank');
-    } catch (error) {
-      console.error('Erro ao abrir extrator de editais:', error);
-      toast.error('Não foi possível abrir o extrator. Tente novamente.');
-    }
+    navigate('/gerenciar-editais');
   };
 
   return (
@@ -183,7 +174,7 @@ const EditaisAbertos = () => {
                     className="ml-2 bg-oraculo-blue text-white" 
                     onClick={handleCadastrarEdital}
                   >
-                    Cadastrar Edital
+                    Importar edital
                   </Button>
                 )}
               </div>
@@ -247,10 +238,10 @@ const EditaisAbertos = () => {
                             />
                           </div>
                         )}
-                        {/* Action Buttons - Only visible to admin */}
-                        {user?.uid === 'sCacAc0ShPfafYjpy0t4pBp77Tb2' && (
+                        {user && (
                           <div className="absolute top-2 right-2 flex gap-1 z-10">
-                            <button 
+                            <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate(`/editar-edital/${edital.id}`);
@@ -263,7 +254,8 @@ const EditaisAbertos = () => {
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                               </svg>
                             </button>
-                            <button 
+                            <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteEdital(edital.id);

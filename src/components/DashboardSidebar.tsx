@@ -15,6 +15,7 @@ import {
   Calendar,
   LogOut,
   Building2,
+  Briefcase,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { trackMenuIntent } from '@/lib/analytics';
@@ -34,6 +35,7 @@ const menuItems: MenuItem[] = [
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
   { title: 'Fornecedores', url: '/fornecedores', icon: Building2, menuItem: 'fornecedores' },
+  { title: 'Empresas', url: '/empresas', icon: Briefcase, menuItem: 'empresas' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   { title: 'Prestação de Contas', url: 'https://execucaofinanceira.web.app/', icon: PlayCircle, menuItem: 'prestacao_contas', external: true, outline: true },

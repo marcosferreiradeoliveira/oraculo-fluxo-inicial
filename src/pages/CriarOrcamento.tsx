@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Trash2, Save, DollarSign, Sparkles, FileDown, FileText, CheckCircle2, Undo2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, DollarSign, Sparkles, FileDown, FileText, CheckCircle2, Undo2, Upload } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from 'sonner';
 import { Clock } from 'lucide-react';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
+import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
 import {
   arredondarValorOrcamento,
   extrairValorRsUltimoDaLinha,
@@ -28,9 +29,12 @@ import {
 } from '@/lib/orcamentoTeto';
 import {
   inferirDuracaoMesesCronograma,
+  inferirMesesRubricaNoCronograma,
   instrucoesOrcamentoAlinhadoCronograma,
   resumoCronogramaParaOrcamento,
+  type CronogramaLike,
 } from '@/lib/cronogramaDuracao';
+import { unidadeUsaMesesDoCronograma } from '@/lib/orcamentoTeto';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
@@ -39,6 +43,7 @@ import {
   limparRubricasOrfas,
   sugerirVinculosRubricasEtapas,
 } from '@/lib/vinculoCronogramaOrcamento';
+import { importarPlanilhaOrcamento } from '@/lib/importarPlanilhaOrcamento';
 
 interface RubricaOrcamento {
   id: string;
@@ -213,6 +218,10 @@ const detectarUnidade = (nomeRubrica: string, textoLinha?: string): string => {
   return 'serviço';
 };
 
+function rubricasTemConteudo(list: RubricaOrcamento[]): boolean {
+  return list.some((r) => String(r.nome || '').trim().length > 0);
+}
+
 const CriarOrcamento = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -231,6 +240,10 @@ const CriarOrcamento = () => {
   const [rateLimitModal, setRateLimitModal] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
   const [etapasCronograma, setEtapasCronograma] = useState<EtapaVinculo[]>([]);
   const [abaOrcamento, setAbaOrcamento] = useState('rubricas');
+  const [importandoPlanilha, setImportandoPlanilha] = useState(false);
+  /** Sugestões de alteração: só após gerar/importar ou orçamento já salvo com rubricas */
+  const [orcamentoProntoParaSugestoes, setOrcamentoProntoParaSugestoes] = useState(false);
+  const inputPlanilhaRef = useRef<HTMLInputElement>(null);
 
   const gerarIdEtapa = () => Math.random().toString(36).slice(2, 11);
 
@@ -242,6 +255,20 @@ const CriarOrcamento = () => {
     [rubricas]
   );
 
+  const cronogramaParaOrcamento = useMemo((): CronogramaLike | null => {
+    if (!projeto) return null;
+    const etapas =
+      etapasCronograma.length > 0
+        ? etapasCronograma.map((e) => ({
+            etapa: e.etapa,
+            inicio: e.inicio,
+            fim: e.fim,
+            rubricasAssociadas: e.rubricasAssociadas,
+          }))
+        : projeto.cronograma?.etapas;
+    return { ...projeto.cronograma, etapas };
+  }, [projeto, etapasCronograma]);
+
   const aplicarSugestaoVinculosOrcamento = () => {
     if (!etapasCronograma.length) {
       toast.info('Não há etapas no cronograma. Crie o cronograma antes de vincular.');
@@ -251,15 +278,43 @@ const CriarOrcamento = () => {
     toast.success('Vínculos sugeridos — revise e salve o orçamento.');
   };
 
-  const vincularOrcamentoGeradoAoCronograma = (lista: RubricaOrcamento[]) => {
+  const prepararOrcamentoPosGeracao = (
+    lista: RubricaOrcamento[],
+    etapasAtuais: EtapaVinculo[],
+  ): { rubricas: RubricaOrcamento[]; etapas: EtapaVinculo[] } => {
     const rub = lista.filter((r) => r.nome.trim()).map((r) => ({ id: r.id, nome: r.nome.trim() }));
-    if (!rub.length) return;
-    setEtapasCronograma((prev) => {
-      if (!prev.length) return prev;
-      return sugerirVinculosRubricasEtapas(prev, rub);
-    });
-    setAbaOrcamento('vinculos');
-    toast.success('Orçamento gerado. Revise os vínculos com o cronograma e clique em Salvar orçamento.', {
+    if (!rub.length) {
+      return { rubricas: lista, etapas: etapasAtuais };
+    }
+    if (!etapasAtuais.length) {
+      const cronRef = cronogramaParaOrcamento ?? projeto?.cronograma ?? null;
+      const dm = inferirDuracaoMesesCronograma(cronRef);
+      return {
+        rubricas: posProcessarRubricasGeradas(lista, tetoOrcamento, dm, {
+          cronograma: cronRef,
+          usarValorCheio: false,
+        }),
+        etapas: etapasAtuais,
+      };
+    }
+    const next = sugerirVinculosRubricasEtapas(etapasAtuais, rub);
+    const cron: CronogramaLike = { ...(projeto?.cronograma ?? {}), etapas: next };
+    const dm = inferirDuracaoMesesCronograma(cron);
+    return {
+      rubricas: posProcessarRubricasGeradas(lista, tetoOrcamento, dm, {
+        cronograma: cron,
+        usarValorCheio: false,
+      }),
+      etapas: next,
+    };
+  };
+
+  const vincularOrcamentoGeradoAoCronograma = (lista: RubricaOrcamento[]) => {
+    const prep = prepararOrcamentoPosGeracao(lista, etapasCronograma);
+    setRubricas(prep.rubricas);
+    setEtapasCronograma(prep.etapas);
+    setAbaOrcamento('rubricas');
+    toast.success('Orçamento gerado. Revise as rubricas e, se quiser, os vínculos na outra aba antes de salvar.', {
       duration: 6000,
     });
   };
@@ -360,7 +415,11 @@ const CriarOrcamento = () => {
           if (projetoData.orcamento.teto && projetoData.orcamento.teto > 0) {
             setTetoOrcamento(projetoData.orcamento.teto);
           }
-          setRubricas(projetoData.orcamento.rubricas || []);
+          const rubricasSalvas = projetoData.orcamento.rubricas || [];
+          setRubricas(rubricasSalvas);
+          if (rubricasTemConteudo(rubricasSalvas)) {
+            setOrcamentoProntoParaSugestoes(true);
+          }
         } else {
           // Inicializar com uma rubrica vazia
           setRubricas([{
@@ -440,6 +499,65 @@ const CriarOrcamento = () => {
     return rubricas.reduce((total, rubrica) => total + rubrica.total, 0);
   };
 
+  const handleImportarPlanilha = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setImportandoPlanilha(true);
+    try {
+      const { rubricas: importadas, tetoDetectado, avisos } = await importarPlanilhaOrcamento(file);
+      if (importadas.length === 0) {
+        toast.error('Importação falhou', {
+          description: avisos[0] || 'Nenhuma rubrica encontrada.',
+          duration: 6000,
+        });
+        return;
+      }
+
+      let idBase = Date.now();
+      const comIds: RubricaOrcamento[] = importadas.map((r) => ({
+        id: (idBase++).toString(),
+        ...r,
+      }));
+
+      const cronRef = cronogramaParaOrcamento ?? projeto?.cronograma;
+      const dm = inferirDuracaoMesesCronograma(cronRef);
+      const ajustadas = posProcessarRubricasGeradas(comIds, tetoOrcamento || tetoDetectado || 0, dm, {
+        cronograma: cronRef,
+        usarValorCheio: false,
+      });
+
+      setRubricas(ajustadas);
+      setTemAlteracoesPendentes(true);
+      setOrcamentoProntoParaSugestoes(true);
+
+      if (tetoDetectado && tetoDetectado > 0 && (!tetoOrcamento || tetoOrcamento <= 0)) {
+        setTetoOrcamento(tetoDetectado);
+      }
+
+      if (etapasCronograma.length > 0) {
+        vincularOrcamentoGeradoAoCronograma(ajustadas);
+      }
+
+      toast.success(`${ajustadas.length} rubrica(s) importada(s)`, {
+        description: avisos.length ? avisos.slice(0, 2).join(' ') : 'Revise os valores e salve o orçamento.',
+        duration: 5000,
+      });
+      if (avisos.length > 1) {
+        console.warn('Importação orçamento:', avisos);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao ler planilha', {
+        description: err instanceof Error ? err.message : 'Formato não suportado (.xlsx, .xls, .csv).',
+        duration: 5000,
+      });
+    } finally {
+      setImportandoPlanilha(false);
+    }
+  };
+
   const avisarSePoucasRubricas = (lista: RubricaOrcamento[]) => {
     const min = minimoRubricasOrcamento(tetoOrcamento);
     if (lista.length > 0 && lista.length < min) {
@@ -488,20 +606,7 @@ const CriarOrcamento = () => {
       const nomeProjeto = projeto.nome || 'Projeto';
       const resumoProjeto = projeto.resumo || '';
 
-      // Buscar portfolio do usuário se houver
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
 
       const endpoint = `${getFunctionsBaseUrl()}/gerarTextosProjeto`;
       const minEsperado = minimoRubricasOrcamento(tetoOrcamento);
@@ -509,8 +614,9 @@ const CriarOrcamento = () => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-      const duracaoMeses = inferirDuracaoMesesCronograma(projeto.cronograma);
-      const resumoCron = resumoCronogramaParaOrcamento(projeto.cronograma);
+      const cronRef = cronogramaParaOrcamento ?? projeto.cronograma;
+      const duracaoMeses = inferirDuracaoMesesCronograma(cronRef);
+      const resumoCron = resumoCronogramaParaOrcamento(cronRef);
       const blocoCron =
         resumoCron.trim().length > 0
           ? `${instrucoesOrcamentoAlinhadoCronograma(duracaoMeses)}\n\n${resumoCron}\n\n`
@@ -576,7 +682,8 @@ const CriarOrcamento = () => {
                   const parcial = posProcessarRubricasGeradas(
                     extrairRubricasDoTexto(textoAcumulado),
                     tetoOrcamento,
-                    duracaoMeses
+                    duracaoMeses,
+                    { cronograma: cronRef }
                   );
                   if (parcial.length > 0) onProgress(parcial);
                 }
@@ -594,7 +701,8 @@ const CriarOrcamento = () => {
         return posProcessarRubricasGeradas(
           extrairRubricasDoTexto(textoFinal),
           tetoOrcamento,
-          duracaoMeses
+          duracaoMeses,
+          { cronograma: cronRef }
         );
       };
 
@@ -678,6 +786,28 @@ const CriarOrcamento = () => {
         avisarSePoucasRubricas(melhor);
       }
 
+      if (gerouComSucesso && rubricasFinaisGeracao.length > 0) {
+        const prep = prepararOrcamentoPosGeracao(rubricasFinaisGeracao, etapasCronograma);
+        setRubricas(prep.rubricas);
+        setEtapasCronograma(prep.etapas);
+        setOrcamentoProntoParaSugestoes(true);
+        setAbaOrcamento('rubricas');
+        await salvarOrcamento({
+          rubricasOverride: prep.rubricas,
+          etapasOverride: prep.etapas,
+          mensagemSucesso: 'Orçamento gerado e salvo',
+          mensagemDescricao:
+            prep.etapas.length > 0
+              ? 'Rubricas e vínculos com o cronograma foram gravados no projeto.'
+              : 'As rubricas foram gravadas no projeto.',
+        });
+        trackTextGenerationCompleted({
+          projectId: id!,
+          textType: 'orcamento',
+          durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
+        });
+      }
+
     } catch (error) {
       console.error('Erro ao gerar orçamento:', error);
       toast.error('Erro ao gerar orçamento', {
@@ -685,20 +815,6 @@ const CriarOrcamento = () => {
         duration: 5000,
       });
     } finally {
-      if (gerouComSucesso) {
-        trackTextGenerationCompleted({
-          projectId: id!,
-          textType: 'orcamento',
-          durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
-        });
-        if (rubricasFinaisGeracao.length > 0) {
-          if (etapasCronograma.length > 0) {
-            vincularOrcamentoGeradoAoCronograma(rubricasFinaisGeracao);
-          } else {
-            toast.info('Orçamento gerado. Crie o cronograma para vincular rubricas às etapas.');
-          }
-        }
-      }
       setGerandoOrcamento(false);
     }
   };
@@ -725,13 +841,16 @@ const CriarOrcamento = () => {
     if (rubricasProcessadas.has(chave)) return idCounter;
 
     rubricasProcessadas.add(chave);
-    const unidade = detectarUnidade(nome, linhaLimpa);
-    const duracaoMeses = inferirDuracaoMesesCronograma(projeto?.cronograma);
+    let unidade = detectarUnidade(nome, linhaLimpa);
+    const cronRef = cronogramaParaOrcamento ?? projeto?.cronograma;
+    const duracaoMeses = inferirDuracaoMesesCronograma(cronRef);
     let quantidadeUnidade = 1;
-    if (unidade === 'mês') {
+    if (unidadeUsaMesesDoCronograma(unidade)) {
       const expl = extrairQuantidadeMesesDaLinha(linhaLimpa);
-      quantidadeUnidade = expl ?? duracaoMeses;
+      const porEtapa = inferirMesesRubricaNoCronograma(nome, cronRef);
+      quantidadeUnidade = expl ?? porEtapa ?? duracaoMeses;
       quantidadeUnidade = Math.max(1, Math.min(120, Math.round(quantidadeUnidade)));
+      if (unidade === 'pessoa' || unidade === 'pessoas') unidade = 'mês';
     }
     const quantidade = 1;
     const valorUnitario =
@@ -794,20 +913,7 @@ const CriarOrcamento = () => {
     setRubricasAnteriores([...rubricas]);
     
     try {
-      // Buscar portfolio do usuário se houver
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
 
       const endpoint = `${getFunctionsBaseUrl()}/gerarTextosProjeto`;
       
@@ -930,8 +1036,11 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         
                         const todasAtualizadas = Array.from(mapaRubricas.values());
                         
-                        const dm = inferirDuracaoMesesCronograma(projeto?.cronograma);
-                        return posProcessarRubricasGeradas(todasAtualizadas, tetoOrcamento, dm);
+                        const cronRef = cronogramaParaOrcamento ?? projeto?.cronograma;
+                        const dm = inferirDuracaoMesesCronograma(cronRef);
+                        return posProcessarRubricasGeradas(todasAtualizadas, tetoOrcamento, dm, {
+                          cronograma: cronRef,
+                        });
                       }
                       return prev;
                     });
@@ -945,8 +1054,11 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                 setRubricas(prev => {
                   const rubricasFinais = extrairRubricasDoTexto(textoFinal);
                   
-                  const dm = inferirDuracaoMesesCronograma(projeto?.cronograma);
-                  const ajustadas = posProcessarRubricasGeradas(rubricasFinais, tetoOrcamento, dm);
+                  const cronRef = cronogramaParaOrcamento ?? projeto?.cronograma;
+                  const dm = inferirDuracaoMesesCronograma(cronRef);
+                  const ajustadas = posProcessarRubricasGeradas(rubricasFinais, tetoOrcamento, dm, {
+                    cronograma: cronRef,
+                  });
                   return ajustadas.length > 0 ? ajustadas : prev;
                 });
               }
@@ -1002,25 +1114,34 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
   };
 
   // Salvar orçamento
-  const salvarOrcamento = async () => {
+  const salvarOrcamento = async (opts?: {
+    rubricasOverride?: RubricaOrcamento[];
+    etapasOverride?: EtapaVinculo[];
+    mensagemSucesso?: string;
+    mensagemDescricao?: string;
+  }) => {
     if (!id) return;
+
+    const rubricasSalvar = opts?.rubricasOverride ?? rubricas;
+    const etapasBase = opts?.etapasOverride ?? etapasCronograma;
+    const totalGeral = rubricasSalvar.reduce((total, rubrica) => total + rubrica.total, 0);
 
     setSalvando(true);
     try {
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
       
-      const nomesValidos = new Set(rubricas.map((r) => r.nome.trim()).filter(Boolean));
+      const nomesValidos = new Set(rubricasSalvar.map((r) => r.nome.trim()).filter(Boolean));
       const etapasVinculo =
-        etapasCronograma.length > 0
-          ? limparRubricasOrfas(etapasCronograma, nomesValidos)
+        etapasBase.length > 0
+          ? limparRubricasOrfas(etapasBase, nomesValidos)
           : null;
 
       const payload: Record<string, unknown> = {
         orcamento: {
           teto: tetoOrcamento,
-          rubricas: rubricas,
-          totalGeral: calcularTotalGeral(),
+          rubricas: rubricasSalvar,
+          totalGeral,
           atualizado_em: serverTimestamp(),
         },
       };
@@ -1034,16 +1155,22 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
         setEtapasCronograma(etapasVinculo);
       }
 
+      if (opts?.rubricasOverride) {
+        setRubricas(rubricasSalvar);
+      }
+
       await updateDoc(projetoRef, payload);
 
       setTemAlteracoesPendentes(false);
       setRubricasAnteriores([]);
 
-      toast.success('Orçamento salvo com sucesso!', {
-        description:
-          etapasVinculo && etapasVinculo.length > 0
-            ? 'Orçamento e vínculos com o cronograma foram salvos.'
-            : 'O orçamento foi salvo no projeto.',
+      const descricaoPadrao =
+        etapasVinculo && etapasVinculo.length > 0
+          ? 'Orçamento e vínculos com o cronograma foram salvos.'
+          : 'O orçamento foi salvo no projeto.';
+
+      toast.success(opts?.mensagemSucesso ?? 'Orçamento salvo com sucesso!', {
+        description: opts?.mensagemDescricao ?? descricaoPadrao,
         duration: 4000,
         icon: <CheckCircle2 className="h-5 w-5 text-green-600" />,
       });
@@ -1307,11 +1434,41 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                         Sugerido do edital: {edital.titulo || edital.nome || 'Edital associado'} (você pode editar)
                       </p>
                     )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Importar planilha: .xlsx, .xls ou .csv — modelo da exportação Excel ou colunas Nome, Qtd, Unidade,
+                      Qtd. Un., Valor unit., Total.
+                    </p>
                   </div>
-                  <div className="flex flex-col justify-end sm:pt-7">
+                  <div className="flex flex-col sm:flex-row gap-2 justify-end sm:pt-7 w-full sm:w-auto">
+                    <input
+                      ref={inputPlanilhaRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                      className="hidden"
+                      onChange={handleImportarPlanilha}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={importandoPlanilha || gerandoOrcamento}
+                      onClick={() => inputPlanilhaRef.current?.click()}
+                      className="h-11 whitespace-nowrap w-full sm:w-auto border-oraculo-blue/40 text-oraculo-blue hover:bg-oraculo-blue/5"
+                    >
+                      {importandoPlanilha ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Importando...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Importar planilha
+                        </>
+                      )}
+                    </Button>
                     <Button
                       onClick={gerarOrcamento}
-                      disabled={gerandoOrcamento || tetoOrcamento <= 0}
+                      disabled={gerandoOrcamento || importandoPlanilha || tetoOrcamento <= 0}
                       className="bg-gradient-to-r from-oraculo-purple to-oraculo-blue hover:opacity-90 text-white px-6 py-2 h-11 whitespace-nowrap w-full sm:w-auto"
                     >
                       {gerandoOrcamento ? (
@@ -1322,7 +1479,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                       ) : (
                         <>
                           <Sparkles className="mr-2 h-4 w-4" />
-                          Gerar Orçamento
+                          Gerar com IA
                         </>
                       )}
                     </Button>
@@ -1330,8 +1487,8 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                 </div>
               </div>
 
-              {/* Campo de Sugestões de Alterações — só aparece depois de gerado o primeiro orçamento */}
-              {rubricas.length > 0 && (
+              {/* Sugestões de alteração: após Gerar com IA, Importar ou orçamento já salvo */}
+              {orcamentoProntoParaSugestoes && rubricasTemConteudo(rubricas) && (
               <div className="p-4 md:p-6 border-b border-gray-200">
                 <Label htmlFor="sugestoes" className="text-base font-semibold text-gray-900 mb-2 block">
                   Sugestões de Alterações ao Orçamento
@@ -1530,7 +1687,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
               <div className="p-4 md:p-6 border-t bg-gray-50 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-start">
                 <Button
                   variant="outline"
-                  onClick={() => navigate(`/projeto/${id}/gerar-textos`)}
+                  onClick={() => navigate(`/projeto/${id}/criar-cronograma`)}
                   className="border-gray-300 w-full sm:w-auto order-2 sm:order-1"
                 >
                   Voltar
@@ -1567,7 +1724,7 @@ Formate cada rubrica como: "Nome da Rubrica: R$ valor" ou "Nome da Rubrica - R$ 
                       </Button>
                     )}
                     <Button
-                      onClick={salvarOrcamento}
+                      onClick={() => void salvarOrcamento()}
                       disabled={salvando}
                       className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white"
                     >

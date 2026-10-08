@@ -44,7 +44,9 @@ import Privacidade from './pages/Privacidade';
 import DetalhesEdital from './pages/DetalhesEdital';
 import ConfirmarEmail from './pages/ConfirmarEmail';
 import EditaisAbertos from './pages/EditaisAbertos';
+import ExtratorEditaisPage from './pages/ExtratorEditaisPage';
 import Fornecedores from './pages/Fornecedores';
+import Empresas from './pages/Empresas';
 import Portfolio from './pages/Portfolio';
 import Admin from './pages/Admin';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -95,7 +97,9 @@ const App = () => (
           <Route path="/biblioteca" element={<ProtectedRoute><Biblioteca /></ProtectedRoute>} />
           <Route path="/podcast" element={<Podcast />} />
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
+          <Route path="/gerenciar-editais" element={<ProtectedRoute><ExtratorEditaisPage /></ProtectedRoute>} />
           <Route path="/fornecedores" element={<Fornecedores />} />
+          <Route path="/empresas" element={<ProtectedRoute><Empresas /></ProtectedRoute>} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />

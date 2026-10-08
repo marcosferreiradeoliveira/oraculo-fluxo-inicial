@@ -6,24 +6,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Settings } from 'lucide-react';
+import { AssociarEmpresaConta } from '@/components/empresa/AssociarEmpresaConta';
+import { DadosPessoaForm } from '@/components/conta/DadosPessoaForm';
+import {
+  emptyDadosCadastraisPessoa,
+  lerDadosPessoaDoUsuario,
+  normalizarDadosCadastraisPessoa,
+  validarDadosPessoa,
+  type DadosCadastraisPessoa,
+} from '@/lib/dadosCadastraisPessoa';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFromCache, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFromServer } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
-import {
-  type DadosCadastraisEmpresa,
-  dadosCadastraisParaTexto,
-  emptyDadosCadastraisEmpresa,
-  formatarCep,
-  lerDadosCadastraisDoUsuario,
-  normalizarDadosCadastraisEmpresa,
-  ufValida,
-} from '@/lib/dadosCadastraisEmpresa';
-import { formatarCnpj, formatarCpf } from '@/lib/fornecedores';
+import { emptyDadosCadastraisEmpresa } from '@/lib/dadosCadastraisEmpresa';
 
 const Conta = () => {
   const navigate = useNavigate();
@@ -33,15 +32,6 @@ const Conta = () => {
   const [saving, setSaving] = useState(false);
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [email, setEmail] = useState('');
-  const [empresa, setEmpresa] = useState('');
-  const [portfolio, setPortfolio] = useState('');
-  const [dadosEmpresa, setDadosEmpresa] = useState<DadosCadastraisEmpresa>(
-    emptyDadosCadastraisEmpresa
-  );
-
-  const patchDadosEmpresa = (patch: Partial<DadosCadastraisEmpresa>) => {
-    setDadosEmpresa((prev) => ({ ...prev, ...patch }));
-  };
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -49,6 +39,11 @@ const Conta = () => {
   const [changingPassword, setChangingPassword] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoURL, setPhotoURL] = useState('');
+  const [dadosPessoa, setDadosPessoa] = useState<DadosCadastraisPessoa>(emptyDadosCadastraisPessoa);
+
+  const patchDadosPessoa = (patch: Partial<DadosCadastraisPessoa>) => {
+    setDadosPessoa((prev) => ({ ...prev, ...patch }));
+  };
 
   const createUserDocument = async (firebaseUser: any) => {
     try {
@@ -60,6 +55,7 @@ const Conta = () => {
         createdAt: timestamp,
         dadosCadastrais: '',
         dadosCadastraisEmpresa: emptyDadosCadastraisEmpresa(),
+        dadosCadastraisPessoa: emptyDadosCadastraisPessoa(),
         data_cadastro: timestamp,
         email: firebaseUser.email || '',
         empresa: '',
@@ -110,10 +106,8 @@ const Conta = () => {
             setUserData(data);
             setNomeCompleto(data.nome_completo || '');
             setEmail(firebaseUser.email || '');
-            setEmpresa(data.empresa || '');
-            setPortfolio(data.portfolio || '');
-            setDadosEmpresa(lerDadosCadastraisDoUsuario(data));
             setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
+            setDadosPessoa(lerDadosPessoaDoUsuario(data));
           } else {
             console.log('Usuário não encontrado no Firestore, criando documento...');
             const created = await createUserDocument(firebaseUser);
@@ -125,10 +119,8 @@ const Conta = () => {
                 setUserData(data);
                 setNomeCompleto(data.nome_completo || '');
                 setEmail(firebaseUser.email || '');
-                setEmpresa(data.empresa || '');
-                setPortfolio(data.portfolio || '');
-                setDadosEmpresa(lerDadosCadastraisDoUsuario(data));
                 setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
+                setDadosPessoa(lerDadosPessoaDoUsuario(data));
               }
             } else {
               setNomeCompleto(firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário');
@@ -150,18 +142,13 @@ const Conta = () => {
   const handleSave = async () => {
     if (!user) return;
 
-    const cnpjDigits = dadosEmpresa.cnpj.replace(/\D/g, '');
-    if (cnpjDigits.length > 0 && cnpjDigits.length !== 14) {
-      toast.error('CNPJ deve ter 14 dígitos.');
+    const erroPf = validarDadosPessoa(dadosPessoa);
+    if (erroPf) {
+      toast.error(erroPf);
       return;
     }
-    if (dadosEmpresa.uf && !ufValida(dadosEmpresa.uf)) {
-      toast.error('UF inválida (use sigla de 2 letras, ex.: SP).');
-      return;
-    }
+    const dadosPfNorm = normalizarDadosCadastraisPessoa(dadosPessoa);
 
-    const dadosNorm = normalizarDadosCadastraisEmpresa(dadosEmpresa);
-    
     setSaving(true);
     try {
       const db = getFirestore();
@@ -170,10 +157,7 @@ const Conta = () => {
       await updateDoc(userDocRef, {
         nome_completo: nomeCompleto,
         email: email,
-        empresa: empresa,
-        portfolio: portfolio,
-        dadosCadastraisEmpresa: dadosNorm,
-        dadosCadastrais: dadosCadastraisParaTexto(dadosNorm),
+        dadosCadastraisPessoa: dadosPfNorm,
       });
       toast.success('Dados atualizados com sucesso!');
     } catch (error) {
@@ -321,7 +305,7 @@ const Conta = () => {
                     Informações Pessoais
                   </CardTitle>
                   <CardDescription>
-                    Atualize seus dados pessoais e de contato
+                    Nome, contato, foto e cadastro de pessoa física (CPF, RG, endereço)
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -383,205 +367,9 @@ const Conta = () => {
                         placeholder="Digite seu email"
                       />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="empresa">Empresa</Label>
-                      <Input 
-                        id="empresa" 
-                        value={empresa}
-                        onChange={(e) => setEmpresa(e.target.value)}
-                        placeholder="Digite o nome da sua empresa"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="portfolio">Portfolio</Label>
-                      <Textarea 
-                        id="portfolio" 
-                        value={portfolio}
-                        onChange={(e) => setPortfolio(e.target.value)}
-                        placeholder="Descreva seu portfolio, projetos anteriores, experiências relevantes..."
-                        rows={4}
-                      />
-                    </div>
-                    <div className="md:col-span-2 space-y-4 pt-2 border-t border-gray-100">
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-900">Dados cadastrais da empresa</h3>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Usados em anexos e textos do projeto. Preencha CNPJ, razão social, endereço e contatos
-                          institucionais.
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="dc-cnpj">CNPJ *</Label>
-                          <Input
-                            id="dc-cnpj"
-                            value={dadosEmpresa.cnpj}
-                            onChange={(e) => patchDadosEmpresa({ cnpj: formatarCnpj(e.target.value) })}
-                            placeholder="00.000.000/0000-00"
-                            inputMode="numeric"
-                          />
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="dc-razao">Razão social *</Label>
-                          <Input
-                            id="dc-razao"
-                            value={dadosEmpresa.razaoSocial}
-                            onChange={(e) => patchDadosEmpresa({ razaoSocial: e.target.value })}
-                            placeholder="Nome jurídico conforme contrato social"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-fantasia">Nome fantasia</Label>
-                          <Input
-                            id="dc-fantasia"
-                            value={dadosEmpresa.nomeFantasia}
-                            onChange={(e) => patchDadosEmpresa({ nomeFantasia: e.target.value })}
-                            placeholder="Como a empresa é conhecida"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-ie">Inscrição estadual</Label>
-                          <Input
-                            id="dc-ie"
-                            value={dadosEmpresa.inscricaoEstadual}
-                            onChange={(e) => patchDadosEmpresa({ inscricaoEstadual: e.target.value })}
-                            placeholder="IE ou isento"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-im">Inscrição municipal</Label>
-                          <Input
-                            id="dc-im"
-                            value={dadosEmpresa.inscricaoMunicipal}
-                            onChange={(e) => patchDadosEmpresa({ inscricaoMunicipal: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-cep">CEP *</Label>
-                          <Input
-                            id="dc-cep"
-                            value={dadosEmpresa.cep}
-                            onChange={(e) => patchDadosEmpresa({ cep: formatarCep(e.target.value) })}
-                            placeholder="00000-000"
-                            inputMode="numeric"
-                          />
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="dc-log">Logradouro *</Label>
-                          <Input
-                            id="dc-log"
-                            value={dadosEmpresa.logradouro}
-                            onChange={(e) => patchDadosEmpresa({ logradouro: e.target.value })}
-                            placeholder="Rua, avenida, número do lote…"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-num">Número *</Label>
-                          <Input
-                            id="dc-num"
-                            value={dadosEmpresa.numero}
-                            onChange={(e) => patchDadosEmpresa({ numero: e.target.value })}
-                            placeholder="Nº ou S/N"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-comp">Complemento</Label>
-                          <Input
-                            id="dc-comp"
-                            value={dadosEmpresa.complemento}
-                            onChange={(e) => patchDadosEmpresa({ complemento: e.target.value })}
-                            placeholder="Sala, bloco, andar…"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-bairro">Bairro *</Label>
-                          <Input
-                            id="dc-bairro"
-                            value={dadosEmpresa.bairro}
-                            onChange={(e) => patchDadosEmpresa({ bairro: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-cidade">Cidade *</Label>
-                          <Input
-                            id="dc-cidade"
-                            value={dadosEmpresa.cidade}
-                            onChange={(e) => patchDadosEmpresa({ cidade: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-uf">UF *</Label>
-                          <Input
-                            id="dc-uf"
-                            value={dadosEmpresa.uf}
-                            onChange={(e) =>
-                              patchDadosEmpresa({ uf: e.target.value.toUpperCase().slice(0, 2) })
-                            }
-                            placeholder="SP"
-                            maxLength={2}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-tel">Telefone / WhatsApp</Label>
-                          <Input
-                            id="dc-tel"
-                            value={dadosEmpresa.telefone}
-                            onChange={(e) => patchDadosEmpresa({ telefone: e.target.value })}
-                            placeholder="(00) 00000-0000"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-email-inst">E-mail institucional</Label>
-                          <Input
-                            id="dc-email-inst"
-                            type="email"
-                            value={dadosEmpresa.emailInstitucional}
-                            onChange={(e) => patchDadosEmpresa({ emailInstitucional: e.target.value })}
-                            placeholder="contato@empresa.com.br"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-rep">Representante legal</Label>
-                          <Input
-                            id="dc-rep"
-                            value={dadosEmpresa.representanteLegal}
-                            onChange={(e) => patchDadosEmpresa({ representanteLegal: e.target.value })}
-                            placeholder="Nome do responsável pela proposta"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dc-cpf-rep">CPF do representante</Label>
-                          <Input
-                            id="dc-cpf-rep"
-                            value={dadosEmpresa.cpfRepresentante}
-                            onChange={(e) =>
-                              patchDadosEmpresa({ cpfRepresentante: formatarCpf(e.target.value) })
-                            }
-                            placeholder="000.000.000-00"
-                            inputMode="numeric"
-                          />
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="dc-obs">Observações (opcional)</Label>
-                          <Textarea
-                            id="dc-obs"
-                            value={dadosEmpresa.observacoes}
-                            onChange={(e) => patchDadosEmpresa({ observacoes: e.target.value })}
-                            placeholder="Dados bancários, sócios, procuradores ou outras informações exigidas pelo edital."
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                      {dadosEmpresa.observacoes &&
-                        !dadosEmpresa.cnpj &&
-                        !dadosEmpresa.razaoSocial && (
-                          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-md p-2">
-                            Você tinha dados cadastrais em texto livre. Revise os campos acima e salve para
-                            organizar tudo.
-                          </p>
-                        )}
-                    </div>
                   </div>
+
+                  <DadosPessoaForm values={dadosPessoa} onChange={patchDadosPessoa} />
 
                   <div className="flex gap-4">
                     <Button 
@@ -600,6 +388,8 @@ const Conta = () => {
                   </div>
                 </CardContent>
               </Card>
+
+              {user?.uid ? <AssociarEmpresaConta uid={user.uid} /> : null}
             </div>
           </div>
         </main>

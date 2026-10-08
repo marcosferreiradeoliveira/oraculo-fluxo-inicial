@@ -210,27 +210,17 @@ const AlterarComIA = () => {
         setDescricaoEditada(data.descricao || '');
         
         if (data.edital_associado) {
-          console.log('Fetching edital with ID:', data.edital_associado);
           try {
             const editalRef = doc(db, 'editais', data.edital_associado);
-            console.log('Edital ref path:', editalRef.path);
             const editalSnap = await getDoc(editalRef);
             
-            console.log('Edital document exists:', editalSnap.exists());
             if (editalSnap.exists()) {
               const editalData = editalSnap.data();
-              console.log('Edital document data:', editalData);
-              
-              // Check all possible name fields
               const possibleNameFields = ['nome', 'titulo', 'name', 'title', 'editalName'];
               const nameField = possibleNameFields.find(field => field in editalData);
-              console.log('Available fields in edital document:', Object.keys(editalData));
-              
               const name = nameField ? editalData[nameField] : `Edital: ${data.edital_associado}`;
-              console.log('Using field for name:', nameField, 'Value:', name);
               setEditalNome(name);
             } else {
-              console.warn('Edital document not found, using ID as fallback');
               setEditalNome(`Edital: ${data.edital_associado}`);
             }
           } catch (error) {
@@ -269,8 +259,6 @@ const AlterarComIA = () => {
     if (analise) {
       // Extract suggestions using the new robust function
       const matches = extrairSugestoes(analise);
-      console.log('Sugestões extraídas em AlterarComIA:', matches);
-      console.log('Total de sugestões:', matches.length);
       setSugestoes(matches);
       // Se já há aprovações salvas, mantém, senão inicializa tudo como false
       setAprovacoes(prev => prev.length === matches.length ? prev : matches.map(() => false));
@@ -300,7 +288,6 @@ const AlterarComIA = () => {
       
       const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
       
-      console.log('Enviando texto e sugestão para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {

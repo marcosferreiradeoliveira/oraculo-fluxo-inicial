@@ -13,6 +13,7 @@ import { DashboardPremiumHero } from '@/components/home/DashboardPremiumHero';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { filterEditaisAbertos, findEditalMaisUrgente } from '@/lib/editalDates';
 import { FornecedoresPainel } from '@/components/fornecedores/FornecedoresPainel';
+import { projetoEntryPath } from '@/lib/projetoWizard';
 
 const capitalizarTitulo = (titulo: string): string => {
   if (!titulo) return '';
@@ -108,7 +109,7 @@ const Index = () => {
                 editalUrgente={editalUrgente}
                 onCriarProjeto={() => navigate('/criar-projeto')}
                 onVerEditais={() => navigate('/editais-abertos')}
-                onContinuarProjeto={(projectId) => navigate(`/projeto/${projectId}`)}
+                onContinuarProjeto={(proj) => navigate(projetoEntryPath(proj.id, proj))}
                 onAvaliarEditalUrgente={(editalId) => navigate(`/criar-projeto?edital=${editalId}`)}
               />
             )}

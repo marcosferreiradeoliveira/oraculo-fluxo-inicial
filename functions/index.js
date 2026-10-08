@@ -11,6 +11,8 @@ const {
   inferirDuracaoMesesCronograma,
   resumoCronogramaParaOrcamento,
   instrucoesOrcamentoAlinhadoCronograma,
+  normalizarDataCronograma,
+  sanitizarEtapasCronogramaGeradas,
 } = require("./cronogramaDuracao");
 const cors = require("cors")({ origin: true });
 const admin = require("firebase-admin");
@@ -63,6 +65,87 @@ function getAI() {
 /** @deprecated use getAI() */
 function getOpenAI() {
   return getAI();
+}
+
+function extrairJsonObjetoDeTexto(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+  const start = s.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === "{") depth += 1;
+    else if (s[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(s.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+/** Baixa PDF via Admin SDK (Firebase/GCS) ou HTTP. */
+async function baixarPdfPorUrl(pdfUrl) {
+  const url = String(pdfUrl || "").trim();
+  if (!url) throw new Error("URL do PDF vazia");
+
+  const firebaseMatch = url.match(
+    /firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i
+  );
+  if (firebaseMatch) {
+    const bucketName = decodeURIComponent(firebaseMatch[1]);
+    const filePath = decodeURIComponent(firebaseMatch[2]);
+    const bucket = getStorage().bucket(bucketName);
+    const [buf] = await bucket.file(filePath).download();
+    return Buffer.from(buf);
+  }
+
+  const gsMatch = url.match(/storage\.googleapis\.com\/([^/]+)\/(.+?)(?:\?|$)/i);
+  if (gsMatch) {
+    const bucket = getStorage().bucket(gsMatch[1]);
+    const [buf] = await bucket.file(decodeURIComponent(gsMatch[2])).download();
+    return Buffer.from(buf);
+  }
+
+  const pdfResponse = await axios.get(url, {
+    responseType: "arraybuffer",
+    timeout: 60000,
+    maxRedirects: 5,
+  });
+  return Buffer.from(pdfResponse.data);
+}
+
+/** pdf-parse v2: API via classe PDFParse (não é mais função). */
+async function extrairTextoDoPdfBuffer(pdfBytes) {
+  const { PDFParse } = pdfParseLib;
+  if (!PDFParse) {
+    throw new Error("pdf-parse: PDFParse não disponível");
+  }
+  const parser = new PDFParse({ data: pdfBytes });
+  try {
+    const result = await parser.getText();
+    if (typeof result === "string") return result;
+    return result?.text || "";
+  } finally {
+    if (typeof parser.destroy === "function") {
+      try {
+        await parser.destroy();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 exports.avaliarProjetoIA = onRequest(
@@ -981,6 +1064,7 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
 exports.gerarCronogramaIA = onRequest(
   {
     cors: true,
+    invoker: 'public',
     secrets: [geminiApiKey],
     memory: '512MiB',
     timeoutSeconds: 120,
@@ -1011,10 +1095,12 @@ exports.gerarCronogramaIA = onRequest(
         try { body = JSON.parse(body); } catch (e) { return res.status(400).json({ error: 'Body JSON inválido' }); }
       }
       if (!body || typeof body !== 'object') body = {};
-      const { projetoId, sugestoes, etapasAtuais, duracaoMeses: duracaoMesesBody } = body;
+      const { projetoId, sugestoes, etapasAtuais, duracaoMeses: duracaoMesesBody, planilhaImportacao } = body;
       if (!projetoId) {
         return res.status(400).json({ error: 'projetoId é obrigatório' });
       }
+      const planilhaImportacaoTrim =
+        typeof planilhaImportacao === 'string' ? planilhaImportacao.trim().slice(0, 60000) : '';
       const duracaoMesesUsuario = typeof duracaoMesesBody === 'number' && duracaoMesesBody >= 1
         ? Math.min(120, Math.floor(duracaoMesesBody))
         : null;
@@ -1081,6 +1167,7 @@ exports.gerarCronogramaIA = onRequest(
 
       const sugestoesTrim = typeof sugestoes === 'string' ? sugestoes.trim() : '';
       const isAlteracoes = sugestoesTrim.length > 0 && Array.isArray(etapasAtuais) && etapasAtuais.length > 0;
+      const isImportPlanilha = planilhaImportacaoTrim.length > 0;
       const nomesRubricasSet = new Set(
         (rubricas || []).map((r) => String(r.nome || r.rubrica || '').trim()).filter(Boolean)
       );
@@ -1088,7 +1175,28 @@ exports.gerarCronogramaIA = onRequest(
       let prompt;
       let systemContent;
 
-      if (isAlteracoes) {
+      if (isImportPlanilha) {
+        prompt = `Você recebeu o conteúdo de uma planilha ou documento com CRONOGRAMA de projeto cultural.
+
+Extraia todas as etapas e retorne APENAS um array JSON válido, sem texto antes ou depois.
+
+Cada item do array:
+- "etapa" (string, nome da atividade)
+- "inicio" (YYYY-MM-DD)
+- "fim" (YYYY-MM-DD)
+- "macroEtapa": exatamente um de pre_producao, producao, divulgacao, pos_producao (infira pela natureza da etapa ou pela coluna Fase)
+- "rubricasAssociadas": array de strings (use [] se não houver rubricas no arquivo)
+
+Interprete datas em formato brasileiro (DD/MM/AAAA) ou ISO. Ignore linhas de cabeçalho repetido ou totais.
+
+CONTEÚDO IMPORTADO:
+${planilhaImportacaoTrim}
+
+Retorne somente o array JSON:`;
+        systemContent =
+          'Você converte planilhas de cronograma em array JSON. Cada objeto: etapa, inicio, fim, macroEtapa, rubricasAssociadas. Resposta: apenas JSON.';
+        console.log('[gerarCronogramaIA] Modo importação de planilha');
+      } else if (isAlteracoes) {
         const cronogramaAtualJson = JSON.stringify(etapasAtuais.map((e) => ({
           etapa: e.etapa || '',
           inicio: String(e.inicio || '').slice(0, 10),
@@ -1157,6 +1265,7 @@ REGRAS DE DATAS E DISTRIBUIÇÃO – CRÍTICO:
 REGRAS DE FORMATO:
 - Retorne APENAS um array JSON válido, sem texto antes ou depois.
 - Cada item deve ter: "etapa" (nome curto e concreto), "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (fase do cronograma) e "rubricasAssociadas" (array de strings).
+- OBRIGATÓRIO: em TODA etapa, "fim" >= "inicio" (mesmo dia permitido). Use SOMENTE YYYY-MM-DD. Não troque início e fim entre si.
 - rubricasAssociadas OBRIGATÓRIO: em cada etapa, indique os NOMES EXATOS das rubricas do orçamento que se aplicam a essa etapa (custos/despesas daquela atividade). Use somente nomes da lista de rubricas do projeto. Pode ser um ou mais; se não houver rubrica específica, use a mais próxima ou deixe [].
 ${listaNomesRubricasParaPrompt ? `\n${listaNomesRubricasParaPrompt}\n` : ''}
 - macroEtapa OBRIGATÓRIO: use exatamente um destes valores em cada etapa, conforme a natureza da atividade:
@@ -1181,7 +1290,7 @@ ${nomeEdital ? `Edital: ${nomeEdital}. Data limite: ${dataFimMax}.` : ''}
 
 Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macroEtapa e rubricasAssociadas com nomes exatos das rubricas):
 [{"etapa":"Contratos e licenciamentos (ECAD, alvarás)","inicio":"2025-02-01","fim":"2025-02-28","macroEtapa":"pre_producao","rubricasAssociadas":["Licenças e direitos autorais"]},{"etapa":"Contratação de equipe técnica e artística","inicio":"2025-03-01","fim":"2025-03-15","macroEtapa":"pre_producao","rubricasAssociadas":["Equipe técnica","Equipe artística"]},{"etapa":"Reserva e locação de espaços e equipamentos","inicio":"2025-03-10","fim":"2025-03-31","macroEtapa":"pre_producao","rubricasAssociadas":["Locação de espaços","Equipamentos"]},{"etapa":"Ensaios e preparação","inicio":"2025-04-01","fim":"2025-04-30","macroEtapa":"producao","rubricasAssociadas":["Ensaios","Produção"]},{"etapa":"Produção de material de divulgação","inicio":"2025-04-15","fim":"2025-05-15","macroEtapa":"divulgacao","rubricasAssociadas":["Divulgação"]},{"etapa":"Montagem técnica e cenográfica","inicio":"2025-05-01","fim":"2025-05-20","macroEtapa":"producao","rubricasAssociadas":["Montagem","Cenografia"]},{"etapa":"Apresentações e realização do evento","inicio":"2025-05-21","fim":"2025-06-15","macroEtapa":"producao","rubricasAssociadas":["Apresentações","Produção"]},{"etapa":"Campanha de divulgação e assessoria","inicio":"2025-05-01","fim":"2025-06-30","macroEtapa":"divulgacao","rubricasAssociadas":["Divulgação","Assessoria de imprensa"]},{"etapa":"Desmontagem e devolução de equipamentos","inicio":"2025-06-16","fim":"2025-06-30","macroEtapa":"pos_producao","rubricasAssociadas":["Logística"]},{"etapa":"Documentação pedagógica e clipping","inicio":"2025-07-01","fim":"2025-07-20","macroEtapa":"pos_producao","rubricasAssociadas":["Documentação","Acessibilidade"]},{"etapa":"Prestação de contas (RCO e documentação)","inicio":"2025-07-21","fim":"2025-09-15","macroEtapa":"pos_producao","rubricasAssociadas":["Administrativo"]}]`;
-        systemContent = 'Você gera um array JSON de etapas de cronograma. Cada objeto: "etapa", "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (pre_producao, producao, divulgacao ou pos_producao) e "rubricasAssociadas" (array de strings com os NOMES EXATOS das rubricas do orçamento que se aplicam àquela etapa). Use apenas nomes de rubricas fornecidos na lista do projeto. IMPORTANTE: muitas etapas devem ser CONCOMITANTES (datas sobrepostas). Resposta: apenas o JSON.';
+        systemContent = 'Você gera um array JSON de etapas de cronograma. Cada objeto: "etapa", "inicio" (YYYY-MM-DD), "fim" (YYYY-MM-DD), "macroEtapa" (pre_producao, producao, divulgacao ou pos_producao) e "rubricasAssociadas" (array de strings com os NOMES EXATOS das rubricas do orçamento que se aplicam àquela etapa). Use apenas nomes de rubricas fornecidos na lista do projeto. CRÍTICO: fim nunca anterior a inicio; datas sempre YYYY-MM-DD. Muitas etapas podem ser CONCOMITANTES (sobreposição). Resposta: apenas o JSON.';
       }
 
       const openai = getAI();
@@ -1230,13 +1339,18 @@ Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macro
                 .map((n) => String(n).trim());
               return {
                 etapa: String(e.etapa).trim(),
-                inicio: String(e.inicio).slice(0, 10),
-                fim: String(e.fim).slice(0, 10),
+                inicio: normalizarDataCronograma(e.inicio) || String(e.inicio).trim(),
+                fim: normalizarDataCronograma(e.fim) || String(e.fim).trim(),
                 macroEtapa: macro,
                 rubricasAssociadas: rubricasAssociadas.length ? rubricasAssociadas : [],
               };
             });
-          if (isAlteracoes && Array.isArray(etapasAtuais) && etapasAtuais.length > 0) {
+          const sanitizarOpts =
+            !isImportPlanilha && dataInicioMin && dataFimMax
+              ? { minYmd: dataInicioMin, maxYmd: dataFimMax }
+              : {};
+          etapas = sanitizarEtapasCronogramaGeradas(etapas, sanitizarOpts);
+          if (!isImportPlanilha && isAlteracoes && Array.isArray(etapasAtuais) && etapasAtuais.length > 0) {
             const mapaPorEtapa = new Map(etapasAtuais.map((e) => [e.etapa || '', e]));
             etapas = etapas.map((e) => {
               const anterior = mapaPorEtapa.get(e.etapa);
@@ -1245,6 +1359,12 @@ Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macro
                 : (e.rubricasAssociadas || []);
               return { ...e, rubricasAssociadas: mantidas.length ? mantidas : (e.rubricasAssociadas || []) };
             });
+          }
+          if (isImportPlanilha && nomesRubricasSet.size > 0) {
+            etapas = etapas.map((e) => ({
+              ...e,
+              rubricasAssociadas: (e.rubricasAssociadas || []).filter((n) => nomesRubricasSet.has(String(n).trim())),
+            }));
           }
         } catch (parseErr) {
           console.error('[gerarCronogramaIA] Erro ao parsear JSON:', parseErr, content.slice(0, 500));
@@ -1269,6 +1389,8 @@ exports.preencherAnexoPDF = onRequest(
     cors: true,
     invoker: 'public',
     secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: '1GiB',
   },
   async (req, res) => {
     // Set CORS headers
@@ -1300,12 +1422,18 @@ exports.preencherAnexoPDF = onRequest(
       console.log('[preencherAnexoPDF] PDF URL:', pdfUrl);
       console.log('[preencherAnexoPDF] Nome do projeto:', nomeProjeto);
       
-      // Baixar o PDF
-      const pdfResponse = await axios.get(pdfUrl, { 
-        responseType: 'arraybuffer',
-        timeout: 30000 
-      });
-      const pdfBytes = Buffer.from(pdfResponse.data);
+      // Baixar o PDF (Admin SDK quando URL é do Firebase Storage)
+      let pdfBytes;
+      try {
+        pdfBytes = await baixarPdfPorUrl(pdfUrl);
+      } catch (downloadErr) {
+        console.error('[preencherAnexoPDF] Falha ao baixar PDF:', downloadErr.message);
+        return res.status(400).json({
+          error: 'Não foi possível baixar o PDF',
+          message:
+            'Envie o arquivo novamente (botão Enviar Arquivo) e tente de novo. Se persistir, verifique permissões do Storage.',
+        });
+      }
       
       console.log('[preencherAnexoPDF] PDF baixado, tamanho:', pdfBytes.length);
       
@@ -1366,7 +1494,7 @@ IMPORTANTE:
         console.log('[preencherAnexoPDF] Chamando IA para identificar campos de formulário...');
         
         const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gemini-3.8-flash",
           messages: [
             { role: "system", content: "Você é um assistente especializado em preencher formulários PDF de projetos culturais. Sempre retorne JSON válido." },
             { role: "user", content: prompt }
@@ -1378,11 +1506,11 @@ IMPORTANTE:
         const aiResponse = completion.choices[0]?.message?.content || '{}';
         console.log('[preencherAnexoPDF] Resposta da IA:', aiResponse);
         
-        try {
-          const parsed = JSON.parse(aiResponse);
-          camposParaPreencher = parsed.campos || [];
-        } catch (error) {
-          console.error('[preencherAnexoPDF] Erro ao parsear resposta da IA:', error);
+        const parsed = extrairJsonObjetoDeTexto(aiResponse);
+        if (parsed && Array.isArray(parsed.campos)) {
+          camposParaPreencher = parsed.campos;
+        } else {
+          console.warn('[preencherAnexoPDF] JSON da IA inválido, usando fallback');
           camposParaPreencher = fieldNames.map(name => ({
             nome: name,
             valor: dadosCadastrais.includes(name.toLowerCase()) ? dadosCadastrais : nomeProjeto
@@ -1419,8 +1547,7 @@ IMPORTANTE:
         // Tentar extrair texto diretamente primeiro
         let textoExtraidoDiretamente = '';
         try {
-          const pdfTextData = await pdfParseLib(pdfBytes);
-          textoExtraidoDiretamente = pdfTextData.text || '';
+          textoExtraidoDiretamente = await extrairTextoDoPdfBuffer(pdfBytes);
           console.log('[preencherAnexoPDF] Texto extraído diretamente, tamanho:', textoExtraidoDiretamente.length);
         } catch (parseError) {
           console.warn('[preencherAnexoPDF] Erro ao extrair texto diretamente:', parseError.message);
@@ -1522,10 +1649,7 @@ IMPORTANTE:
         if (!pdfText || pdfText.trim().length < 10) {
           console.log('[preencherAnexoPDF] Tentando extrair texto com método alternativo...');
           try {
-            const pdfTextDataRetry = await pdfParseLib(pdfBytes, {
-              max: 0, // Processar todas as páginas
-            });
-            const textoRetry = pdfTextDataRetry.text || '';
+            const textoRetry = await extrairTextoDoPdfBuffer(pdfBytes);
             if (textoRetry && textoRetry.trim().length >= 10) {
               pdfText = textoRetry;
               console.log('[preencherAnexoPDF] Texto extraído com método alternativo, tamanho:', pdfText.length);
@@ -1593,7 +1717,7 @@ IMPORTANTE:
 
         try {
           const completionExtracao = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gemini-3.8-flash",
             messages: [
               { role: "system", content: "Você é um assistente especializado em extrair dados cadastrais. Sempre retorne JSON válido." },
               { role: "user", content: promptExtracao }
@@ -1605,7 +1729,7 @@ IMPORTANTE:
           const respostaExtracao = completionExtracao.choices[0]?.message?.content || '{}';
           console.log('[preencherAnexoPDF] Resposta da IA para extração:', respostaExtracao);
           
-          const parsedExtracao = JSON.parse(respostaExtracao);
+          const parsedExtracao = extrairJsonObjetoDeTexto(respostaExtracao) || {};
           dadosExtraidos = {
             cnpj: parsedExtracao.cnpj || '',
             razaoSocial: parsedExtracao.razaoSocial || '',
@@ -1679,13 +1803,13 @@ IMPORTANTE:
 Retorne APENAS o texto completo preenchido, mantendo a estrutura original do documento.`;
         
         const completionPreenchimento = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gemini-3.8-flash",
           messages: [
             { role: "system", content: "Você é um assistente especializado em preencher documentos mantendo a estrutura original. Retorne apenas o texto preenchido, preservando títulos, parágrafos e formatação." },
             { role: "user", content: promptPreenchimento }
           ],
           temperature: 0.2,
-          max_tokens: 4000
+          max_tokens: 8192
         });
         
         const textoPreenchido = completionPreenchimento.choices[0]?.message?.content || pdfText;
@@ -1826,14 +1950,24 @@ Retorne APENAS o texto completo preenchido, mantendo a estrutura original do doc
         });
         
         console.log('[preencherAnexoPDF] Arquivo salvo no Storage');
-        
-        // Tornar o arquivo público
-        await file.makePublic();
-        console.log('[preencherAnexoPDF] Arquivo tornado público');
-        
-        // Obter URL pública usando getSignedUrl ou URL pública direta
-        publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-        console.log('[preencherAnexoPDF] URL pública gerada:', publicUrl);
+
+        try {
+          const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires,
+          });
+          publicUrl = signedUrl;
+          console.log('[preencherAnexoPDF] URL assinada gerada');
+        } catch (signErr) {
+          console.warn('[preencherAnexoPDF] Signed URL falhou, tentando URL pública:', signErr.message);
+          try {
+            await file.makePublic();
+          } catch {
+            /* bucket pode bloquear ACL */
+          }
+          publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(fileName).replace(/%2F/g, '/')}`;
+        }
       } catch (storageError) {
         console.error('[preencherAnexoPDF] Erro completo ao salvar no Storage:', {
           message: storageError.message,

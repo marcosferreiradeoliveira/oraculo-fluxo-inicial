@@ -23,6 +23,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Remover qualquer configuração do workerSrc para o CDN
 // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { useAuthState } from 'react-firebase-hooks/auth';
+import { projetoEntryPath } from '@/lib/projetoWizard';
 
 interface DadosExtraidos {
   data_encerramento?: string | null;
@@ -112,7 +113,6 @@ const OraculoAI = () => {
         
         // Fetch Projetos
         if (user) {
-          console.log('Buscando projetos para o usuário:', user.uid);
           try {
             const projetosRef = collection(db, 'projetos');
             const q = query(
@@ -120,20 +120,13 @@ const OraculoAI = () => {
               where('user_id', '==', user.uid)
             );
             
-            console.log('Query criada:', q);
             const projetosSnapshot = await getDocs(q);
-            console.log('Documentos encontrados:', projetosSnapshot.docs.length);
             
-            const projetos = projetosSnapshot.docs.map(doc => {
-              const data = doc.data();
-              console.log(`Projeto ${doc.id}:`, data);
-              return {
-                id: doc.id,
-                ...data
-              };
-            });
+            const projetos = projetosSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
             
-            console.log('Projetos carregados:', projetos);
             setMeusProjetos(projetos);
           } catch (error) {
             console.error('Erro ao buscar projetos:', error);
@@ -346,7 +339,7 @@ const OraculoAI = () => {
                 ) : (
                   meusProjetos.map((projeto, index) => (
                     <div key={projeto.id || index} className="relative group">
-                      <Link to={`/projeto/${projeto.id}`} className="block hover:no-underline">
+                      <Link to={projetoEntryPath(projeto.id, projeto)} className="block hover:no-underline">
                         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                           <CardHeader className="pb-3">
                             <div className="flex items-start justify-between">
@@ -357,7 +350,7 @@ const OraculoAI = () => {
                                 </div>
                               </div>
                             </div>
-                            <CardDescription className="space-y-1">
+                            <div className="text-sm text-muted-foreground space-y-1">
                               <div className="flex items-center gap-1 text-xs">
                                 <FileText className="h-3 w-3" />
                                 {projeto.edital_associado || 'Sem edital associado'}
@@ -366,7 +359,7 @@ const OraculoAI = () => {
                                 <span className="w-2 h-2 rounded-full bg-oraculo-blue inline-block mr-1"></span>
                                 <span className="font-semibold">Setor:</span> {projeto.categoria}
                               </div>
-                            </CardDescription>
+                            </div>
                           </CardHeader>
                         </Card>
                       </Link>

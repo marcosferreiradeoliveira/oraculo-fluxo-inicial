@@ -12,6 +12,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
+import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -111,19 +112,6 @@ const GerarTextos = () => {
       isMounted.current = false;
     };
   }, []);
-  
-  // Debug effect to log state changes
-  useEffect(() => {
-    console.log('[DEBUG] gerando state changed to:', gerando);
-  }, [gerando]);
-  
-  // Debug effect to log text changes
-  useEffect(() => {
-    console.log('[DEBUG] textos state changed:', textos);
-    if (textoSelecionado && textos[textoSelecionado]) {
-      console.log(`[DEBUG] Current text for ${textoSelecionado}:`, textos[textoSelecionado]);
-    }
-  }, [textos, textoSelecionado]);
   
   // Show text box when a text type is selected or when generating
   useEffect(() => {
@@ -241,19 +229,14 @@ const GerarTextos = () => {
     }
     
     try {
-      console.log(`[DEBUG] Salvando texto para ${tipo} no Firestore`);
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
       
       // First update the local state
-      setTextos(prev => {
-        const newTexts = {
-          ...prev,
-          [tipo]: texto
-        };
-        console.log('[DEBUG] Estado local atualizado:', newTexts);
-        return newTexts;
-      });
+      setTextos(prev => ({
+        ...prev,
+        [tipo]: texto
+      }));
       
       // Then update Firestore with the complete textos_gerados object
       await updateDoc(projetoRef, {
@@ -264,7 +247,6 @@ const GerarTextos = () => {
         atualizado_em: serverTimestamp()
       });
       
-      console.log(`[DEBUG] Texto salvo com sucesso para ${tipo}`);
       return true;
     } catch (error) {
       console.error('Erro ao salvar no Firestore:', error);
@@ -277,29 +259,15 @@ const GerarTextos = () => {
   };
 
   const gerarTexto = async (tipo: TextoTipo): Promise<boolean> => {
-    const log = (message: string, data?: any) => {
-      const timestamp = new Date().toISOString();
-      if (data !== undefined) {
-        console.log(`[${timestamp}] ${message}`, data);
-      } else {
-        console.log(`[${timestamp}] ${message}`);
-      }
-    };
-
-    log('Iniciando geração de texto para:', { tipo, projetoId: id });
-    
     try {
       // 1. Validações iniciais
       if (!projeto) {
         const errorMsg = 'Projeto não carregado';
-        log(errorMsg);
         alert('Erro: Projeto não carregado. Por favor, recarregue a página.');
         throw new Error(errorMsg);
       }
       
       if (gerando) {
-        const errorMsg = `Já existe uma geração em andamento para: ${gerando}`;
-        log(errorMsg);
         return false; // Indica que não foi possível iniciar a geração
       }
       
@@ -308,7 +276,6 @@ const GerarTextos = () => {
       setGerando(tipo);
       
       // 3. Limpeza do texto existente
-      log('Limpando texto existente...');
       setTextos(prev => ({
         ...prev,
         [tipo]: ''
@@ -316,7 +283,6 @@ const GerarTextos = () => {
       
       // 4. Aguarda atualização do estado
       await new Promise(resolve => setTimeout(resolve, 50));
-      log('Estado limpo com sucesso');
       
       // 5. Prepara a requisição
       setProgresso('Preparando dados...');
@@ -335,19 +301,11 @@ const GerarTextos = () => {
             ...projetoSnap.data() 
           } as ProjetoDocument;
           
-          log('Projeto recarregado do Firestore:', { 
-            hasDescricao: !!projetoAtualizado.descricao,
-            descricaoLength: projetoAtualizado.descricao?.length || 0 
-          });
-          
           // Atualizar o estado local também
           setProjeto(projetoAtualizado);
-        } else {
-          log('Aviso: Projeto não encontrado no Firestore, usando estado local');
         }
       } catch (err) {
         console.error('Erro ao recarregar projeto do Firestore:', err);
-        log('Erro ao recarregar projeto, usando estado local');
       }
       
       // Buscar dados do usuário (portfolio, equipeBio e dadosCadastrais) para incluir na geração
@@ -362,10 +320,10 @@ const GerarTextos = () => {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            userPortfolio = userData.portfolio || '';
             equipeBio = userData.equipeBio || '';
             dadosCadastrais = userData.dadosCadastrais || '';
           }
+          userPortfolio = await buscarPortfolioParaIA(user.uid);
         } catch (err) {
           console.error('Erro ao buscar dados do usuário:', err);
         }
@@ -386,21 +344,7 @@ const GerarTextos = () => {
         userId: user?.uid // Adicionar userId para buscar dados do usuário do Firestore
       };
       
-      log('Dados da requisição:', { 
-        ...requestData, 
-        dadosProjeto: '[...]' // Não logar o projeto inteiro
-      });
-      
-      // Debug específico para orçamento
-      if (tipo === 'orcamento') {
-        log('Gerando orçamento - tipo original:', tipo);
-        log('Gerando orçamento - tipo mapeado:', tipoMapeado);
-        log('Projeto atualizado data keys:', Object.keys(projetoAtualizado));
-        log('Projeto atualizado descricao length:', projetoAtualizado.descricao?.length || 0);
-      }
-      
       // 6. Envia a requisição
-      console.log('[DEBUG] Preparando para enviar requisição...');
       setProgresso('Conectando ao servidor...');
       const startTime = Date.now();
       trackTextGenerationStarted({
@@ -408,37 +352,24 @@ const GerarTextos = () => {
         textType: tipoMapeado,
       });
 
-      console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
-      console.log('[DEBUG] Request data keys:', Object.keys(requestData));
-      
       // Tenta primeiro a nova função, se falhar usa a antiga
       let response;
       try {
-        console.log('[DEBUG] Tentando fetch para Firebase Function...');
         response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
         });
-        console.log('[DEBUG] Resposta recebida do Firebase Function, status:', response.status);
       } catch (err) {
-        console.error('[ERROR] Erro ao chamar Firebase Function:', err);
-        // Fallback para a URL do Cloud Run
-        console.log('[DEBUG] Tentando fallback para Cloud Run...');
+        console.error('Erro ao chamar Firebase Function:', err);
         response = await fetch('https://gerartexto-v3odkawqzq-uc.a.run.app', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
         });
-        console.log('[DEBUG] Resposta recebida do Cloud Run, status:', response.status);
       }
       
       const requestTime = Date.now() - startTime;
-      log(`Resposta recebida em ${requestTime}ms`, {
-        status: response.status,
-        statusText: response.statusText
-      });
-      console.log(`[${new Date().toISOString()}] Resposta recebida em ${requestTime}ms`, response);
       
       if (!response.ok) {
         let errorData: { error?: string; message?: string } | null = null;
@@ -464,22 +395,15 @@ const GerarTextos = () => {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const data = await response.json();
-        console.log('[DEBUG] Recebida resposta JSON');
-        console.log('[DEBUG] Dados recebidos:', data);
         
         if (data.texto) {
           setProgresso('Gerando texto...');
           const fullTextData = data.texto.trim();
-          console.log('[DEBUG] Texto recebido via JSON:', fullTextData);
           if (isMounted.current) {
-            setTextos(prev => {
-              const newTexts = {
-                ...prev,
-                [tipo]: fullTextData
-              };
-              console.log('[DEBUG] Atualizando textos com novo valor:', newTexts);
-              return newTexts;
-            });
+            setTextos(prev => ({
+              ...prev,
+              [tipo]: fullTextData
+            }));
             await salvarNoFirestore(tipo, fullTextData);
             setTextoSelecionado(tipo);
             setGerando(null); // Clear loading state after successful update
@@ -638,10 +562,8 @@ const GerarTextos = () => {
       }
       throw error; // Re-throw to be caught by the outer catch if needed
     } finally {
-      console.log(`[${new Date().toISOString()}] Finalizando geração para:`, tipo);
       // Always clear the loading state
       if (isMounted.current) {
-        console.log('[DEBUG] Clearing loading state in finally');
         // Use requestAnimationFrame to ensure React has finished its current render cycle
         requestAnimationFrame(() => {
           if (isMounted.current) {
@@ -1006,17 +928,7 @@ const GerarTextos = () => {
                               setAplicandoSugestao(false);
                               return;
                             }
-                            let portfolioTexto = '';
-                            if (user) {
-                              try {
-                                const db = getFirestore();
-                                const userDocRef = doc(db, 'usuarios', user.uid);
-                                const userDoc = await getDoc(userDocRef);
-                                if (userDoc.exists()) portfolioTexto = userDoc.data().portfolio || '';
-                              } catch (err) {
-                                console.error('Erro ao buscar portfolio:', err);
-                              }
-                            }
+                            const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
                             const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
                             const response = await fetch(endpoint, {
                               method: 'POST',

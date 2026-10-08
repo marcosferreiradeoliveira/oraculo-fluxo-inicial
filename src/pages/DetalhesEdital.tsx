@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
-import { getEditaisDb } from '@/lib/editaisDb';
+import { getEditaisDb, getEditaisWriteDb } from '@/lib/editaisDb';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -23,7 +23,8 @@ import {
   History,
   Award,
   Plus,
-  Download
+  Download,
+  Pencil,
 } from 'lucide-react';
 
 interface Edital {
@@ -76,9 +77,11 @@ const DetalhesEdital = () => {
       }
       
       try {
-        const editalRef = doc(getEditaisDb(), 'editais', id);
-        const editalSnap = await getDoc(editalRef);
-        
+        let editalSnap = await getDoc(doc(getEditaisDb(), 'editais', id));
+        if (!editalSnap.exists()) {
+          editalSnap = await getDoc(doc(getEditaisWriteDb(), 'editais', id));
+        }
+
         if (editalSnap.exists()) {
           const data = editalSnap.data();
           const editalData = { 
@@ -236,15 +239,27 @@ const DetalhesEdital = () => {
               )}
             </div>
 
-            {/* Botão Formatar Projeto — destaque no topo */}
-            <Button 
-              size="lg"
-              onClick={() => navigate(`/criar-projeto?edital=${id}`)}
-              className="mt-6 w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
-            >
-              <Plus className="h-6 w-6" />
-              Formatar para este edital
-            </Button>
+            <div className="mt-6 flex flex-col sm:flex-row flex-wrap gap-3">
+              <Button
+                size="lg"
+                onClick={() => navigate(`/criar-projeto?edital=${id}`)}
+                className="w-full sm:w-auto px-8 py-5 text-base md:text-lg font-semibold bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Plus className="h-6 w-6" />
+                Formatar para este edital
+              </Button>
+              {user && id && (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => navigate(`/editar-edital/${id}`)}
+                  className="w-full sm:w-auto px-6 py-5 text-base font-semibold border-oraculo-blue/40 text-oraculo-blue hover:bg-oraculo-blue/5 flex items-center justify-center gap-2"
+                >
+                  <Pencil className="h-5 w-5" />
+                  Editar edital
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Key Information Cards */}

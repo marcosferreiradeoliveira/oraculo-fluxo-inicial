@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { collection, getDocs, getFirestore, type Firestore } from 'firebase/firestore';
 import { db as primaryDb } from '@/lib/firebase';
 
 /** App web culturalapp-fb9b0 — só leitura pública de `editais` (rules: allow read: if true). */
@@ -17,6 +17,9 @@ const CATALOG_APP_NAME = 'edital-catalog-culturalapp';
 export type EditaisCatalogSource = 'local' | 'culturalapp';
 
 export function editaisCatalogSource(): EditaisCatalogSource {
+  const profile = (import.meta.env.VITE_FIREBASE_PROFILE as string | undefined)?.trim().toLowerCase();
+  if (profile === 'oraculo-is') return 'local';
+
   const v = (import.meta.env.VITE_EDITAIS_CATALOG as string | undefined)?.trim().toLowerCase();
   if (v === 'culturalapp' || v === 'culturalapp-fb9b0' || v === 'roxo') return 'culturalapp';
   return 'local';
@@ -43,4 +46,26 @@ export function getEditaisWriteDb(): Firestore {
 
 export function isEditaisCatalogExternal(): boolean {
   return editaisCatalogSource() === 'culturalapp';
+}
+
+/** Catálogo + editais importados localmente (quando leitura aponta para culturalapp). */
+export async function fetchEditaisMergedDocs(): Promise<Array<{ id: string; data: () => Record<string, unknown> }>> {
+  const byId = new Map<string, Record<string, unknown>>();
+
+  const ingest = (db: Firestore) =>
+    getDocs(collection(db, 'editais')).then((snap) => {
+      snap.docs.forEach((d) => {
+        byId.set(d.id, { id: d.id, ...d.data() });
+      });
+    });
+
+  await ingest(getEditaisDb());
+  if (isEditaisCatalogExternal()) {
+    await ingest(getEditaisWriteDb());
+  }
+
+  return Array.from(byId.entries()).map(([id, data]) => ({
+    id,
+    data: () => data,
+  }));
 }

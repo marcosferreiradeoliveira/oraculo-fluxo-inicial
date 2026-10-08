@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, deleteField, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, deleteField, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
 } from '@/lib/analytics';
 import { toast } from 'sonner';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
 import { AnaliseMarkdown } from '@/components/analise/AnaliseMarkdown';
 import { NotasCriteriosPainel } from '@/components/analise/NotasCriteriosPainel';
 import {
@@ -29,6 +30,7 @@ import {
   inferirTipoProjeto,
 } from '@/lib/criteriosAvaliacao';
 import { camposNotaParaFirestore } from '@/lib/extrairNotasCriterios';
+import { projetoEntryPath } from '@/lib/projetoWizard';
 
 /** Streaming só encerra com flag explícita; fallback para projetos já salvos antes do campo existir. */
 function analiseMarcadaComoCompleta(data: { analise_ia?: string; analise_ia_completa?: boolean }): boolean {
@@ -240,7 +242,10 @@ const formatarTextoParaExibicao = (texto: string): string => {
 const Projeto = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const isStreaming = searchParams.get('streaming') === 'true';
+  const pendingAutoAnalisarRef = useRef(
+    searchParams.get('analisar') === '1' || searchParams.get('streaming') === 'true'
+  );
+  const streamScrollRef = useRef<HTMLDivElement>(null);
   const [projeto, setProjeto] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [analisando, setAnalisando] = useState(false);
@@ -306,125 +311,99 @@ const Projeto = () => {
 
   useEffect(() => {
     if (!id) return;
-    
+
     setLoading(true);
-    setAnaliseIniciada(false); // Reset quando carregar novo projeto
+    setAnaliseIniciada(false);
     const db = getFirestore();
     const ref = doc(db, 'projetos', id);
-    
-    // Se está em modo streaming (veio do Criar Projeto), não mostrar modal; exibir página com caixa de análise em tempo real
-    if (isStreaming) {
-      setMostrarAnalise(false);
-      setAnalisando(true);
-      setStatusIA('Recebendo análise da IA...');
-      setSubEtapasIA(['A IA está escrevendo a análise...']);
-      
-      const unsubscribe = onSnapshot(ref, (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setProjeto({ id: snap.id, ...data });
-          
-          // Se há análise sendo escrita, atualizar em tempo real e fechar o modal "consultando as musas"
-          if (data.analise_ia) {
-            setMostrarAnalise(false);
-            setAnalise(data.analise_ia);
-            
-            // Extrair sugestões conforme a análise vai sendo escrita
-            const matches = extrairSugestoes(data.analise_ia);
-            setSugestoes(matches);
-            setAprovacoes(Array(matches.length).fill(false));
-            
-            // Só encerra streaming quando o backend/cliente marcar análise como completa
-            if (analiseMarcadaComoCompleta(data)) {
-              setAnalisando(false);
-              setStreamingAnaliseContent('');
-              setStatusIA('Análise concluída!');
-              setSubEtapasIA([]);
-              if (typeof data.etapa_atual === 'number' && data.etapa_atual >= 2) {
-                setEtapaAtual(data.etapa_atual);
-              } else if (etapaAtual < 2) {
-                setEtapaAtual(2);
-              }
-              navigate(`/projeto/${id}`, { replace: true });
-            } else if (data.analise_ia) {
-              setStreamingAnaliseContent(data.analise_ia);
+
+    const fetchProjeto = async () => {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = { id: snap.id, ...(snap.data() as any) };
+        setProjeto(data);
+        setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
+        setDescricaoEditada(data.descricao || '');
+
+        if (
+          inferirTipoProjeto(data) === 'mae' &&
+          (data.analise_ia || analiseMarcadaComoCompleta(data))
+        ) {
+          navigate(projetoEntryPath(id!, data), { replace: true });
+          return;
+        }
+
+        if (data.analise_ia && data.primeira_analise_completa === undefined) {
+          await updateDoc(ref, { primeira_analise_completa: true });
+          setPrimeiraAnaliseCompleta(true);
+        } else {
+          setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
+        }
+
+        if (data.analise_ia) {
+          if (data.analise_ia_completa !== false && data.nota_estimada == null) {
+            const notaCampos = camposNotaParaFirestore(data.analise_ia);
+            if (notaCampos) {
+              await updateDoc(ref, notaCampos);
+              Object.assign(data, notaCampos);
             }
           }
+
+          setAnalise(data.analise_ia);
+          setStatusIA('Análise carregada');
+
+          const matches = extrairSugestoes(data.analise_ia);
+          setSugestoes(matches);
+          setAprovacoes(Array(matches.length).fill(false));
         }
-        setLoading(false);
-      });
-      
-      return () => unsubscribe();
-    } else {
-      // Modo normal: buscar uma vez
-      const fetchProjeto = async () => {
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = { id: snap.id, ...(snap.data() as any) };
-          setProjeto(data);
-          setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
-          setDescricaoEditada(data.descricao || '');
-          
-          // Check if first analysis was already completed
-          // Se já existe análise mas não tem o campo, considerar como primeira análise completa (para projetos antigos)
-          if (data.analise_ia && data.primeira_analise_completa === undefined) {
-            // Projeto antigo com análise mas sem campo - marcar como primeira análise completa
-            const ref = doc(db, 'projetos', id);
-            await updateDoc(ref, { primeira_analise_completa: true });
-            setPrimeiraAnaliseCompleta(true);
-          } else {
-            setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
-          }
-          
-          // If analysis exists, process it
-          if (data.analise_ia) {
-            if (data.analise_ia_completa !== false && data.nota_estimada == null) {
-              const notaCampos = camposNotaParaFirestore(data.analise_ia);
-              if (notaCampos) {
-                await updateDoc(ref, notaCampos);
-                Object.assign(data, notaCampos);
-              }
-            }
 
-            setAnalise(data.analise_ia);
-            setStatusIA('Análise carregada');
-
-            const matches = extrairSugestoes(data.analise_ia);
-            setSugestoes(matches);
-            setAprovacoes(Array(matches.length).fill(false));
-          }
-          
-          // Track project viewed
-          if (user) {
-            const db = getFirestore();
-            const userRef = doc(db, 'usuarios', user.uid);
-            const userSnap = await getDoc(userRef);
-            const userData = userSnap.exists() ? userSnap.data() : {};
-            
-            trackProjectViewed({
-              projectId: id,
-              hasAnalysis: !!data.analise_ia,
-              hasTexts: !!data.textos,
-            });
-          }
+        if (user) {
+          trackProjectViewed({
+            projectId: id,
+            hasAnalysis: !!data.analise_ia,
+            hasTexts: !!data.textos,
+          });
         }
-        setLoading(false);
-      };
-      fetchProjeto();
-    }
-  }, [id, user, isStreaming]);
+      }
+      setLoading(false);
+    };
+    fetchProjeto();
+  }, [id, user, navigate]);
 
-  // Iniciar análise automaticamente quando o projeto é carregado sem análise
+  // Inicia análise automática (criar projeto ?analisar=1 ou projeto ainda sem análise)
   useEffect(() => {
-    if (!loading && projeto && !projeto.analise_ia && !analisando && !analiseIniciada && user) {
-      setAnaliseIniciada(true); // Marcar como iniciada para evitar múltiplas chamadas
-      // Pequeno delay para garantir que o componente está totalmente renderizado
-      const timer = setTimeout(() => {
-        analisarComIA();
-      }, 800);
-      return () => clearTimeout(timer);
+    if (!id || loading || !projeto || !user || analiseIniciada || analisando) return;
+
+    if (projeto.analise_ia && analiseMarcadaComoCompleta(projeto)) {
+      if (pendingAutoAnalisarRef.current) {
+        pendingAutoAnalisarRef.current = false;
+        navigate(projetoEntryPath(id, projeto), { replace: true });
+      }
+      return;
     }
-  }, [loading, projeto, analisando, analiseIniciada, user]);
+
+    if (projeto.analise_ia) return;
+
+    const fromCreateFlow = pendingAutoAnalisarRef.current;
+    if (fromCreateFlow) pendingAutoAnalisarRef.current = false;
+
+    setAnaliseIniciada(true);
+    if (fromCreateFlow) {
+      navigate(`/projeto/${id}`, { replace: true });
+    }
+
+    const delayMs = fromCreateFlow ? 0 : 300;
+    const timer = setTimeout(() => {
+      void analisarComIA({ inline: true });
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [id, loading, projeto, user, analiseIniciada, analisando, navigate]);
+
+  useEffect(() => {
+    if (!streamingAnaliseContent || !streamScrollRef.current) return;
+    const el = streamScrollRef.current;
+    el.scrollTop = el.scrollHeight;
+  }, [streamingAnaliseContent]);
 
   // Handler for approving a suggestion
   const handleAprovar = async (idx: number) => {
@@ -446,22 +425,9 @@ const Projeto = () => {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     try {
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
-      
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
+
       const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
-      console.log('Enviando texto e sugestão para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -690,22 +656,9 @@ const Projeto = () => {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     try {
-      let portfolioTexto = '';
-      if (user) {
-        try {
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            portfolioTexto = userDoc.data().portfolio || '';
-          }
-        } catch (err) {
-          console.error('Erro ao buscar portfolio:', err);
-        }
-      }
-      
+      const portfolioTexto = user ? await buscarPortfolioParaIA(user.uid) : '';
+
       const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
-      console.log('Enviando texto e sugestão personalizada para o backend...');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -903,40 +856,36 @@ const Projeto = () => {
   };
 
   // Função para analisar com IA
-  const analisarComIA = async () => {
+  const analisarComIA = async (options?: { inline?: boolean }) => {
+    const inline = options?.inline === true;
 
-    // Track analysis started
     if (id && user) {
-      const db = getFirestore();
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.exists() ? userSnap.data() : {};
-      const projetoSnap = await getDoc(doc(db, 'projetos', id));
-      const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
-      const isFirstAnalysis = !projetoData?.analise_ia;
-      
-      trackAnalysisStarted({
-        projectId: id,
-        isFirstAnalysis: isFirstAnalysis,
-      });
+      void (async () => {
+        const dbTrack = getFirestore();
+        const projetoSnap = await getDoc(doc(dbTrack, 'projetos', id));
+        const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
+        trackAnalysisStarted({
+          projectId: id,
+          isFirstAnalysis: !projetoData?.analise_ia,
+        });
+      })();
     }
-    
-    // Primeiro, mostra o modal e configura os estados iniciais
-    setMostrarAnalise(true);
+
+    setMostrarAnalise(!inline);
     setAnalise(null);
     setErroIA(null);
-    setStatusIA('O Oráculo está consultando as musas...');
-    setSubEtapasIA(['Consultando as musas da inspiração...']);
+    setStreamingAnaliseContent('');
+    setStatusIA(inline ? 'Preparando análise...' : 'O Oráculo está consultando as musas...');
+    setSubEtapasIA(
+      inline ? ['Conectando ao servidor de análise...'] : ['Consultando as musas da inspiração...']
+    );
     setAnalisando(true);
-    
-    // Força uma atualização síncrona do DOM
-    await new Promise(resolve => {
-      // Usa requestAnimationFrame para garantir que o React tenha tempo de renderizar
-      requestAnimationFrame(() => {
-        // Usa um pequeno timeout para garantir que o navegador tenha tempo de renderizar
-        setTimeout(resolve, 100);
+
+    if (!inline) {
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => setTimeout(resolve, 100));
       });
-    });
+    }
     
     // Processamento real: buscar edital e portfolio em paralelo (sem atrasos artificiais)
     try {
@@ -961,9 +910,7 @@ const Projeto = () => {
       };
 
       // Buscar edital e portfolio em paralelo para reduzir tempo total
-      const portfolioPromise = user
-        ? getDoc(doc(db, 'usuarios', user.uid)).then(snap => (snap.exists() ? (snap.data()?.portfolio || '') : ''))
-        : Promise.resolve('');
+      const portfolioPromise = user ? buscarPortfolioParaIA(user.uid) : Promise.resolve('');
       const [editalResult, portfolioTexto] = await Promise.all([
         editalParaAnalise ? fetchEditalESelecionados(editalParaAnalise) : Promise.resolve(null),
         portfolioPromise,
@@ -1085,7 +1032,12 @@ const Projeto = () => {
             const data = JSON.parse(line.slice(6));
             if (data.content) {
               fullContent += data.content;
-              scheduleFlush();
+              if (fullContent.length <= 1200) {
+                setStreamingAnaliseContent(fullContent);
+                setMostrarAnalise(false);
+              } else {
+                scheduleFlush();
+              }
             }
             if (data.done) {
               fullContent = data.fullContent ?? fullContent;
@@ -1253,7 +1205,7 @@ const Projeto = () => {
               <p className="mt-1">{erroIA}</p>
             </div>
             <button
-              onClick={analisarComIA}
+              onClick={() => void analisarComIA()}
               className="px-4 py-2 bg-oraculo-blue text-white rounded-lg hover:bg-oraculo-blue/90 transition"
             >
               Tentar novamente
@@ -1573,7 +1525,7 @@ const Projeto = () => {
                   <Button
                     size="lg"
                     className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-base md:text-xl px-6 md:px-12 py-4 md:py-6 flex items-center gap-2 md:gap-3 w-full justify-center font-bold"
-                    onClick={analisarComIA}
+                    onClick={() => void analisarComIA()}
                     disabled={analisando}
                   >
                     <Brain className="h-6 w-6 md:h-8 md:w-8" />
@@ -1611,7 +1563,10 @@ const Projeto = () => {
                       </div>
                     </div>
                     <div className="bg-white border-2 border-gray-200 rounded-b-xl shadow-xl overflow-hidden">
-                      <div className="p-4 md:p-8 max-h-[70vh] overflow-y-auto">
+                      <div ref={streamScrollRef} className="p-4 md:p-8 max-h-[70vh] overflow-y-auto">
+                        {!(streamingAnaliseContent || projeto?.analise_ia) && (
+                          <p className="text-sm text-gray-500 animate-pulse">{statusIA || 'Aguardando primeiras palavras da IA...'}</p>
+                        )}
                         <AnaliseMarkdown
                           content={streamingAnaliseContent || projeto?.analise_ia || ''}
                           className="prose-sm md:prose-base"
@@ -1892,7 +1847,7 @@ const Projeto = () => {
                     <Button 
                       size="lg" 
                       className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-xl px-12 py-6 flex items-center gap-3 w-full justify-center font-bold" 
-                      onClick={analisarComIA} 
+                      onClick={() => void analisarComIA()} 
                       disabled={analisando}
                     >
                       <Brain className="h-8 w-8" />

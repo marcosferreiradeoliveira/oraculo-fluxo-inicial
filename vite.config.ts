@@ -5,14 +5,16 @@ import path from "path";
 
 // https://vitejs.dev/config/
 const FIREBASE_PROJECT = process.env.VITE_PROJECT_ID || 'oraculo-is';
-// Cronograma em dev: por padrão usa o emulador (evita 503 da função em produção).
-// Terminal 1: cd functions && npm run serve   Terminal 2: npm run dev
-// Para usar a função em produção em dev: VITE_CRONOGRAMA_USE_PROD=1 npm run dev
+// Cronograma em dev: padrão = função publicada (VITE_CRONOGRAMA_USE_PROD=1 em .env.oraculo-is).
+// Emulador: VITE_CRONOGRAMA_USE_PROD=0 + cd functions && npm run serve
 const CRONOGRAMA_PROJECT = FIREBASE_PROJECT;
 const CRONOGRAMA_REGION = 'us-central1';
-const CRONOGRAMA_PROD = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net/gerarCronogramaIA`;
+const CRONOGRAMA_PROD_BASE = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net`;
 const CRONOGRAMA_EMULATOR_BASE = 'http://127.0.0.1:5001';
-const useCronogramaProd = process.env.VITE_CRONOGRAMA_USE_PROD === '1';
+const useCronogramaProd = process.env.VITE_CRONOGRAMA_USE_PROD !== '0';
+const cronogramaProxyTarget =
+  process.env.VITE_CRONOGRAMA_PROXY_TARGET?.trim() ||
+  (useCronogramaProd ? CRONOGRAMA_PROD_BASE : CRONOGRAMA_EMULATOR_BASE);
 
 export default defineConfig(({ mode }) => ({
   server: {
@@ -20,10 +22,12 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api/gerarCronogramaIA': {
-        target: useCronogramaProd ? CRONOGRAMA_PROD : CRONOGRAMA_EMULATOR_BASE,
+        target: cronogramaProxyTarget,
         changeOrigin: true,
         rewrite: () =>
-          useCronogramaProd ? '/' : `/${CRONOGRAMA_PROJECT}/${CRONOGRAMA_REGION}/gerarCronogramaIA`,
+          useCronogramaProd && !process.env.VITE_CRONOGRAMA_PROXY_TARGET?.trim()
+            ? '/gerarCronogramaIA'
+            : `/${CRONOGRAMA_PROJECT}/${CRONOGRAMA_REGION}/gerarCronogramaIA`,
       },
     },
   },

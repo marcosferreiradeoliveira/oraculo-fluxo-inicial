@@ -1,3 +1,5 @@
+import { inferirTipoProjeto, type ProjetoComTipo } from '@/lib/criteriosAvaliacao';
+
 /** Labels e rotas do assistente de criação de projeto (ordem fixa). */
 export const WIZARD_STEP_LABELS = [
   'Criar Projeto',
@@ -22,6 +24,14 @@ export const WIZARD_STEP = {
   documentos: 7,
   anexos: 8,
 } as const;
+
+/** Rota ao abrir o projeto (lista / dashboard). Projetos sem edital → Alterar com IA. */
+export function projetoEntryPath(projectId: string, projeto?: ProjetoComTipo | null): string {
+  if (projeto && inferirTipoProjeto(projeto) === 'mae') {
+    return `/projeto/${projectId}/alterar-com-ia`;
+  }
+  return `/projeto/${projectId}`;
+}
 
 export function wizardRoutes(projectId: string): string[] {
   return [

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
@@ -6,7 +6,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ChevronRight, ChevronDown } from 'lucide-react';
+import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ChevronRight, ChevronDown, Upload, Loader2 } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -19,6 +19,18 @@ import {
   limparRubricasOrfas,
   sugerirVinculosRubricasEtapas,
 } from '@/lib/vinculoCronogramaOrcamento';
+import {
+  importarPlanilhaCronograma,
+  planilhaCronogramaComoTexto,
+  type EtapaPlanilhaImportada,
+} from '@/lib/importarPlanilhaCronograma';
+import { WIZARD_STEP, WIZARD_STEP_LABELS, wizardRoutes } from '@/lib/projetoWizard';
+import {
+  corrigirInicioFimCronograma,
+  fimAntesDoInicioCronograma,
+  formatarDataPtBrDeIso,
+  normalizarDataCronograma,
+} from '@/lib/cronogramaDatas';
 
 // Dev: proxy Vite. Produção: rewrite do Firebase Hosting para a função (mesma origem, sem CORS)
 const GERAR_CRONOGRAMA_URL = '/api/gerarCronogramaIA';
@@ -84,9 +96,12 @@ const CriarCronograma = () => {
   const [duracaoProjetoMeses, setDuracaoProjetoMeses] = useState<number | ''>('');
   const [expandedEtapaId, setExpandedEtapaId] = useState<string | null>(null);
   const [abaCronograma, setAbaCronograma] = useState('etapas');
+  const [importandoCronograma, setImportandoCronograma] = useState(false);
+  const inputImportCronogramaRef = useRef<HTMLInputElement>(null);
 
-  const steps = ['Criar Projeto', 'Avaliar com IA', 'Alterar com IA', 'Gerar Textos', 'Criar Cronograma', 'Criar Orçamento', 'Equipe', 'Documentos de Inscrição', 'Preencher Anexos'];
-  const currentStep = 4;
+  const steps = [...WIZARD_STEP_LABELS];
+  const currentStep = WIZARD_STEP.cronograma;
+  const wizardStepRoutes = id ? wizardRoutes(id) : [];
 
   // Analytics: etapa "Criar Cronograma" visualizada (Mixpanel/Firebase/GTM) — uma vez ao carregar
   const stepViewedRef = React.useRef(false);
@@ -120,6 +135,8 @@ const CriarCronograma = () => {
           setEtapas(Array.isArray(etapasSalvas) ? etapasSalvas.map((e: EtapaCronograma) => ({
             ...e,
             id: e.id || gerarId(),
+            inicio: normalizarDataCronograma(e.inicio) || e.inicio || '',
+            fim: normalizarDataCronograma(e.fim) || e.fim || '',
             macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
           })) : []);
           const dur = data.cronograma?.duracaoMeses;
@@ -181,6 +198,125 @@ const CriarCronograma = () => {
   /** Lista de etapas ordenada só para exibição: pré → produção → pós → divulgação (concomitantes mantidas) */
   const etapasOrdenadas = useMemo(() => ordenarEtapasPorFase(etapas), [etapas]);
 
+  const mapEtapaComDatasCorrigidas = (e: {
+    etapa: string;
+    inicio: string;
+    fim: string;
+    macroEtapa?: MacroEtapa;
+    rubricasAssociadas?: string[];
+  }): EtapaCronograma => {
+    const { inicio, fim } = corrigirInicioFimCronograma(e.inicio, e.fim);
+    return {
+      ...e,
+      id: gerarId(),
+      inicio,
+      fim,
+      macroEtapa:
+        e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa) ? e.macroEtapa : 'producao',
+      rubricasAssociadas: e.rubricasAssociadas ?? [],
+    };
+  };
+
+  const aplicarEtapasImportadas = (lista: EtapaPlanilhaImportada[]) => {
+    setEtapas(
+      lista.map((e) => mapEtapaComDatasCorrigidas({
+        ...e,
+        macroEtapa:
+          e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa) ? e.macroEtapa : 'producao',
+      })),
+    );
+  };
+
+  const aplicarEtapasGeradasIA = (etapasGeradas: Omit<EtapaCronograma, 'id'>[]) => {
+    setEtapas(
+      etapasGeradas.map((e) =>
+        mapEtapaComDatasCorrigidas({
+          etapa: e.etapa,
+          inicio: e.inicio,
+          fim: e.fim,
+          macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
+          rubricasAssociadas: e.rubricasAssociadas ?? [],
+        }),
+      ),
+    );
+  };
+
+  const _aplicarEtapasImportadasLegacy = (lista: EtapaPlanilhaImportada[]) => {
+    setEtapas(
+      lista.map((e) => ({
+        ...e,
+        id: gerarId(),
+        inicio: normalizarDataCronograma(e.inicio),
+        fim: normalizarDataCronograma(e.fim),
+        macroEtapa:
+          e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa) ? e.macroEtapa : 'producao',
+        rubricasAssociadas: e.rubricasAssociadas ?? [],
+      }))
+    );
+  };
+
+  const handleImportarCronogramaComIA = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !id || !user) return;
+
+    setImportandoCronograma(true);
+    const startTime = Date.now();
+    trackTextGenerationStarted({ projectId: id, textType: 'cronograma' });
+
+    try {
+      const nome = file.name.toLowerCase();
+      const isPlanilha = nome.endsWith('.xlsx') || nome.endsWith('.xls') || nome.endsWith('.csv');
+
+      if (isPlanilha) {
+        const { etapas: diretas, avisos } = await importarPlanilhaCronograma(file);
+        if (diretas.length > 0) {
+          aplicarEtapasImportadas(diretas);
+          if (avisos.length) toast.info(avisos.slice(0, 3).join(' '));
+          toast.success(`${diretas.length} etapas importadas da planilha. Revise e salve.`);
+          trackTextGenerationCompleted({
+            projectId: id,
+            textType: 'cronograma',
+            durationSeconds: (Date.now() - startTime) / 1000,
+            textLength: diretas.length,
+          });
+          return;
+        }
+      }
+
+      toast.info('Interpretando arquivo com IA…');
+      const planilhaImportacao = await planilhaCronogramaComoTexto(file);
+      const res = await fetch(GERAR_CRONOGRAMA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projetoId: id, userId: user.uid, planilhaImportacao }),
+      });
+      const text = await res.text();
+      const data = text ? (() => { try { return JSON.parse(text); } catch { return {}; } })() : {};
+      if (!res.ok) {
+        throw new Error(data.error || data.message || `Erro ao importar (${res.status})`);
+      }
+      const etapasGeradas = Array.isArray(data.etapas) ? data.etapas : [];
+      if (etapasGeradas.length === 0) {
+        toast.error('A IA não extraiu etapas do arquivo. Use o modelo da exportação XLSX ou tente outro formato.');
+        return;
+      }
+      aplicarEtapasImportadas(etapasGeradas);
+      trackTextGenerationCompleted({
+        projectId: id,
+        textType: 'cronograma',
+        durationSeconds: (Date.now() - startTime) / 1000,
+        textLength: etapasGeradas.length,
+      });
+      toast.success(`${etapasGeradas.length} etapas importadas com IA. Revise e salve.`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Erro ao importar cronograma.');
+    } finally {
+      setImportandoCronograma(false);
+    }
+  };
+
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
     setGerandoCronograma(true);
@@ -200,7 +336,12 @@ const CriarCronograma = () => {
       const data = text ? (() => { try { return JSON.parse(text); } catch { return {}; } })() : {};
       if (!res.ok) {
         if (res.status === 503) {
-          throw new Error('Serviço temporariamente indisponível (cold start). Aguarde alguns segundos e tente novamente. Em local: use o emulador (veja README ou .env.example).');
+          throw new Error('Serviço temporariamente indisponível (cold start). Aguarde alguns segundos e tente novamente.');
+        }
+        if (import.meta.env.DEV && res.status === 500 && !text?.trim()) {
+          throw new Error(
+            'Não foi possível falar com gerarCronogramaIA. Reinicie o dev server (npm run dev:is). Se usar emulador: VITE_CRONOGRAMA_USE_PROD=0 e cd functions && npm run serve com GEMINI_API_KEY em functions/.secret.local.',
+          );
         }
         const serverMsg = data.error || data.message || (res.status === 500 ? text?.slice(0, 200) : null);
         throw new Error(serverMsg || `Erro ao gerar cronograma (${res.status})`);
@@ -213,6 +354,8 @@ const CriarCronograma = () => {
       setEtapas(etapasGeradas.map((e: Omit<EtapaCronograma, 'id'>) => ({
         ...e,
         id: gerarId(),
+        inicio: normalizarDataCronograma(e.inicio),
+        fim: normalizarDataCronograma(e.fim),
         macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
         rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
@@ -278,6 +421,8 @@ const CriarCronograma = () => {
       setEtapas(etapasGeradas.map((e: Omit<EtapaCronograma, 'id'>) => ({
         ...e,
         id: gerarId(),
+        inicio: normalizarDataCronograma(e.inicio),
+        fim: normalizarDataCronograma(e.fim),
         macroEtapa: (e.macroEtapa && MACRO_ETAPAS.some((m) => m.value === e.macroEtapa)) ? e.macroEtapa : 'producao',
         rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
@@ -299,14 +444,29 @@ const CriarCronograma = () => {
 
   const salvarCronograma = async () => {
     if (!id) return;
-    const incompletas = etapas.filter((e) => !e.etapa.trim() || !e.inicio || !e.fim);
+    const etapasNormalizadas = etapas.map((e) => ({
+      ...e,
+      inicio: normalizarDataCronograma(e.inicio),
+      fim: normalizarDataCronograma(e.fim),
+    }));
+
+    const incompletas = etapasNormalizadas.filter(
+      (e) => !e.etapa.trim() || !e.inicio || !e.fim,
+    );
     if (incompletas.length > 0) {
       toast.error('Preencha etapa, início e fim em todas as linhas.');
       return;
     }
-    const comFimAntesDoInicio = etapas.some((e) => e.fim < e.inicio);
-    if (comFimAntesDoInicio) {
-      toast.error('A data de fim não pode ser anterior à data de início em nenhuma etapa.');
+
+    const datasInvalidas = etapasNormalizadas.filter((e) =>
+      fimAntesDoInicioCronograma(e.inicio, e.fim),
+    );
+    if (datasInvalidas.length > 0) {
+      const e = datasInvalidas[0];
+      toast.error(
+        `Na etapa "${e.etapa.trim()}": fim (${formatarDataPtBrDeIso(e.fim)}) não pode ser antes do início (${formatarDataPtBrDeIso(e.inicio)}).`,
+        { duration: 8000 },
+      );
       return;
     }
 
@@ -314,10 +474,11 @@ const CriarCronograma = () => {
     try {
       const db = getFirestore();
       const projetoRef = doc(db, 'projetos', id);
-      const duracaoMesesToSave = typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : null;
+      const duracaoMesesToSave =
+        typeof duracaoProjetoMeses === 'number' && duracaoProjetoMeses >= 1 ? duracaoProjetoMeses : null;
       const nomesValidos = new Set(nomesRubricas.map((n) => n.trim()));
-      const etapasLimpas = limparRubricasOrfas(etapas, nomesValidos) as EtapaCronograma[];
-      if (nomesValidos.size > 0 && JSON.stringify(etapasLimpas) !== JSON.stringify(etapas)) {
+      const etapasLimpas = limparRubricasOrfas(etapasNormalizadas, nomesValidos) as EtapaCronograma[];
+      if (JSON.stringify(etapasLimpas) !== JSON.stringify(etapas)) {
         setEtapas(etapasLimpas);
       }
       await updateDoc(projetoRef, {
@@ -494,19 +655,8 @@ const CriarCronograma = () => {
                       key={index}
                       className={`flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                       onClick={() => {
-                        if (isClickable) {
-                          const routes = [
-                            `/projeto/${id}`,
-                            `/projeto/${id}`,
-                            `/projeto/${id}/alterar-com-ia`,
-                            `/projeto/${id}/gerar-textos`,
-                            `/projeto/${id}/criar-cronograma`,
-                            `/projeto/${id}/criar-orcamento`,
-                            `/projeto/${id}/equipe`,
-                            `/projeto/${id}/documentos-inscricao`,
-                            `/projeto/${id}/preencher-anexos`,
-                          ];
-                          if (routes[index]) navigate(routes[index]);
+                        if (isClickable && wizardStepRoutes[index]) {
+                          navigate(wizardStepRoutes[index]);
                         }
                       }}
                     >
@@ -558,11 +708,41 @@ const CriarCronograma = () => {
                   <p className="text-sm text-gray-600">
                     Cada etapa deve estar associada a uma macro etapa (Pré-produção, Produção, Divulgação ou Pós-produção). Atribua a fase na coluna &quot;Fase&quot; da tabela.
                   </p>
+                  <p className="text-xs text-gray-500">
+                    Importar: .xlsx / .csv no formato da exportação (Fase, Etapa, Início, Fim) ou outro layout — a IA
+                    interpreta quando o formato não for reconhecido.
+                  </p>
                   <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={inputImportCronogramaRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv,.txt,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                      className="hidden"
+                      onChange={handleImportarCronogramaComIA}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={importandoCronograma || gerandoCronograma}
+                      onClick={() => inputImportCronogramaRef.current?.click()}
+                      className="border-oraculo-blue/40 text-oraculo-blue hover:bg-oraculo-blue/5 w-full sm:w-auto"
+                    >
+                      {importandoCronograma ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Importando...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Importar com IA
+                        </>
+                      )}
+                    </Button>
                     <Button
                       type="button"
                       onClick={gerarCronogramaComIA}
-                      disabled={gerandoCronograma}
+                      disabled={gerandoCronograma || importandoCronograma}
                       className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white w-full sm:w-auto"
                     >
                       {gerandoCronograma ? (
@@ -901,15 +1081,15 @@ const CriarCronograma = () => {
               </Card>
             )}
 
-            {/* Próximo passo: Documentos de Inscrição — no pé da página */}
+            {/* Próximo passo — no pé da página (mesmo destino do botão do topo) */}
             <div className="flex flex-col items-stretch sm:items-end gap-2 pt-6 sm:pt-8 pb-6 px-4 md:px-8 mt-8 sm:mt-10 border-t-2 border-oraculo-blue/20 bg-gradient-to-r from-transparent to-oraculo-purple/5 rounded-b-xl">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</span>
               <Button
                 size="lg"
-                onClick={() => navigate(`/projeto/${id}/documentos-inscricao`)}
+                onClick={() => navigate(`/projeto/${id}/criar-orcamento`)}
                 className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-8 md:px-10 py-3 sm:py-4 text-sm sm:text-base md:text-lg font-semibold"
               >
-                Próxima etapa: Documentos de Inscrição <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
+                Próximo: Criar Orçamento <span className="ml-2 text-lg sm:text-xl" aria-hidden>→</span>
               </Button>
             </div>
           </div>

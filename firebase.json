@@ -28,9 +28,12 @@
       }
     ]
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
+  "storage": [
+    {
+      "bucket": "oraculo-is.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ],
   "functions": [
     {
       "source": "functions",
