@@ -9,7 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Brain, FileText, FolderOpen, Calendar, MapPin, Clock, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
-import { collection, getDocs, query, where, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, deleteDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
+import {
+  fetchProjetosAcessiveis,
+  podeExcluirProjetoCard,
+  usuarioPodeExcluirProjetos,
+} from '@/lib/projetosEmpresa';
+import { getMembroEmpresa, lerRefsEmpresaDoUsuario } from '@/lib/empresasDb';
 import { toast } from 'sonner';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
@@ -73,6 +79,8 @@ const OraculoAI = () => {
   const [mostrarModalApagar, setMostrarModalApagar] = useState(false);
   const [projetoParaApagar, setProjetoParaApagar] = useState<string | null>(null);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
+  const [podeExcluirProjetos, setPodeExcluirProjetos] = useState(true);
+  const [gestorEmpresa, setGestorEmpresa] = useState(false);
 
   // Função para abrir modal de confirmação de exclusão
   const abrirModalApagar = (projetoId: string, e: React.MouseEvent) => {
@@ -114,20 +122,29 @@ const OraculoAI = () => {
         // Fetch Projetos
         if (user) {
           try {
-            const projetosRef = collection(db, 'projetos');
-            const q = query(
-              projetosRef,
-              where('user_id', '==', user.uid)
+            const [resumos, podeExcluir] = await Promise.all([
+              fetchProjetosAcessiveis(user.uid),
+              usuarioPodeExcluirProjetos(user.uid),
+            ]);
+            setPodeExcluirProjetos(podeExcluir);
+            const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
+            const eid = lerRefsEmpresaDoUsuario(userSnap.data()).defaultEmpresaId;
+            if (eid) {
+              const membro = await getMembroEmpresa(eid, user.uid);
+              setGestorEmpresa(
+                membro?.status === 'active' &&
+                  (membro.role === 'gestor_financeiro' || membro.role === 'super_admin')
+              );
+            } else {
+              setGestorEmpresa(false);
+            }
+            const projetos = await Promise.all(
+              resumos.map(async (r) => {
+                const snap = await getDoc(doc(db, 'projetos', r.id));
+                return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+              })
             );
-            
-            const projetosSnapshot = await getDocs(q);
-            
-            const projetos = projetosSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            
-            setMeusProjetos(projetos);
+            setMeusProjetos(projetos.filter(Boolean));
           } catch (error) {
             console.error('Erro ao buscar projetos:', error);
           }
@@ -363,13 +380,20 @@ const OraculoAI = () => {
                           </CardHeader>
                         </Card>
                       </Link>
-                      <button
-                        onClick={(e) => abrirModalApagar(projeto.id, e)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10"
-                        title="Excluir projeto"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {podeExcluirProjetoCard(
+                        user?.uid ?? '',
+                        projeto,
+                        podeExcluirProjetos,
+                        gestorEmpresa
+                      ) ? (
+                        <button
+                          onClick={(e) => abrirModalApagar(projeto.id, e)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10"
+                          title="Excluir projeto"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   ))
                 )}

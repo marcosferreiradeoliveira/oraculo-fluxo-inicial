@@ -23,6 +23,8 @@ import {
 import { camposNotaParaFirestore } from '@/lib/extrairNotasCriterios';
 import { projetoEntryPath } from '@/lib/projetoWizard';
 import { buscarPortfolioParaIA } from '@/lib/portfolioEmpresa';
+import { fetchProjetosAcessiveis } from '@/lib/projetosEmpresa';
+import { lerRefsEmpresaDoUsuario } from '@/lib/empresasDb';
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 const MICROFONE_POPUP_KEY = 'criar-projeto-microfone-popup-visto';
 
@@ -607,13 +609,15 @@ const CriarProjeto = () => {
     }
     setLoadingProjetosHub(true);
     const db = getFirestore();
-    const q = query(collection(db, 'projetos'), where('user_id', '==', user.uid));
-    getDocs(q)
-      .then((snap) => {
-        const list: ProjetoResumo[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<ProjetoResumo, 'id'>),
-        }));
+    fetchProjetosAcessiveis(user.uid)
+      .then(async (resumos) => {
+        const list: ProjetoResumo[] = [];
+        for (const r of resumos) {
+          const d = await getDoc(doc(db, 'projetos', r.id));
+          if (d.exists()) {
+            list.push({ id: d.id, ...(d.data() as Omit<ProjetoResumo, 'id'>) });
+          }
+        }
         list.sort((a, b) => {
           const ta = a.data_criacao?.toDate?.()?.getTime() ?? 0;
           const tb = b.data_criacao?.toDate?.()?.getTime() ?? 0;
@@ -927,6 +931,9 @@ const CriarProjeto = () => {
       }
       
       await ensureUsuarioFirestore(user);
+
+      const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
+      const empresaAtiva = lerRefsEmpresaDoUsuario(userSnap.data()).defaultEmpresaId;
       
       // Verificar limite de projetos antes de criar
       const verificacaoLimite = await verificarLimiteProjetos(user.uid);
@@ -948,6 +955,9 @@ const CriarProjeto = () => {
         etapa_atual: 1,
         tipo_projeto: tipoProjeto,
       };
+      if (empresaAtiva) {
+        projetoData.empresaId = empresaAtiva;
+      }
       
       if (tipoProjeto === 'edital' && editalId) {
         projetoData.edital_id = editalId;

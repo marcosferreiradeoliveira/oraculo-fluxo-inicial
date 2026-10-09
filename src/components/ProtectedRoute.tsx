@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import ConfirmarEmail from '@/pages/ConfirmarEmail';
@@ -12,12 +12,27 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireEmailVerification = false }: ProtectedRouteProps) {
   const [user, loading] = useAuthState(auth);
   const navigate = useNavigate();
+  const location = useLocation();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        navigate('/cadastro');
+        const params = new URLSearchParams(location.search);
+        const convite = params.get('convite');
+        if (location.pathname === '/empresas' && convite) {
+          navigate(`/primeiro-acesso?resolver=${encodeURIComponent(convite)}`, {
+            replace: true,
+          });
+          return;
+        }
+
+        const returnTo = `${location.pathname}${location.search}`;
+        const q =
+          returnTo && returnTo !== '/cadastro'
+            ? `?redirect=${encodeURIComponent(returnTo)}`
+            : '';
+        navigate(`/cadastro${q}`, { replace: true });
       } else {
         // COMENTADO: Verificação de email confirmado
         // if (requireEmailVerification && !user.emailVerified) {
@@ -28,7 +43,7 @@ export function ProtectedRoute({ children, requireEmailVerification = false }: P
         setChecking(false);
       }
     }
-  }, [user, loading, navigate, requireEmailVerification]);
+  }, [user, loading, navigate, location.pathname, location.search, requireEmailVerification]);
 
   if (loading || checking) {
     return (

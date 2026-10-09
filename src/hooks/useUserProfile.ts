@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { fetchProjetosAcessiveis } from '@/lib/projetosEmpresa';
 
 export type PremiumProjectSummary = {
   id: string;
@@ -45,11 +46,14 @@ export function etapaLabel(index: number): string {
 }
 
 async function loadProjectMetrics(uid: string): Promise<HomeDashboardMetrics> {
-  const q = query(collection(db, 'projetos'), where('user_id', '==', uid));
-  const snapProjetos = await getDocs(q);
-  const projetos = snapProjetos.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<
-    Record<string, unknown> & { id: string }
-  >;
+  const resumos = await fetchProjetosAcessiveis(uid);
+  const snapProjetos = await Promise.all(
+    resumos.map(async (r) => {
+      const d = await getDoc(doc(db, 'projetos', r.id));
+      return d.exists() ? ({ id: d.id, ...d.data() } as Record<string, unknown> & { id: string }) : null;
+    })
+  );
+  const projetos = snapProjetos.filter(Boolean) as Array<Record<string, unknown> & { id: string }>;
   const sorted = [...projetos].sort((a, b) => {
     const ta =
       (a.data_atualizacao as { toMillis?: () => number })?.toMillis?.() ??

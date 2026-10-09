@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { trackLoginSuccess } from '@/lib/analytics';
 import { ensureUsuarioFirestore } from '@/lib/ensureUsuarioFirestore';
+import { parseConviteParam } from '@/lib/conviteEmpresaCallable';
 import logo from '@/assets/logo.png';
 
 const Cadastro = () => {
@@ -21,6 +22,16 @@ const Cadastro = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useEffect(() => {
+    const convite = parseConviteParam(redirect);
+    if (convite) {
+      navigate(`/primeiro-acesso?resolver=${encodeURIComponent(convite)}`, { replace: true });
+    }
+  }, [redirect, navigate]);
+
+  const conviteNoRedirect =
+    redirect?.includes('convite=') ?? false;
 
   const resolveTarget = () => {
     let target = redirect && redirect.startsWith('/') ? redirect : '/';
@@ -74,9 +85,17 @@ const Cadastro = () => {
           <h1 className="font-display text-xl md:text-2xl font-bold text-[#071F4E] mb-1">
             Entrar na sua conta
           </h1>
-          <p className="text-[#1B4C41]/80 text-xs md:text-sm mb-6">
+          <p className="text-[#1B4C41]/80 text-xs md:text-sm mb-2">
             Sonhos são para se viver
           </p>
+          {conviteNoRedirect ? (
+            <p className="text-sm text-[#0088CB] bg-[#0088CB]/10 border border-[#0088CB]/20 rounded-lg px-3 py-2 mb-4">
+              Convite para entrar em uma empresa. Use o <strong>mesmo e-mail</strong> que recebeu o
+              link; depois do login você poderá aceitar em Empresas.
+            </p>
+          ) : (
+            <div className="mb-4" />
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

@@ -348,6 +348,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /primeiro_acesso_tokens/{tokenId} {
+      allow read, write: if false;
+    }
+
     // ─── Coleções legadas / conteúdo público ───────────────────────────────
 
     match /expenses/{id} {
@@ -392,10 +396,55 @@ service cloud.firestore {
     }
 
     // Oráculo Cultural — apps legados no mesmo projeto Firebase
+    function canManageAllProjetosEmpresa(empresaId) {
+      return isOwnerEmpresa(empresaId)
+        || (isMembroAtivo(empresaId)
+            && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro']);
+    }
+
+    function canReadProjetoCriacao(empresaId, projetoId) {
+      return isMembroAtivo(empresaId) && (
+        canManageAllProjetosEmpresa(empresaId)
+        || projetoId in membroDoc(empresaId).data.get('assignedProjects', [])
+      );
+    }
+
+    function usuarioDefaultEmpresaId() {
+      return isAuth()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('defaultEmpresaId', '')
+        : '';
+    }
+
+    function canReadProjetoAtribuidoDefaultEmpresa(projetoId) {
+      let eid = usuarioDefaultEmpresaId();
+      return eid != '' && canReadProjetoCriacao(eid, projetoId);
+    }
+
     match /projetos/{projetoId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
+      allow read: if isAuth() && (
+        isAdmin()
+        || resource.data.user_id == request.auth.uid
+        || (resource.data.empresaId != null
+            && canReadProjetoCriacao(resource.data.empresaId, projetoId))
+        || canReadProjetoAtribuidoDefaultEmpresa(projetoId)
+      );
       allow create: if isAuth() && request.resource.data.user_id == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
+      allow update: if isAuth() && (
+        isAdmin()
+        || resource.data.user_id == request.auth.uid
+        || (resource.data.empresaId != null
+            && canReadProjetoCriacao(resource.data.empresaId, projetoId))
+        || canReadProjetoAtribuidoDefaultEmpresa(projetoId)
+      );
+      allow delete: if isAuth() && (
+        isAdmin()
+        || (resource.data.empresaId != null && canManageAllProjetosEmpresa(resource.data.empresaId))
+        || (resource.data.user_id == request.auth.uid
+            && (resource.data.empresaId == null
+                || !isMembroAtivo(resource.data.empresaId)
+                || membroDoc(resource.data.empresaId).data.role != 'membro'))
+      );
     }
 
     function canAccessPortfolioEmpresa(empresaId) {
@@ -418,10 +467,36 @@ service cloud.firestore {
       );
     }
 
+    function fornecedorDoOwnerEmpresaDefault() {
+      return usuarioDefaultEmpresaId() != ''
+        && isMembroAtivo(usuarioDefaultEmpresaId())
+        && resource.data.get('userId', '') != ''
+        && get(/databases/$(database)/documents/empresas/$(usuarioDefaultEmpresaId())).data.ownerUid
+            == resource.data.get('userId', '');
+    }
+
+    function fornecedorVisivelMembroEmpresa() {
+      return resource != null && (
+        (resource.data.get('empresaId', '') != ''
+          && isMembroAtivo(resource.data.get('empresaId', '')))
+        || fornecedorDoOwnerEmpresaDefault()
+      );
+    }
+
     match /fornecedores/{fornecedorId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || fornecedorVisivelMembroEmpresa()
+      );
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.empresaId == null || canManageEmpresaTeam(request.resource.data.empresaId));
+      allow update, delete: if isAuth() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null && canManageEmpresaTeam(resource.data.empresaId))
+      );
     }
 
 

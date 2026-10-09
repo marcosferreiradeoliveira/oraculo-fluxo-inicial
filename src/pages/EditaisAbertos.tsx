@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, deleteDoc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { auth } from '../lib/firebase';
-import { getEditaisWriteDb, isEditaisCatalogExternal } from '@/lib/editaisDb';
+import { fetchEditaisMergedDocs, getEditaisWriteDb, isEditaisCatalogExternal } from '@/lib/editaisDb';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,13 +46,12 @@ const EditaisAbertos = () => {
       try {
         setLoading(true);
         
-        // Fetch Editais - apenas os que ainda não encerraram
-        const editaisSnapshot = await getDocs(collection(getEditaisWriteDb(), 'editais'));
+        const merged = await fetchEditaisMergedDocs();
         const editais: Edital[] = [];
         const now = new Date();
-        
-        editaisSnapshot.forEach((doc) => {
-          const edital = { id: doc.id, ...doc.data() } as Edital;
+
+        merged.forEach((docSnap) => {
+          const edital = { id: docSnap.id, ...docSnap.data() } as Edital;
           
           // Verifica data_encerramento primeiro (campo principal)
           let dataEncerramento: Date | null = null;

@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { getEditaisDb } from '@/lib/editaisDb';
+import { fetchEditaisMergedDocs } from '@/lib/editaisDb';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, DollarSign, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,17 +70,23 @@ const Index = () => {
     const fetchEditais = async () => {
       setLoadingEditais(true);
       try {
-        let snapshot;
-        try {
-          const editaisDb = getEditaisDb();
-          const qEditais = query(collection(editaisDb, 'editais'), orderBy('data_encerramento', 'desc'), limit(40));
-          snapshot = await getDocs(qEditais);
-        } catch {
-          snapshot = await getDocs(query(collection(getEditaisDb(), 'editais'), limit(40)));
-        }
-
-        const raw = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setEditaisAbertosTodos(filterEditaisAbertos(raw));
+        const merged = await fetchEditaisMergedDocs();
+        const raw = merged.map((d) => ({ id: d.id, ...d.data() }));
+        const sorted = [...raw].sort((a: any, b: any) => {
+          const ts = (v: unknown) => {
+            if (!v) return 0;
+            if (typeof v === 'object' && v !== null && 'seconds' in v) {
+              return Number((v as { seconds: number }).seconds) * 1000;
+            }
+            if (typeof v === 'object' && v !== null && 'toDate' in v) {
+              return (v as { toDate: () => Date }).toDate().getTime();
+            }
+            const d = new Date(String(v));
+            return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+          };
+          return ts(b.data_encerramento) - ts(a.data_encerramento);
+        });
+        setEditaisAbertosTodos(filterEditaisAbertos(sorted.slice(0, 40)));
       } catch (e) {
         console.error('Erro ao buscar editais:', e);
         setEditaisAbertosTodos([]);

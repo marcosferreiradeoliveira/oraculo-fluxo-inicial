@@ -82,12 +82,8 @@ const ProjetoEquipe = () => {
         const al = (data.equipe?.alocacoes || []) as AlocacaoEquipe[];
         setAlocacoes(Array.isArray(al) ? al : []);
 
-        const fq = query(collection(db, 'fornecedores'), where('userId', '==', user.uid));
-        const fs = await getDocs(fq);
-        const lista: Fornecedor[] = [];
-        fs.forEach((d) => lista.push({ id: d.id, ...d.data() } as Fornecedor));
-        lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        setFornecedores(lista);
+        const { fetchFornecedoresAcessiveis } = await import('@/lib/fornecedoresEmpresa');
+        setFornecedores(await fetchFornecedoresAcessiveis(user.uid));
       } catch (e) {
         console.error(e);
         toast.error('Erro ao carregar dados da equipe.');

@@ -20,6 +20,7 @@ import Infograficos from "./pages/Infograficos";
 import Conta from "./pages/Conta";
 import Suporte from "./pages/Suporte";
 import Cadastro from "./pages/Cadastro";
+import PrimeiroAcesso from "./pages/PrimeiroAcesso";
 import CriarProjeto from "./pages/CriarProjeto";
 import AvaliarProjeto from "./pages/AvaliarProjeto";
 import Projeto from "./pages/Projeto";
@@ -89,6 +90,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/primeiro-acesso" element={<PrimeiroAcesso />} />
           {/* COMENTADO: Rota de confirmação de email */}
           {/* <Route path="/confirmar-email" element={<ConfirmarEmail />} /> */}
           <Route path="/termos" element={<Termos />} />

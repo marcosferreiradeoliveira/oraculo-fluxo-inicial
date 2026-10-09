@@ -36,9 +36,11 @@ import {
 } from '@/lib/empresasDb';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PortfolioGaleriaEmpresa } from '@/components/empresa/PortfolioGaleriaEmpresa';
+import { EmpresaEquipePanel } from '@/components/empresa/EmpresaEquipePanel';
+import { EmpresaConvitesPendentesBanner } from '@/components/empresa/EmpresaConvitesPendentesBanner';
 
 type View = 'lista' | 'criar' | 'detalhe';
-type DetalheAba = 'cadastro' | 'galeria';
+type DetalheAba = 'cadastro' | 'galeria' | 'equipe';
 
 function emptyForm(): DadosEmpresaFormValues {
   return {
@@ -271,6 +273,13 @@ const Empresas = () => {
         <DashboardHeader />
         <main className="flex-1 p-4 md:p-8 animate-fade-in">
           <div className="max-w-6xl mx-auto">
+            <EmpresaConvitesPendentesBanner
+              conviteParam={searchParams.get('convite')}
+              onAccepted={() => {
+                setSearchParams({}, { replace: true });
+                void load();
+              }}
+            />
             {view === 'lista' && (
               <>
                 <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -331,8 +340,8 @@ const Empresas = () => {
                       <CardContent>
                         <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 text-sm text-gray-600">
                           <Building2 className="h-8 w-8 text-gray-400 mb-2" />
-                          Nenhuma empresa vinculada ao seu e-mail ainda. Peça ao administrador
-                          para enviar um convite ou crie uma nova empresa ao lado.
+                          Nenhuma empresa vinculada ao seu e-mail ainda. Peça um link de convite
+                          (Empresas → Equipe) ou crie uma nova empresa ao lado.
                         </div>
                       </CardContent>
                     </Card>
@@ -488,6 +497,7 @@ const Empresas = () => {
                   <TabsList className="mb-4">
                     <TabsTrigger value="cadastro">Cadastro</TabsTrigger>
                     <TabsTrigger value="galeria">Portfólio (galeria)</TabsTrigger>
+                    <TabsTrigger value="equipe">Equipe e convites</TabsTrigger>
                   </TabsList>
                   <TabsContent value="cadastro">
                     <Card>
@@ -518,6 +528,13 @@ const Empresas = () => {
                     <PortfolioGaleriaEmpresa
                       empresaId={selectedId}
                       empresaNome={form.nome}
+                    />
+                  </TabsContent>
+                  <TabsContent value="equipe">
+                    <EmpresaEquipePanel
+                      empresaId={selectedId}
+                      empresaNome={form.nome}
+                      ownerUid={empresas.find((e) => e.id === selectedId)?.ownerUid}
                     />
                   </TabsContent>
                 </Tabs>

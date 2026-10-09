@@ -1,5 +1,6 @@
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { fetchProjetosAcessiveis } from '@/lib/projetosEmpresa';
 import type { AlocacaoEquipe } from '@/lib/equipeProjeto';
 
 export type ProjetoVinculoFornecedor = {
@@ -14,10 +15,11 @@ export async function carregarMapaProjetosPorFornecedor(
   userId: string
 ): Promise<Map<string, ProjetoVinculoFornecedor[]>> {
   const mapa = new Map<string, ProjetoVinculoFornecedor[]>();
-  const q = query(collection(db, 'projetos'), where('user_id', '==', userId));
-  const snap = await getDocs(q);
+  const resumos = await fetchProjetosAcessiveis(userId);
 
-  snap.forEach((docSnap) => {
+  for (const r of resumos) {
+    const docSnap = await getDoc(doc(db, 'projetos', r.id));
+    if (!docSnap.exists()) continue;
     const data = docSnap.data();
     const nome = (data.nome as string)?.trim() || 'Projeto sem nome';
     const alocacoes = (data.equipe?.alocacoes ?? []) as AlocacaoEquipe[];
@@ -41,7 +43,7 @@ export async function carregarMapaProjetosPorFornecedor(
         mapa.set(fid, [...atual, item].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
       }
     }
-  });
+  }
 
   return mapa;
 }

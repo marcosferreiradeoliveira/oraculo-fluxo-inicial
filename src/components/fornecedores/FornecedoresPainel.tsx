@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -30,6 +31,11 @@ import {
   carregarMapaProjetosPorFornecedor,
   type ProjetoVinculoFornecedor,
 } from '@/lib/fornecedorProjetos';
+import {
+  fetchFornecedoresAcessiveis,
+  usuarioPodeGerenciarFornecedores,
+} from '@/lib/fornecedoresEmpresa';
+import { lerRefsEmpresaDoUsuario } from '@/lib/empresasDb';
 import { toast } from 'sonner';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -88,6 +94,7 @@ export function FornecedoresPainel() {
   >(new Map());
   const [carregandoProjetos, setCarregandoProjetos] = useState(false);
   const [fornecedorProjetosFoco, setFornecedorProjetosFoco] = useState<Fornecedor | null>(null);
+  const [podeGerenciar, setPodeGerenciar] = useState(true);
 
   const carregar = useCallback(async () => {
     if (!user) {
@@ -97,13 +104,11 @@ export function FornecedoresPainel() {
     }
     try {
       setLoading(true);
-      const q = query(collection(db, 'fornecedores'), where('userId', '==', user.uid));
-      const snap = await getDocs(q);
-      const items: Fornecedor[] = [];
-      snap.forEach((d) => {
-        items.push({ id: d.id, ...d.data() } as Fornecedor);
-      });
-      items.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+      const [items, manage] = await Promise.all([
+        fetchFornecedoresAcessiveis(user.uid),
+        usuarioPodeGerenciarFornecedores(user.uid),
+      ]);
+      setPodeGerenciar(manage);
       setLista(items);
     } catch (e) {
       console.error(e);
@@ -191,7 +196,9 @@ export function FornecedoresPainel() {
           ? atividadeReferenciaPorId(form.atividade.referenciaId)
           : undefined;
       const atividade = atividadeFromForm(form.atividade, ref);
-      const payload = {
+      const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
+      const empresaAtiva = lerRefsEmpresaDoUsuario(userSnap.data()).defaultEmpresaId;
+      const payload: Record<string, unknown> = {
         userId: user.uid,
         tipoPessoa: form.tipoPessoa,
         nome: form.nome.trim(),
@@ -203,6 +210,9 @@ export function FornecedoresPainel() {
         atividade: atividade ?? null,
         atualizadoEm: serverTimestamp(),
       };
+      if (empresaAtiva) {
+        payload.empresaId = empresaAtiva;
+      }
 
       if (editando) {
         await updateDoc(doc(db, 'fornecedores', editando.id), payload);
@@ -274,8 +284,9 @@ export function FornecedoresPainel() {
             Fornecedores
           </h2>
           <p className="text-gray-600 mt-1 text-sm md:text-base max-w-2xl">
-            Cadastre fornecedores e parceiros da sua produção — dados da sua conta, independentes de
-            qualquer projeto.
+            {podeGerenciar
+              ? 'Cadastre fornecedores e parceiros da produção — compartilhados com a equipe da empresa.'
+              : 'Fornecedores cadastrados pela equipe da empresa (somente consulta).'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
@@ -285,10 +296,12 @@ export function FornecedoresPainel() {
               Projetos por fornecedor
             </Button>
           )}
-          <Button className="gradient-brand text-white" onClick={abrirNovo}>
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar fornecedor
-          </Button>
+          {podeGerenciar ? (
+            <Button className="gradient-brand text-white" onClick={abrirNovo}>
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar fornecedor
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -305,10 +318,14 @@ export function FornecedoresPainel() {
             <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
               Pessoa física (CPF) ou jurídica (CNPJ), mini bio e e-mail — um cadastro por vez.
             </p>
-            <Button variant="outline" onClick={abrirNovo}>
-              <Plus className="h-4 w-4 mr-2" />
-              Cadastrar o primeiro
-            </Button>
+            {podeGerenciar ? (
+              <Button variant="outline" onClick={abrirNovo}>
+                <Plus className="h-4 w-4 mr-2" />
+                Cadastrar o primeiro
+              </Button>
+            ) : (
+              <p className="text-sm text-gray-500">Peça a um gestor da empresa para cadastrar.</p>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -362,20 +379,22 @@ export function FornecedoresPainel() {
                     <Eye className="h-3.5 w-3.5 mr-1" />
                     Ver projetos
                   </Button>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => abrirEditar(f)}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => excluir(f)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  {podeGerenciar ? (
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => abrirEditar(f)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => excluir(f)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

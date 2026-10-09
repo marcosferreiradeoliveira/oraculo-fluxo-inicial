@@ -17,11 +17,11 @@ const CATALOG_APP_NAME = 'edital-catalog-culturalapp';
 export type EditaisCatalogSource = 'local' | 'culturalapp';
 
 export function editaisCatalogSource(): EditaisCatalogSource {
-  const profile = (import.meta.env.VITE_FIREBASE_PROFILE as string | undefined)?.trim().toLowerCase();
-  if (profile === 'oraculo-is') return 'local';
-
   const v = (import.meta.env.VITE_EDITAIS_CATALOG as string | undefined)?.trim().toLowerCase();
   if (v === 'culturalapp' || v === 'culturalapp-fb9b0' || v === 'roxo') return 'culturalapp';
+
+  const profile = (import.meta.env.VITE_FIREBASE_PROFILE as string | undefined)?.trim().toLowerCase();
+  if (profile === 'oraculo-is') return 'local';
   return 'local';
 }
 
@@ -52,16 +52,23 @@ export function isEditaisCatalogExternal(): boolean {
 export async function fetchEditaisMergedDocs(): Promise<Array<{ id: string; data: () => Record<string, unknown> }>> {
   const byId = new Map<string, Record<string, unknown>>();
 
-  const ingest = (db: Firestore) =>
-    getDocs(collection(db, 'editais')).then((snap) => {
+  const ingest = async (db: Firestore, optional = false) => {
+    try {
+      const snap = await getDocs(collection(db, 'editais'));
       snap.docs.forEach((d) => {
         byId.set(d.id, { id: d.id, ...d.data() });
       });
-    });
+    } catch (err) {
+      if (!optional) throw err;
+      if (import.meta.env.DEV) {
+        console.warn('[editais] leitura opcional falhou (projeto local):', err);
+      }
+    }
+  };
 
   await ingest(getEditaisDb());
   if (isEditaisCatalogExternal()) {
-    await ingest(getEditaisWriteDb());
+    await ingest(getEditaisWriteDb(), true);
   }
 
   return Array.from(byId.entries()).map(([id, data]) => ({
