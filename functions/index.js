@@ -14,8 +14,6 @@ const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 const axios = require("axios");
 const { getStorage } = require("firebase-admin/storage");
 const pdfParseLib = require("pdf-parse");
-const { createWorker } = require("tesseract.js");
-const { fromPath } = require("pdf2pic");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -42,6 +40,54 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 // Definir secret para Brevo
 const brevoApiKey = defineSecret("BREVO_API_KEY");
+
+function getBrevoApiKey() {
+  try {
+    const fromSecret = brevoApiKey.value();
+    if (fromSecret && typeof fromSecret === "string") {
+      return fromSecret.trim().replace(/\r?\n/g, "");
+    }
+  } catch (_e) {
+    // Emulador local
+  }
+  const fromEnv = process.env.BREVO_API_KEY;
+  return typeof fromEnv === "string" ? fromEnv.trim().replace(/\r?\n/g, "") : "";
+}
+
+const BREVO_AXIOS_OPTS = { timeout: 20000, maxRedirects: 0 };
+
+/** POST contato Brevo; payload mínimo se atributos customizados falharem. */
+async function createBrevoContact(apiKey, { email, listId, nome }) {
+  const url = "https://api.brevo.com/v3/contacts";
+  const headers = { "api-key": apiKey, "Content-Type": "application/json" };
+  const primeiroNome = nome ? String(nome).split(" ")[0] : "Usuário";
+  const payloads = [
+    {
+      email,
+      listIds: [listId],
+      attributes: { NOME: nome || "Novo Usuário", PRIMEIRO_NOME: primeiroNome },
+      emailBlacklisted: false,
+      smsBlacklisted: false,
+      updateEnabled: true,
+    },
+    { email, listIds: [listId], updateEnabled: true },
+  ];
+
+  let lastError;
+  for (let i = 0; i < payloads.length; i++) {
+    try {
+      return await axios.post(url, payloads[i], { ...BREVO_AXIOS_OPTS, headers });
+    } catch (err) {
+      lastError = err;
+      const st = err.response?.status;
+      if (st === 409) throw err;
+      if (i < payloads.length - 1) {
+        console.warn("[createBrevoContact] Retry payload mínimo após", st || err.code);
+      }
+    }
+  }
+  throw lastError;
+}
 
 // Definir secret para OpenAI. Em produção usa Secret Manager; localmente usa .env (emulador não injeta secrets)
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
@@ -1959,6 +2005,8 @@ IMPORTANTE:
             
             console.log('[preencherAnexoPDF] PDF salvo temporariamente, convertendo para imagens...');
             
+            const { createWorker } = require("tesseract.js");
+            const { fromPath } = require("pdf2pic");
             // Converter PDF para imagens usando pdf2pic
             const convert = fromPath(tempPdfPath, {
               density: 300,
@@ -2756,8 +2804,9 @@ exports.adicionarContatoBrevo = onRequest(
     cors: true,
     invoker: 'public',
     secrets: [brevoApiKey],
-    memory: '128MiB',
-    cpu: 0.0833,
+    memory: '512MiB',
+    cpu: 1,
+    timeoutSeconds: 60,
   },
   async (req, res) => {
     // Set CORS headers
@@ -2787,35 +2836,44 @@ exports.adicionarContatoBrevo = onRequest(
       }
 
       // Chave API do Brevo | listId 12 = padrão (ex.: sync usuários), listId 15 = newsletter "Receba em seu email os últimos editais"
-      const BREVO_API_KEY = brevoApiKey.value();
+      const BREVO_API_KEY = getBrevoApiKey();
       const BREVO_LIST_ID = listIdParam != null ? Number(listIdParam) : 12;
-      const BREVO_API_URL = 'https://api.brevo.com/v3/contacts';
-      
+
       console.log('[adicionarContatoBrevo] API Key configurada:', BREVO_API_KEY ? 'SIM' : 'NÃO');
       console.log('[adicionarContatoBrevo] Lista ID:', BREVO_LIST_ID);
 
-      // Dados que serão enviados para a API Brevo
-      const contactData = {
-        email: email,
-        listIds: [BREVO_LIST_ID],
-        attributes: {
-          NOME: nome || 'Novo Usuário',
-          PRIMEIRO_NOME: nome ? nome.split(' ')[0] : 'Usuário',
-        },
-        emailBlacklisted: false,
-        smsBlacklisted: false,
-        updateEnabled: true, // Atualiza se o contato já existir
-      };
-      
-      console.log('[adicionarContatoBrevo] Dados a serem enviados:', JSON.stringify(contactData));
+      if (!BREVO_API_KEY) {
+        res.status(503).json({
+          success: false,
+          error: 'BREVO_API_KEY não configurada',
+          message: 'Configure o secret BREVO_API_KEY no projeto culturalapp-fb9b0 e redeploy adicionarContatoBrevo.',
+        });
+        return;
+      }
 
-      // Faz a chamada POST para a API de Contatos do Brevo
-      const response = await axios.post(BREVO_API_URL, contactData, {
-        headers: {
-          'api-key': BREVO_API_KEY,
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('[adicionarContatoBrevo] Enviando contato para lista', BREVO_LIST_ID);
+
+      let response;
+      try {
+        response = await createBrevoContact(BREVO_API_KEY, {
+          email,
+          listId: BREVO_LIST_ID,
+          nome,
+        });
+      } catch (firstErr) {
+        const st = firstErr.response?.status;
+        if (st === 502 || st === 504 || firstErr.code === "ECONNABORTED") {
+          console.warn("[adicionarContatoBrevo] Retry após", st || firstErr.code);
+          await new Promise((r) => setTimeout(r, 800));
+          response = await createBrevoContact(BREVO_API_KEY, {
+            email,
+            listId: BREVO_LIST_ID,
+            nome,
+          });
+        } else {
+          throw firstErr;
+        }
+      }
 
       console.log(`[adicionarContatoBrevo] Usuário ${email} adicionado com sucesso ao Brevo. Status: ${response.status}`);
       console.log('[adicionarContatoBrevo] Resposta do Brevo:', JSON.stringify(response.data));
@@ -2855,7 +2913,7 @@ exports.adicionarContatoBrevo = onRequest(
           
           const listIdUpdate = req.body.listId != null ? Number(req.body.listId) : 12;
           try {
-            const BREVO_API_KEY = brevoApiKey.value();
+            const BREVO_API_KEY = getBrevoApiKey();
             const BREVO_API_URL = `https://api.brevo.com/v3/contacts/${encodeURIComponent(req.body.email)}`;
             
             const updateData = {
@@ -2867,6 +2925,7 @@ exports.adicionarContatoBrevo = onRequest(
             };
             
             const updateResponse = await axios.put(BREVO_API_URL, updateData, {
+              ...BREVO_AXIOS_OPTS,
               headers: {
                 'api-key': BREVO_API_KEY,
                 'Content-Type': 'application/json',
@@ -2892,9 +2951,25 @@ exports.adicionarContatoBrevo = onRequest(
         }
       }
       
-      res.status(500).json({ 
-        error: 'Erro ao adicionar contato ao Brevo', 
-        message: error.response?.data?.message || error.message 
+      const upstreamStatus = error.response?.status;
+      const brevoBody = error.response?.data;
+      const upstreamMessage =
+        (typeof brevoBody === 'object' && brevoBody !== null
+          ? brevoBody.message || brevoBody.code || JSON.stringify(brevoBody)
+          : null) ||
+        error.message;
+      const status =
+        upstreamStatus === 504 || error.code === 'ECONNABORTED'
+          ? 504
+          : upstreamStatus === 502
+            ? 502
+            : 500;
+
+      res.status(status).json({
+        success: false,
+        error: 'Erro ao adicionar contato ao Brevo',
+        message: upstreamMessage,
+        brevoStatus: upstreamStatus ?? null,
       });
     }
   }

@@ -394,7 +394,7 @@ const OraculoAI = () => {
             {/* Formulário de cadastro de email para receber editais */}
             <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
                 <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
-                  <div className="flex-1 w-full md:w-auto">
+                  <div className="flex-1 w-full min-w-0">
                     <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
                       Receba em seu email os últimos editais
                     </h3>
@@ -466,20 +466,20 @@ const OraculoAI = () => {
                           setSalvandoEmail(false);
                         }
                       }}
-                      className="flex flex-col gap-2 max-w-md"
+                      className="flex flex-col sm:flex-row gap-2 w-full max-w-2xl"
                     >
-<Input
-                      type="email"
-                      placeholder="Seu melhor email"
-                      value={emailNewsletter}
-                      onChange={(e) => setEmailNewsletter(e.target.value)}
-                      className="text-sm bg-white border-gray-200"
-                      disabled={salvandoEmail}
-                      required
-                    />
+                      <Input
+                        type="email"
+                        placeholder="Seu melhor email"
+                        value={emailNewsletter}
+                        onChange={(e) => setEmailNewsletter(e.target.value)}
+                        className="text-sm bg-white border-gray-200 flex-1 min-w-0 h-10"
+                        disabled={salvandoEmail}
+                        required
+                      />
                       <Button
                         type="submit"
-                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
+                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 h-10 whitespace-nowrap text-sm shrink-0 w-full sm:w-auto"
                         disabled={salvandoEmail}
                       >
                         {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}

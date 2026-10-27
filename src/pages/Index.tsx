@@ -7,7 +7,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayUnion, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Download, Play, Calendar, DollarSign, TrendingUp, FileText, Headphones, Sparkles } from 'lucide-react';
+import { Download, Play, TrendingUp, FileText, Headphones, Sparkles, Eye } from 'lucide-react';
+import { EditalCard, type EditalCardModel } from '@/components/editais/EditalCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -19,13 +20,7 @@ import analisarImage from '@/assets/Analisar.jpeg';
 import { DashboardPremiumHero } from '@/components/home/DashboardPremiumHero';
 import { filterEditaisAbertos, findEditalMaisUrgente, type EditalUrgenteInfo } from '@/lib/editalDates';
 import { FornecedoresPainel } from '@/components/fornecedores/FornecedoresPainel';
-
-// Função para capitalizar apenas a primeira letra do título
-const capitalizarTitulo = (titulo: string): string => {
-  if (!titulo) return '';
-  // Converte para minúsculas e depois capitaliza a primeira letra
-  return titulo.charAt(0).toUpperCase() + titulo.slice(1).toLowerCase();
-};
+import { contentCardDescription } from '@/lib/contentExcerpt';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -37,8 +32,10 @@ const Index = () => {
   const [editaisAbertosTodos, setEditaisAbertosTodos] = useState<any[]>([]);
   const [loadingEditais, setLoadingEditais] = useState(true);
   const { user, loading: profileLoading, isPremium, profile, planLabel } = useUserProfile();
-  /** Banners de aquisição/demo — só para visitantes ou contas não premium */
-  const showOnboardingBanners = !user || (!profileLoading && !isPremium);
+  /** Demo na home — só visitantes sem conta */
+  const showVisitorDemoBanner = !profileLoading && !user;
+  /** Usuário logado (Starter): um único CTA principal */
+  const showLoggedInEvalHero = Boolean(user && !profileLoading && !isPremium);
   const showPremiumDashboard = Boolean(user && !profileLoading && isPremium && profile);
 
   const editaisAbertosCount = editaisAbertosTodos.length;
@@ -217,65 +214,73 @@ const Index = () => {
               />
             )}
 
-            {showOnboardingBanners && (
-            <>
-            {/* Demo — Módulo 1 (simulador parcial), sem login */}
-            <div className="mb-10 rounded-2xl overflow-hidden bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple shadow-xl border-2 border-oraculo-purple/30">
-              <div className="flex flex-col lg:flex-row lg:items-stretch">
-                <div className="flex-1 p-6 md:p-8 flex flex-col justify-center">
-                  <h2 className="text-xl md:text-2xl font-bold text-white mb-3">
-                    Veja como um projeto é avaliado antes de enviar o seu
-                  </h2>
-                  <p className="text-white/95 text-sm md:text-base leading-relaxed mb-6 max-w-xl">
-                    Em menos de 2 minutos, veja uma avaliação real feita pela IA especializada em editais culturais — projeto de exemplo, sem cadastro.
-                  </p>
+            {showLoggedInEvalHero && (
+              <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg border border-oraculo-purple/20">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 p-6 md:p-7">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
+                      Avaliar um projeto
+                    </h2>
+                    <p className="text-white/90 text-sm md:text-base leading-relaxed max-w-2xl">
+                      Descreva seu projeto e receba um parecer da IA alinhado ao edital — depois ajuste textos, orçamento e cronograma no mesmo fluxo.
+                    </p>
+                  </div>
                   <Button
                     size="lg"
-                    onClick={() => {
-                      trackCtaVerComoFunciona();
-                      navigate('/avaliar-projeto?iniciar=1');
-                    }}
-                    className="w-full md:w-auto bg-[#FFCB05] hover:bg-[#e6b800] text-[#1A1A1A] font-bold text-base md:text-lg px-8 py-6 shadow-lg border-0"
+                    onClick={() => navigate('/criar-projeto')}
+                    className="flex-shrink-0 w-full md:w-auto bg-white text-oraculo-blue hover:bg-white/95 font-bold text-base px-8 py-5 shadow-md border-0"
                   >
                     <Sparkles className="h-5 w-5 mr-2" />
-                    Ver como funciona na prática
+                    Avaliar um projeto
                   </Button>
-                  <p className="text-white/80 text-xs md:text-sm mt-3">
-                    Depois você poderá avaliar seu próprio projeto no plano Starter (15 créditos grátis no cadastro).
-                  </p>
-                </div>
-                <div className="lg:w-2/5 min-h-[200px] lg:min-h-0 relative hidden sm:block">
-                  <img
-                    src={analisarImage}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* CTA: Comece por aqui */}
-            <div className="mb-10 rounded-2xl bg-gradient-to-r from-oraculo-blue via-oraculo-blue to-oraculo-purple p-6 md:p-8 shadow-xl border-2 border-oraculo-purple/30">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                <div className="flex-1">
-                  <h2 className="text-xl md:text-2xl font-bold text-white mb-3">
-                    Comece por aqui sua jornada para ganhar mais editais
-                  </h2>
-                  <p className="text-white/95 text-sm md:text-base leading-relaxed max-w-2xl">
-                    Descreva seu projeto cultural, por voz ou texto, e o nosso oráculo vai fazer a avaliação como se fosse um parecerista, direcionada para os editais que você escolher. Depois disso, a gente cria os textos, orçamento, cronograma e organiza suas certidões. Vamos lá!
-                  </p>
+            {showVisitorDemoBanner && (
+              <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg border border-oraculo-purple/20">
+                <div className="flex flex-col sm:flex-row sm:items-stretch">
+                  <div className="flex-1 p-6 md:p-7 flex flex-col justify-center">
+                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wide mb-2">
+                      Demonstração · sem cadastro
+                    </p>
+                    <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
+                      Veja como um projeto é avaliado
+                    </h2>
+                    <p className="text-white/90 text-sm md:text-base leading-relaxed mb-5 max-w-xl">
+                      Projeto fictício, análise completa em ~2 minutos. Crie sua conta depois para avaliar o seu com créditos Starter.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          trackCtaVerComoFunciona();
+                          navigate('/avaliar-projeto?iniciar=1');
+                        }}
+                        className="w-full sm:w-auto bg-[#FFCB05] hover:bg-[#e6b800] text-[#1A1A1A] font-bold text-base px-7 py-5 shadow-md border-0"
+                      >
+                        <Sparkles className="h-5 w-5 mr-2" />
+                        Ver como funciona
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => navigate('/cadastro')}
+                        className="w-full sm:w-auto border-white/40 bg-white/10 text-white hover:bg-white/20 font-semibold text-base px-7 py-5"
+                      >
+                        Criar conta grátis
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="sm:w-48 md:w-56 min-h-[140px] sm:min-h-0 relative hidden sm:block flex-shrink-0">
+                    <img
+                      src={analisarImage}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
                 </div>
-                <Button
-                  size="lg"
-                  onClick={() => navigate('/criar-projeto')}
-                  className="flex-shrink-0 w-full md:w-auto bg-white text-oraculo-blue hover:bg-white/95 font-bold text-base md:text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all border-2 border-white/50"
-                >
-                  <Sparkles className="h-5 w-5 mr-2" />
-                  Começar Agora
-                </Button>
               </div>
-            </div>
-            </>
             )}
 
             {/* Editais Abertos */}
@@ -294,84 +299,21 @@ const Index = () => {
                   Ver Mais
                 </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
                 {loadingEditais ? (
                   <div className="text-center text-gray-500 py-12 col-span-4">Carregando editais...</div>
                 ) : editais.length === 0 ? (
                   <div className="text-center text-gray-500 py-12 col-span-4">Nenhum edital aberto no momento.</div>
                 ) : (
-                  editais.map((edital, index) => {
-                    const formatDate = (date: any) => {
-                      if (!date) return '';
-                      if (date.toDate) {
-                        return date.toDate().toLocaleDateString('pt-BR');
-                      }
-                      return new Date(date).toLocaleDateString('pt-BR');
-                    };
-
-                    return (
-                      <Card 
-                        key={edital.id || index} 
-                        className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer overflow-hidden"
-                        onClick={() => navigate(`/edital/${edital.id}`)}
-                      >
-                        {(edital as any).thumbnail && (
-                          <div className="w-full aspect-video bg-gray-100">
-                            <img
-                              src={(edital as any).thumbnail}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
-                            {edital.nome ? capitalizarTitulo(edital.nome) : 'Edital sem nome'}
-                          </CardTitle>
-                          {edital.proponente && (
-                            <CardDescription className="line-clamp-1">
-                              {edital.proponente}
-                            </CardDescription>
-                          )}
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {edital.data_encerramento && (
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Calendar className="h-4 w-4 mr-2 text-oraculo-blue" />
-                              {formatDate(edital.data_encerramento)}
-                            </div>
-                          )}
-                          {edital.valor_maximo_premiacao && (
-                            <div className="flex items-center text-sm text-gray-600">
-                              <DollarSign className="h-4 w-4 mr-2 text-green-600" />
-                              {edital.valor_maximo_premiacao}
-                            </div>
-                          )}
-                          <div className="flex flex-col gap-2 mt-2">
-                            <Button 
-                              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white hover:opacity-90"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/criar-projeto?edital=${edital.id}`);
-                              }}
-                            >
-                              Avalie seu projeto neste edital
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              className="w-full"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/edital/${edital.id}`);
-                              }}
-                            >
-                              Ver Detalhes
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
+                  editais.map((edital, index) => (
+                    <EditalCard
+                      key={edital.id || index}
+                      edital={edital as EditalCardModel}
+                      primaryActionLabel="Avaliar neste edital"
+                      onOpenDetails={(id) => navigate(`/edital/${id}`)}
+                      onCreateProject={(id) => navigate(`/criar-projeto?edital=${id}`)}
+                    />
+                  ))
                 )}
               </div>
               <Button 
@@ -385,7 +327,7 @@ const Index = () => {
               {/* Formulário de cadastro de email para receber editais */}
               <div className="mt-8 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-xl p-4 md:p-6 border-2 border-oraculo-blue/20">
                 <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
-                  <div className="flex-1 w-full md:w-auto">
+                  <div className="flex-1 w-full min-w-0">
                     <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 md:mb-3">
                       Receba em seu email os últimos editais
                     </h3>
@@ -463,20 +405,20 @@ const Index = () => {
                           setSalvandoEmail(false);
                         }
                       }}
-                      className="flex flex-col gap-2 max-w-md"
+                      className="flex flex-col sm:flex-row gap-2 w-full max-w-2xl"
                     >
                       <Input
                         type="email"
                         placeholder="Seu melhor email"
                         value={emailNewsletter}
                         onChange={(e) => setEmailNewsletter(e.target.value)}
-                        className="text-sm bg-white border-gray-200"
+                        className="text-sm bg-white border-gray-200 flex-1 min-w-0 h-10"
                         disabled={salvandoEmail}
                         required
                       />
                       <Button
                         type="submit"
-                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-4 py-2 whitespace-nowrap text-sm w-1/2"
+                        className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white px-6 h-10 whitespace-nowrap text-sm shrink-0 w-full sm:w-auto"
                         disabled={salvandoEmail}
                       >
                         {salvandoEmail ? 'Cadastrando...' : 'Cadastrar'}
@@ -534,13 +476,12 @@ const Index = () => {
                           )}
                         </div>
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
+                          <CardTitle className="text-lg leading-snug text-clamp-2 break-words">
                             {guia.titulo}
                           </CardTitle>
-                          <div
-                            className="text-sm text-muted-foreground overflow-hidden break-words max-h-[4.5rem] [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug"
-                            dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
-                          />
+                          <CardDescription className="text-clamp-3 break-words mt-1.5">
+                            {contentCardDescription(guia.descricao) || 'Guia disponível na plataforma.'}
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">
                           <Button 
@@ -565,7 +506,11 @@ const Index = () => {
                               }
                             }}
                           >
-                            <Download className="h-4 w-4 mr-2" />
+                            {isEspecial ? (
+                              <Eye className="h-4 w-4 mr-2" />
+                            ) : (
+                              <Download className="h-4 w-4 mr-2" />
+                            )}
                             {isEspecial ? 'Ver Detalhes' : 'Baixar Guia'}
                           </Button>
                         </CardContent>
@@ -590,11 +535,11 @@ const Index = () => {
                           </Badge>
                         </div>
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
+                          <CardTitle className="text-lg leading-snug text-clamp-2 break-words">
                             {ep.titulo}
                           </CardTitle>
-                          <CardDescription className="line-clamp-2">
-                            {ep.descricao}
+                          <CardDescription className="text-clamp-3 break-words">
+                            {contentCardDescription(ep.descricao) || ep.descricao || 'Episódio disponível na plataforma.'}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">

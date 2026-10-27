@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { DemoWizardShell } from '@/components/home/DemoWizardShell';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Loader2, FileCheck, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   PROJETO_DEMONSTRACAO,
   formatarMoedaBRL,
@@ -33,17 +35,17 @@ const PASSOS: Record<
     etapaAtiva: 4,
     titulo: 'Orçamento do projeto (exemplo)',
     subtitulo: 'Planilha fictícia completa (~R$ 600 mil) — rubricas típicas de festival de médio porte, apenas para demonstração.',
-    voltar: '/avaliar-projeto/gerar-textos',
+    voltar: '/avaliar-projeto',
     proximo: '/avaliar-projeto/cronograma',
-    proximoLabel: 'Próximo: Criar Cronograma →',
+    proximoLabel: 'Ver cronograma gerado →',
   },
   cronograma: {
     etapaAtiva: 5,
     titulo: 'Cronograma de execução (exemplo)',
     subtitulo: '23 marcos de jan a out/2026 — planejamento, festival, circulação e prestação de contas (demonstração).',
     voltar: '/avaliar-projeto/orcamento',
-    proximo: '/avaliar-projeto/documentos',
-    proximoLabel: 'Próximo: Documentos e Inscrição →',
+    proximo: '/cadastro?redirect=/criar-projeto',
+    proximoLabel: 'Salvar e editar no seu projeto real →',
   },
   documentos: {
     etapaAtiva: 6,
@@ -106,11 +108,42 @@ export default function AvaliarProjetoDemoPasso() {
 
   const demo = PROJETO_DEMONSTRACAO;
   const totalOrcamento = demo.orcamento.rubricas.reduce((s, r) => s + r.total, 0);
+  const cadastroUrl = '/cadastro?redirect=/criar-projeto';
+
+  const avisoSomenteLeitura = (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 flex flex-wrap items-start gap-3 text-sm text-amber-950 mb-4">
+      <Lock className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" aria-hidden />
+      <p className="flex-1 min-w-[12rem] leading-relaxed">
+        Visualização gratuita do exemplo.{' '}
+        <Link to={cadastroUrl} className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950">
+          Crie conta
+        </Link>{' '}
+        para editar rubricas, exportar PDF ou salvar no seu projeto.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="border-amber-300 text-amber-900 shrink-0"
+        onClick={() => toast.message('Disponível após criar conta', { description: 'Edição e exportação ficam no seu projeto real.' })}
+      >
+        Exportar PDF
+      </Button>
+    </div>
+  );
+
+  const navegarStepDemo = (index: number) => {
+    if (index <= 2) navigate('/avaliar-projeto');
+    else if (index === 4) navigate('/avaliar-projeto/orcamento');
+    else if (index === 5) navigate('/avaliar-projeto/cronograma');
+  };
 
   const conteudo = (() => {
     switch (slug) {
       case 'orcamento':
         return (
+          <>
+          {avisoSomenteLeitura}
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-zinc-200 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-zinc-800">Total do projeto</p>
@@ -149,10 +182,12 @@ export default function AvaliarProjetoDemoPasso() {
               </table>
             </div>
           </div>
+          </>
         );
       case 'cronograma':
         return (
           <div className="space-y-4">
+            {avisoSomenteLeitura}
             <DemoCronogramaGantt etapas={demo.cronograma.etapas} />
             <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
@@ -247,6 +282,13 @@ export default function AvaliarProjetoDemoPasso() {
             onVoltar={() => navigate(config.voltar)}
             proximoLabel={config.proximoLabel}
             onProximo={() => navigate(config.proximo)}
+            onStepClick={navegarStepDemo}
+            verExemploStepIndexes={[4, 5]}
+            proximoClassName={
+              slug === 'cronograma'
+                ? 'bg-[#22C55E] hover:bg-[#1ea34f] text-white font-bold py-3 px-6 rounded-xl w-full sm:w-auto sm:ml-auto border-0 shadow-md'
+                : undefined
+            }
           >
             {conteudo}
           </DemoWizardShell>

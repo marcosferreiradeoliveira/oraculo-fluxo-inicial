@@ -4,7 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Download, Star, Edit } from 'lucide-react';
+import { BookOpen, Download, Star, Edit, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -12,6 +12,7 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { trackGuiaDownloaded } from '@/lib/analytics';
+import { contentCardDescription } from '@/lib/contentExcerpt';
 
 const Biblioteca = () => {
   const navigate = useNavigate();
@@ -21,22 +22,6 @@ const Biblioteca = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  // Função para remover tags HTML e retornar texto puro
-  const stripHtmlTags = (html: string): string => {
-    if (!html) return '';
-    // Remove tags HTML usando regex
-    const text = html.replace(/<[^>]*>/g, '');
-    // Decodifica entidades HTML comuns
-    return text
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .trim();
-  };
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
@@ -190,16 +175,11 @@ const Biblioteca = () => {
                       )}
                     </div>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-lg leading-tight">
+                      <CardTitle className="text-lg leading-snug text-clamp-2 break-words">
                         {guia.titulo}
                       </CardTitle>
-                      <CardDescription>
-                        {(() => {
-                          const descricaoLimpa = stripHtmlTags(guia.descricao || '');
-                          return descricaoLimpa.length > 120
-                            ? descricaoLimpa.slice(0, 120) + '...'
-                            : descricaoLimpa;
-                        })()}
+                      <CardDescription className="text-clamp-3 break-words">
+                        {contentCardDescription(guia.descricao) || 'Guia disponível na biblioteca.'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -235,7 +215,11 @@ const Biblioteca = () => {
                           }
                         }}
                       >
-                        <Download className="h-4 w-4 mr-2" />
+                        {isEspecial ? (
+                          <Eye className="h-4 w-4 mr-2" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
                         {isEspecial ? 'Ver Detalhes' : 'Baixar Guia'}
                       </Button>
                     </CardContent>

@@ -10,6 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trackEditalViewed } from '@/lib/analytics';
 import {
+  formatEditalEncerramentoLongo,
+  formatEditalValorPremiacao,
+  parseEditalEncerramento,
+  diasRestantes,
+} from '@/lib/editalDates';
+import { formatEditalTitulo, formatEditalOrgao } from '@/lib/editalDisplayText';
+import {
   ensureEditalLandingFields,
   getEditalLandingPublicUrl,
   isLandingSlugValid,
@@ -199,40 +206,6 @@ const DetalhesEdital = () => {
     }
   };
 
-  const formatDate = (dateField: any) => {
-    if (!dateField) return 'Não informado';
-    
-    if (typeof dateField === 'object' && 'seconds' in dateField) {
-      return new Date(dateField.seconds * 1000).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-      });
-    } else if (typeof dateField === 'string') {
-      return dateField;
-    }
-    return 'Data inválida';
-  };
-
-  const getDaysRemaining = (dateField: any) => {
-    if (!dateField) return null;
-    
-    let deadlineDate: Date;
-    if (typeof dateField === 'object' && 'seconds' in dateField) {
-      deadlineDate = new Date(dateField.seconds * 1000);
-    } else if (typeof dateField === 'string') {
-      deadlineDate = new Date(dateField);
-    } else {
-      return null;
-    }
-    
-    const now = new Date();
-    const diffTime = deadlineDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays;
-  };
-
   const landingAtiva = edital?.landing_ativa !== false;
   const landingSlug =
     typeof edital?.landing_slug === 'string' && isLandingSlugValid(normalizeLandingSlug(edital.landing_slug))
@@ -286,7 +259,9 @@ const DetalhesEdital = () => {
     );
   }
 
-  const daysRemaining = getDaysRemaining(edital.data_encerramento || edital.dataEncerramento);
+  const prazoReal = parseEditalEncerramento(edital);
+  const daysRemaining = prazoReal ? diasRestantes(prazoReal) : null;
+  const valorExibicao = formatEditalValorPremiacao(edital.valor_maximo_premiacao);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -306,13 +281,11 @@ const DetalhesEdital = () => {
             
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{edital.nome}</h1>
-                {edital.proponente && (
-                  <div className="flex items-center text-gray-600 mb-4">
-                    <Building className="h-5 w-5 mr-2" />
-                    <span className="text-lg">{edital.proponente}</span>
-                  </div>
-                )}
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{formatEditalTitulo(edital.nome)}</h1>
+                <div className="flex items-center text-gray-600 mb-4">
+                  <Building className="h-5 w-5 mr-2 flex-shrink-0" />
+                  <span className="text-lg">{formatEditalOrgao(edital.proponente)}</span>
+                </div>
               </div>
               
               {daysRemaining !== null && (
@@ -375,9 +348,7 @@ const DetalhesEdital = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Data de Encerramento</p>
-                    <p className="text-lg font-semibold">
-                      {formatDate(edital.data_encerramento || edital.dataEncerramento)}
-                    </p>
+                    <p className="text-lg font-semibold">{formatEditalEncerramentoLongo(edital)}</p>
                   </div>
                   <Calendar className="h-8 w-8 text-oraculo-blue" />
                 </div>
@@ -389,9 +360,7 @@ const DetalhesEdital = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Valor Máximo</p>
-                    <p className="text-lg font-semibold">
-                      {edital.valor_maximo_premiacao || 'Não informado'}
-                    </p>
+                    <p className="text-lg font-semibold">{valorExibicao ?? 'Consulte o edital'}</p>
                   </div>
                   <DollarSign className="h-8 w-8 text-green-600" />
                 </div>

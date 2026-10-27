@@ -13,12 +13,15 @@ import {
   Play,
   FileText,
   Plus,
-  Edit
+  Edit,
+  Eye,
+  Download,
 } from 'lucide-react';
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import { contentCardDescription, stripHtmlToText } from '@/lib/contentExcerpt';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -406,11 +409,13 @@ const InteligenciaMercado = () => {
                         </div>
                       </div>
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-lg leading-tight line-clamp-2">
+                        <CardTitle className="text-lg leading-snug text-clamp-2 break-words">
                           {podcast.titulo}
                         </CardTitle>
-                        <CardDescription className="line-clamp-2">
-                          {podcast.descricao}
+                        <CardDescription className="text-clamp-3 break-words">
+                          {contentCardDescription(podcast.descricao) ||
+                            podcast.descricao ||
+                            'Episódio disponível na plataforma.'}
                         </CardDescription>
                         <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
                           {podcast.criadoEm && (
@@ -466,7 +471,7 @@ const InteligenciaMercado = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {guias.map((guia) => {
                     const isExpandido = descricoesExpandidas.has(guia.id);
-                    const descricaoLonga = guia.descricao && guia.descricao.length > 100;
+                    const descricaoLonga = stripHtmlToText(guia.descricao || '').length > 180;
                     // Verificação mais robusta para isEspecial (pode vir como true, "true", 1, etc)
                     const isEspecial = Boolean(guia.especial) && (guia.especial === true || String(guia.especial).toLowerCase() === 'true' || Number(guia.especial) === 1);
                     
@@ -533,14 +538,21 @@ const InteligenciaMercado = () => {
                           )}
                         </div>
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-lg leading-tight line-clamp-2">
+                          <CardTitle className="text-lg leading-snug text-clamp-2 break-words">
                             {guia.titulo}
                           </CardTitle>
                           <div className="mt-2">
-                            <div
-                              className={`text-sm text-muted-foreground break-words [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug ${isExpandido ? '' : 'overflow-hidden max-h-[4.5rem]'}`}
-                              dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
-                            />
+                            {isExpandido ? (
+                              <div
+                                className="text-sm text-muted-foreground break-words [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_p]:mb-0.5 [&_*]:leading-snug"
+                                dangerouslySetInnerHTML={{ __html: guia.descricao || '' }}
+                              />
+                            ) : (
+                              <CardDescription className="text-clamp-3 break-words">
+                                {contentCardDescription(guia.descricao) ||
+                                  'Guia disponível na plataforma.'}
+                              </CardDescription>
+                            )}
                             {descricaoLonga && (
                               <button
                                 onClick={(e) => {
@@ -592,7 +604,11 @@ const InteligenciaMercado = () => {
                               }
                             }}
                           >
-                            <FileText className="h-4 w-4 mr-2" />
+                            {isEspecial ? (
+                              <Eye className="h-4 w-4 mr-2" />
+                            ) : (
+                              <Download className="h-4 w-4 mr-2" />
+                            )}
                             {isEspecial ? 'Ver Detalhes' : 'Abrir Guia'}
                           </Button>
                         </CardContent>

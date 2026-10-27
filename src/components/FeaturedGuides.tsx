@@ -56,10 +56,10 @@ export function FeaturedGuides() {
               </div>
             </div>
             <CardContent className="p-4">
-              <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-oraculo-blue transition-colors">
+              <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-oraculo-blue transition-colors text-clamp-2 break-words">
                 {guide.title}
               </h3>
-              <p className="text-sm text-gray-600">{guide.description}</p>
+              <p className="text-sm text-gray-600 text-clamp-3 break-words">{guide.description}</p>
             </CardContent>
           </Card>
         ))}

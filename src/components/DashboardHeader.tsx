@@ -12,6 +12,7 @@ import { isStarterPlan } from '@/lib/starterPlan';
 
 export function DashboardHeader() {
   const [user, setUser] = useState<any>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [isStarter, setIsStarter] = useState(false);
   const [creditos, setCreditos] = useState<number | null>(null);
@@ -35,6 +36,7 @@ export function DashboardHeader() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      setAuthReady(true);
       if (firebaseUser) {
         const db = getFirestore();
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -140,7 +142,11 @@ export function DashboardHeader() {
 
           {/* User Profile ou chamada para criar conta */}
           <div className="flex items-center space-x-2 sm:space-x-3 relative min-w-0 z-50">
-            {user ? (
+            {!authReady ? (
+              <div className="flex items-center gap-2" aria-busy="true" aria-label="Carregando sessão">
+                <div className="h-9 w-28 bg-gray-100 rounded-md animate-pulse" />
+              </div>
+            ) : user ? (
               <>
                 <div className="text-right min-w-0 max-w-[50vw] sm:max-w-none">
                   <div className="text-sm font-medium text-gray-900">
@@ -187,7 +193,7 @@ export function DashboardHeader() {
                 <Sparkles className="h-5 w-5 text-oraculo-blue" />
                 <Link to="/cadastro?mode=login" onClick={() => trackIntentLogin({ source: 'header' })}>
                   <Button size="sm" className="mt-0.5 bg-oraculo-blue text-white hover:bg-oraculo-purple">
-                    Acessar Conta
+                    Entrar ou criar conta
                   </Button>
                 </Link>
               </div>

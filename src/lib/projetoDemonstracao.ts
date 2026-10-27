@@ -37,28 +37,45 @@ export type ProjetoDemonstracao = {
 
 export const PROJETO_DEMONSTRACAO: ProjetoDemonstracao = {
   nome: 'Festival de Música e Poesia na Praça',
-  editalNome: 'Edital de fomento à cultura — exemplo',
+  editalNome: 'Lei Rouanet (PRONAC)',
   descricao: `Projeto de realização de um festival gratuito de música e poesia em praça pública, com 4 apresentações ao longo de um fim de semana.
 
-Objetivos: democratizar o acesso à cultura, valorizar artistas locais e promover o encontro entre música e literatura.
+Objetivos: democratizar o acesso à cultura, valorizar artistas locais e de outras regiões, e promover o encontro entre música e literatura.
 
-Público-alvo: população em geral, famílias e jovens. Estimativa de 2.000 pessoas no total.`,
+Público-alvo: população em geral, famílias e jovens. Estimativa de 2.000 pessoas no total.
+
+Atividades principais: curadoria de 8 artistas (bandas e poetas), montagem de palco e som, divulgação em redes sociais e rádio comunitária, mediação cultural antes de cada apresentação, registro em vídeo para divulgação posterior.
+
+Equipe: 1 produtor, 1 assistente de produção, 2 técnicos de som e luz, 1 mediador cultural. Parceria com associação de moradores para divulgação e apoio logístico.
+
+Cronograma: pré-produção em 2 meses (contratações, licenças, divulgação); realização em 2 dias; pós-produção (edição de vídeo e prestação de contas) em 1 mês.`,
   analise_ia: `1. ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL
-O projeto responde de forma clara aos eixos de democratização do acesso e valorização de artistas locais. A proposta de festival gratuito em espaço público está alinhada ao perfil do edital.
+- Relevância e Mérito Cultural: O projeto visa democratizar o acesso à cultura e valorizar artistas locais, o que contribui positivamente para o cenário cultural brasileiro. No entanto, o texto do projeto poderia detalhar mais sobre como pretende inovar na linguagem ou defender o patrimônio cultural. A trajetória do proponente não é mencionada, o que dificulta a avaliação da capacidade técnica. O interesse público é justificado pela gratuidade do evento e pelo foco em inclusão cultural.
+- Viabilidade Técnica e Orçamental: O projeto não apresenta detalhes sobre o orçamento, o que impede a avaliação da coerência orçamental e do respeito aos limites de cachês. Sem informações sobre custos administrativos, não é possível verificar se estão dentro do limite de 15%. A capacidade de captação não é abordada, o que é um ponto crítico para a viabilidade.
+- Obrigatoriedades de Acessibilidade: O projeto não menciona medidas de acessibilidade, como Libras, audiodescrição ou legendagem, nem garante que o local possui infraestrutura para pessoas com mobilidade reduzida. Isso é uma falha significativa, pois a acessibilidade é um critério eliminatório.
+- Democratização do Acesso (Contrapartidas): O projeto é gratuito, o que atende ao critério de democratização do acesso. No entanto, não há menção à distribuição de bilhetes para o MinC ou patrocinadores, nem sobre a descentralização, embora a realização em praça pública sugira um esforço nesse sentido.
+- Conformidade com os Limites do Proponente: Não há informações sobre a categoria do proponente (PF, MEI ou PJ) e quantos projetos estão em andamento, o que impede a avaliação da conformidade com os limites do proponente.
 
 2. PONTOS FORTES DO PROJETO
-• Objetivos mensuráveis e público-alvo definido.
-• Equipe e parcerias locais descritas com papéis claros.
-• Atividades coerentes com o orçamento e o cronograma apresentados.
+- A proposta de um festival gratuito em praça pública promove a democratização do acesso à cultura.
+- O foco em artistas locais e de outras regiões valoriza a diversidade cultural.
+- A parceria com a associação de moradores para divulgação e apoio logístico fortalece o envolvimento comunitário.
+- A mediação cultural antes das apresentações enriquece a experiência do público.
 
 3. PONTOS FRACOS E GAPS
-• Detalhar indicadores de impacto (número de artistas, oficinas, acessibilidade).
-• Reforçar estratégia de divulgação além das redes sociais.
+- Falta de detalhamento sobre o orçamento e limites de cachês.
+- Ausência de medidas de acessibilidade, que é um critério eliminatório.
+- Insuficiência de informações sobre a trajetória do proponente e capacidade de captação.
+- Não há menção à distribuição de bilhetes para o MinC ou patrocinadores.
 
 4. SUGESTÕES DE MELHORIA
-Sugestão: Incluir ações de acessibilidade (libras, audiodescrição) para fortalecer a nota em inclusão.
+Sugestão: Incluir um orçamento detalhado, especificando custos de cachês, infraestrutura e administrativos, para garantir coerência orçamental.
+Sugestão: Incorporar medidas de acessibilidade, como intérpretes de Libras e infraestrutura para mobilidade reduzida, para atender às obrigatoriedades de acessibilidade.
+Sugestão: Apresentar informações sobre a trajetória do proponente e histórico de projetos para demonstrar capacidade técnica e de captação.
+Sugestão: Detalhar a distribuição de bilhetes para o MinC e patrocinadores, conforme exigido pelo edital.
+Sugestão: Esclarecer a categoria do proponente (PF, MEI ou PJ) e quantos projetos estão em andamento para verificar a conformidade com os limites do proponente.
 
-5. NOTA ESTIMADA (0–10): 8,0 / 10`,
+5. NOTA ESTIMADA (0-100): 60`,
   textos_gerados: {
     justificativa:
       'A proposta justifica-se pela carência de programação cultural gratuita de qualidade no território, reunindo música e literatura em formato acessível à comunidade.',
@@ -442,23 +459,36 @@ export type AvaliacaoDemoProgress = {
 export async function executarAvaliacaoDemonstracao(progress: AvaliacaoDemoProgress): Promise<string> {
   const full = PROJETO_DEMONSTRACAO.analise_ia;
   const fases: Array<[string, string[]]> = [
-    ['Coletando dados do projeto e edital...', ['Lendo edital e critérios...']],
-    ['Gerando avaliação demonstrativa...', ['Simulando banca examinadora...']],
-    ['Recebendo análise...', ['Organizando pontos fortes e gaps...']],
+    ['Lendo edital e matriz de critérios...', ['Lei Rouanet · PRONAC', 'Carregando pesos da banca...']],
+    ['Comparando projeto aos critérios...', ['Relevância cultural', 'Viabilidade orçamentária', 'Acessibilidade']],
+    ['Montando parecer demonstrativo...', ['Pontos fortes', 'Gaps', 'Sugestões práticas']],
+    ['Finalizando nota estimada...', ['Consolidando score 0–100']],
   ];
   for (const [status, subs] of fases) {
     progress.setStatus(status);
     progress.setSubEtapas(subs);
-    await delay(650);
+    await delay(520);
   }
-  const tokens = full.match(/\S+|\s+/g) ?? [full];
+  progress.setStatus('Gerando parecer (demonstração)...');
+  progress.setSubEtapas(['Streaming do relatório...']);
+
+  const chunks = full.split(/(?<=[.!?])\s+|\n+/);
   let acc = '';
-  for (let i = 0; i < tokens.length; i += 6) {
-    acc += tokens.slice(i, i + 6).join('');
+  for (const piece of chunks) {
+    if (!piece.trim()) continue;
+    const words = piece.split(/(\s+)/);
+    for (let i = 0; i < words.length; i += 3) {
+      acc += words.slice(i, i + 3).join('');
+      progress.setConteudo(acc);
+      await delay(28 + Math.min(40, acc.length / 120));
+    }
+    acc += '\n';
     progress.setConteudo(acc);
-    await delay(35);
+    await delay(60);
   }
   progress.setConteudo(full);
+  progress.setStatus('');
+  progress.setSubEtapas([]);
   return full;
 }
 
@@ -491,6 +521,16 @@ export function aplicarSugestaoDemonstracao(textoBase: string, sugestao: string)
   const bloco = sugestao.trim();
   if (!bloco) return textoBase;
   return `${textoBase.trim()}\n\n${bloco}`;
+}
+
+/** Nota inicial do parecer demo (0–100). Cada sugestão aplicada reflete melhoria perceptível. */
+export const DEMO_NOTA_INICIAL = 60;
+
+export function calcularNotaDemoVisitante(sugestoesAplicadas: number): number {
+  if (sugestoesAplicadas <= 0) return DEMO_NOTA_INICIAL;
+  const bonusPrimeira = 8;
+  const bonusDemais = Math.max(0, sugestoesAplicadas - 1) * 2;
+  return Math.min(100, DEMO_NOTA_INICIAL + bonusPrimeira + bonusDemais);
 }
 
 /** UI do parecer demonstrativo (Módulo 1 — visitante deslogado) */

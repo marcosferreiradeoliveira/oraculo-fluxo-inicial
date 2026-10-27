@@ -1,4 +1,4 @@
-import { diasRestantes, parseEditalEncerramento } from '@/lib/editalDates';
+import { diasRestantes, parseEditalEncerramento, formatEditalValorPremiacao } from '@/lib/editalDates';
 
 export type EditalLandingCriterio = {
   nome: string;
@@ -200,8 +200,8 @@ export function mergeEditalLandingWithFirestore(
   const proponente = data.proponente ?? data.orgao;
   if (typeof proponente === 'string' && proponente.trim()) merged.proponente = proponente.trim();
 
-  const valor = data.valor_maximo_premiacao;
-  if (typeof valor === 'string' && valor.trim()) merged.valorGlobal = valor.trim();
+  const valor = formatEditalValorPremiacao(data.valor_maximo_premiacao);
+  if (valor) merged.valorGlobal = valor;
 
   const encerramento = parseEditalEncerramento(data);
   if (encerramento) {

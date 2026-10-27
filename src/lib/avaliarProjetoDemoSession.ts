@@ -10,7 +10,20 @@ export type AvaliarProjetoDemoSession = {
   email?: string;
   landingSlug?: string;
   textos_gerados?: Record<string, string>;
+  /** Tour público: textos/orçamento/cronograma sem chamar Cloud Functions */
+  modoDemonstracao?: boolean;
 };
+
+export const DEMO_AVALIAR_ROUTES = [
+  '/avaliar-projeto',
+  '/avaliar-projeto',
+  '/avaliar-projeto',
+  '/avaliar-projeto/gerar-textos',
+  '/avaliar-projeto/orcamento',
+  '/avaliar-projeto/cronograma',
+  '/avaliar-projeto/documentos',
+  '/avaliar-projeto/finalizar',
+] as const;
 
 const STORAGE_KEY = 'avaliarProjeto_dados';
 

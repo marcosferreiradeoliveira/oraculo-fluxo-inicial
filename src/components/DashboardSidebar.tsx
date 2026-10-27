@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useLocation, type Location } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { Link } from 'react-router-dom';
 import { 
   Home, 
   Brain, 
@@ -35,6 +37,9 @@ type MenuItem = {
   outline?: boolean;
 };
 
+/** Rotas visíveis apenas com sessão Firebase ativa */
+const AUTH_ONLY_MENU_ITEMS = new Set(['meus_projetos', 'perfil', 'fornecedores']);
+
 const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
@@ -67,9 +72,67 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+function normalizeHash(hash: string): string {
+  const h = (hash || '').trim().toLowerCase();
+  if (!h) return '';
+  return h.startsWith('#') ? h : `#${h}`;
+}
+
+function isMenuItemActive(item: MenuItem, location: Location): boolean {
+  const { pathname } = location;
+  const hash = normalizeHash(location.hash);
+
+  if (item.menuItem === 'inicio') {
+    return pathname === '/' && hash !== '#fornecedores';
+  }
+  if (item.menuItem === 'fornecedores') {
+    return pathname === '/' && hash === '#fornecedores';
+  }
+
+  const path = item.url.split('#')[0];
+  if (!path || path === '/') return false;
+
+  const exactPaths = new Set([
+    '/editais-abertos',
+    '/conta',
+    '/suporte',
+    '/oraculo-ai',
+    '/inteligencia-mercado',
+  ]);
+  if (exactPaths.has(path)) {
+    return pathname === path || pathname.startsWith(`${path}/`);
+  }
+
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function menuItemNavTo(item: MenuItem): string | { pathname: string; hash?: string } {
+  if (item.menuItem === 'inicio') {
+    return '/';
+  }
+  if (item.menuItem === 'fornecedores') {
+    return { pathname: '/', hash: 'fornecedores' };
+  }
+  return item.url.split('#')[0] || item.url;
+}
+
+function navItemClassName(item: MenuItem, active: boolean): string {
+  return `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+    active
+      ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
+      : item.outline
+        ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20'
+        : 'hover:bg-purple-800/30'
+  } hover:translate-x-1`;
+}
+
 export function DashboardSidebar() {
+  const [user, authLoading] = useAuthState(auth);
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const visibleMenuItems = menuItems.filter(
+    (item) => user || !AUTH_ONLY_MENU_ITEMS.has(item.menuItem),
+  );
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -92,7 +155,7 @@ export function DashboardSidebar() {
     if (isMobile) {
       setIsOpen(false);
     }
-  }, [location.pathname, isMobile]);
+  }, [location.pathname, location.hash, isMobile]);
 
   // Fechar ao clicar fora
   useEffect(() => {
@@ -166,7 +229,9 @@ export function DashboardSidebar() {
         {/* Navigation Menu */}
         <nav className="flex-1 py-6 overflow-y-auto">
           <ul className="space-y-2 px-4">
-            {menuItems.map((item) => (
+            {visibleMenuItems.map((item) => {
+              const active = isMenuItemActive(item, location);
+              return (
               <li key={item.title}>
                 {item.external ? (
                   <a
@@ -187,40 +252,45 @@ export function DashboardSidebar() {
                     <ExternalLink className="h-4 w-4 text-purple-300" />
                   </a>
                 ) : (
-                  <NavLink
-                    to={item.url}
+                  <Link
+                    to={menuItemNavTo(item)}
+                    aria-current={active ? 'page' : undefined}
                     onClick={() => trackMenuIntent({ menu_item: item.menuItem, destination: item.url, cta_type: 'nav_link' })}
-                    className={({ isActive }) =>
-                      `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-                        isActive
-                          ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple shadow-lg'
-                          : item.outline
-                          ? 'border-2 border-purple-400/50 hover:border-purple-400 hover:bg-purple-800/20'
-                          : 'hover:bg-purple-800/30'
-                      } hover:translate-x-1`
-                    }
+                    className={navItemClassName(item, active)}
                   >
                     <div className="flex items-center space-x-3">
                       <item.icon className="h-5 w-5" />
                       <span className="font-medium">{item.title}</span>
                     </div>
-                  </NavLink>
+                  </Link>
                 )}
               </li>
-            ))}
+            );
+            })}
           </ul>
         </nav>
 
-        {/* Logout ao pé do menu — visível em todas as telas */}
         <div className="px-4 pb-3 border-t border-purple-800/30">
-          <button
-            type="button"
-            onClick={() => signOut(auth)}
-            className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-red-600/90 hover:bg-red-600 border border-red-500/50 font-medium transition-colors"
-          >
-            <LogOut className="h-5 w-5" />
-            Sair da conta
-          </button>
+          {authLoading ? (
+            <div className="h-11 rounded-lg bg-purple-800/30 animate-pulse" aria-hidden />
+          ) : user ? (
+            <button
+              type="button"
+              onClick={() => signOut(auth)}
+              className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-red-600/90 hover:bg-red-600 border border-red-500/50 font-medium transition-colors"
+            >
+              <LogOut className="h-5 w-5" />
+              Sair da conta
+            </button>
+          ) : (
+            <Link
+              to="/cadastro?mode=login"
+              className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-gradient-to-r from-oraculo-blue to-oraculo-purple font-medium transition-opacity hover:opacity-95"
+            >
+              <User className="h-5 w-5" />
+              Entrar ou criar conta
+            </Link>
+          )}
         </div>
 
         {/* Footer */}

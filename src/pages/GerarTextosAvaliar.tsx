@@ -6,6 +6,9 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, CheckCircle, Copy, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildDemoTextosCompletos } from '@/lib/demoTextosPrePreenchidos';
+import { simularGeracaoTextoDemo } from '@/lib/projetoDemonstracao';
+import type { AvaliarProjetoDemoSession } from '@/lib/avaliarProjetoDemoSession';
 
 const GERAR_TEXTO_PROMPT = `Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere um texto claro, objetivo e bem estruturado para o seguinte item do projeto: `;
 
@@ -22,13 +25,8 @@ const TIPOS_PADRAO = ['justificativa', 'objetivos', 'metodologia', 'resultados_e
 
 export default function GerarTextosAvaliar() {
   const navigate = useNavigate();
-  const [dados, setDados] = useState<{
-    nome: string;
-    descricao: string;
-    editalAssociado?: string;
-    analiseConteudo?: string;
-    editalId?: string | null;
-  } | null>(null);
+  const [dados, setDados] = useState<AvaliarProjetoDemoSession | null>(null);
+  const [modoDemo, setModoDemo] = useState(false);
   const [editalTipos, setEditalTipos] = useState<string[]>(TIPOS_PADRAO);
   const [loading, setLoading] = useState(true);
   const [textos, setTextos] = useState<Record<string, string>>({});
@@ -48,8 +46,15 @@ export default function GerarTextosAvaliar() {
       return;
     }
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as AvaliarProjetoDemoSession;
       setDados(parsed);
+      const isDemo = Boolean(parsed.modoDemonstracao);
+      setModoDemo(isDemo);
+      if (isDemo) {
+        setTextos(buildDemoTextosCompletos(Object.keys(parsed.textos_gerados ?? {})));
+      } else if (parsed.textos_gerados && typeof parsed.textos_gerados === 'object') {
+        setTextos(parsed.textos_gerados);
+      }
       if (parsed.editalId) {
         getDoc(doc(getFirestore(), 'editais', parsed.editalId))
           .then((snap) => {
@@ -75,6 +80,21 @@ export default function GerarTextosAvaliar() {
     const tipoMapeado = TIPO_MAP[tipo] || tipo;
     setGerando(tipo);
     setTextos((prev) => ({ ...prev, [tipo]: '' }));
+
+    if (modoDemo) {
+      try {
+        await simularGeracaoTextoDemo(tipoMapeado, (parcial) => {
+          setTextos((prev) => ({ ...prev, [tipo]: parcial }));
+        });
+        toast.success('Texto gerado (demonstração).');
+        setGerando(null);
+        return true;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro na demonstração.');
+        setGerando(null);
+        return false;
+      }
+    }
 
     const dadosProjeto = {
       nome: dados.nome,
@@ -191,6 +211,10 @@ export default function GerarTextosAvaliar() {
         // ignore
       }
     }
+    if (modoDemo) {
+      navigate('/avaliar-projeto/orcamento');
+      return;
+    }
     navigate('/cadastro?redirect=/avaliar-projeto&continuar=true');
   };
 
@@ -226,7 +250,8 @@ export default function GerarTextosAvaliar() {
                   onClick={handleContinuar}
                   className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white w-full sm:w-auto px-4 sm:px-6 md:px-8 py-3 sm:py-2.5 text-sm sm:text-base font-semibold"
                 >
-                  Salvar projeto e continuar <span className="ml-2 opacity-90">→</span>
+                  {modoDemo ? 'Ver orçamento de exemplo' : 'Salvar projeto e continuar'}{' '}
+                  <span className="ml-2 opacity-90">→</span>
                 </Button>
               </div>
             </div>

@@ -52,6 +52,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { StarterPlanGuard } from './components/StarterPlanGuard';
 import AvaliarProjeto from './pages/AvaliarProjeto';
 import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
+import AvaliarProjetoDemoPasso from './pages/AvaliarProjetoDemoPasso';
 import ProjetoEquipe from './pages/ProjetoEquipe';
 
 const queryClient = new QueryClient();
@@ -101,6 +102,10 @@ const App = () => (
           <Route path="/editais-abertos" element={<EditaisAbertos />} />
           <Route path="/avaliar-projeto" element={<AvaliarProjeto />} />
           <Route path="/avaliar-projeto/gerar-textos" element={<GerarTextosAvaliar />} />
+          <Route path="/avaliar-projeto/orcamento" element={<AvaliarProjetoDemoPasso />} />
+          <Route path="/avaliar-projeto/cronograma" element={<AvaliarProjetoDemoPasso />} />
+          <Route path="/avaliar-projeto/documentos" element={<AvaliarProjetoDemoPasso />} />
+          <Route path="/avaliar-projeto/finalizar" element={<AvaliarProjetoDemoPasso />} />
           <Route path="/gerenciar-editais" element={<ProtectedRoute><ExtratorEditaisPage /></ProtectedRoute>} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />

@@ -101,7 +101,7 @@ export function RecentContent() {
                 </Badge>
               </div>
               
-              <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-oraculo-blue transition-colors line-clamp-2">
+              <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-oraculo-blue transition-colors text-clamp-2 break-words">
                 {item.title}
               </h3>
               

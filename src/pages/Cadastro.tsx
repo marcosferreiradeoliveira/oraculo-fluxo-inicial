@@ -31,6 +31,15 @@ const Cadastro = () => {
   const [cadastroConcluido, setCadastroConcluido] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    try {
+      const fromLanding = sessionStorage.getItem('oraculo_landing_email')?.trim();
+      if (fromLanding) setEmail((prev) => prev || fromLanding);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handleGoogleSignIn = async () => {
     setErro('');
     setLoadingGoogle(true);
