@@ -75,6 +75,7 @@ interface Edital {
 }
 
 const ADMIN_EDITAL_UID = 'sCacAc0ShPfafYjpy0t4pBp77Tb2';
+const LANDING_CAMPANHA_EMAIL = 'marcosferreira@mobcontent.com.br';
 
 const DetalhesEdital = () => {
   const { id } = useParams<{ id: string }>();
@@ -85,6 +86,7 @@ const DetalhesEdital = () => {
   const [edital, setEdital] = useState<Edital | null>(null);
   const [loading, setLoading] = useState(true);
   const [gerandoLanding, setGerandoLanding] = useState(false);
+  const podeVerLandingCampanha = user?.email === LANDING_CAMPANHA_EMAIL;
 
   useEffect(() => {
     const fetchEdital = async () => {
@@ -160,7 +162,7 @@ const DetalhesEdital = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!id || !edital?.nome || loading || !canManageEdital) return;
+    if (!id || !edital?.nome || loading || !podeVerLandingCampanha) return;
     if (
       typeof edital.landing_slug === 'string' &&
       isLandingSlugValid(normalizeLandingSlug(edital.landing_slug))
@@ -186,7 +188,7 @@ const DetalhesEdital = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, edital?.nome, edital?.landing_slug, loading, canManageEdital]);
+  }, [id, edital?.nome, edital?.landing_slug, loading, podeVerLandingCampanha]);
 
   const handleExcluirEdital = async () => {
     if (!id) return;
@@ -403,59 +405,61 @@ const DetalhesEdital = () => {
             </Card>
           </div>
 
-          <Card className="mb-8 border-oraculo-purple/20 bg-gradient-to-br from-oraculo-purple/5 to-oraculo-blue/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Sparkles className="h-5 w-5 text-oraculo-purple" />
-                Landing de campanha (simulação de nota)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {landingUrl ? (
-                <>
-                  <p className="text-sm text-gray-600">
-                    Compartilhe este link fora do portal — página dedicada ao edital, sem menu de editais abertos.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                    <code className="flex-1 text-sm bg-white border rounded-lg px-3 py-2 break-all text-oraculo-blue">
-                      {landingUrl}
-                    </code>
-                    <div className="flex gap-2 shrink-0">
-                      <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkLanding()}>
-                        <Copy className="h-4 w-4 mr-1" />
-                        Copiar
-                      </Button>
-                      <Button type="button" size="sm" asChild>
-                        <a href={landingUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-1" />
-                          Abrir
-                        </a>
-                      </Button>
+          {podeVerLandingCampanha ? (
+            <Card className="mb-8 border-oraculo-purple/20 bg-gradient-to-br from-oraculo-purple/5 to-oraculo-blue/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Sparkles className="h-5 w-5 text-oraculo-purple" />
+                  Landing de campanha (simulação de nota)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {landingUrl ? (
+                  <>
+                    <p className="text-sm text-gray-600">
+                      Compartilhe este link fora do portal — página dedicada ao edital, sem menu de editais abertos.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <code className="flex-1 text-sm bg-white border rounded-lg px-3 py-2 break-all text-oraculo-blue">
+                        {landingUrl}
+                      </code>
+                      <div className="flex gap-2 shrink-0">
+                        <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkLanding()}>
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copiar
+                        </Button>
+                        <Button type="button" size="sm" asChild>
+                          <a href={landingUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            Abrir
+                          </a>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <Link2 className="h-3.5 w-3.5" />
-                    Slug: <span className="font-mono">{landingSlug}</span>
-                    {!landingAtiva ? ' · landing desativada' : null}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-gray-600">
-                    {gerandoLanding
-                      ? 'Gerando link da landing de campanha a partir do nome do edital…'
-                      : 'A landing pública é criada automaticamente ao importar o edital. Se o link não aparecer, recarregue a página ou edite o edital.'}
-                  </p>
-                  {gerandoLanding ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-oraculo-purple" />
-                      Aguarde…
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <Link2 className="h-3.5 w-3.5" />
+                      Slug: <span className="font-mono">{landingSlug}</span>
+                      {!landingAtiva ? ' · landing desativada' : null}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600">
+                      {gerandoLanding
+                        ? 'Gerando link da landing de campanha a partir do nome do edital…'
+                        : 'A landing pública é criada automaticamente ao importar o edital. Se o link não aparecer, recarregue a página ou edite o edital.'}
+                    </p>
+                    {gerandoLanding ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-oraculo-purple" />
+                        Aguarde…
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* Escopo */}
           {edital.escopo && (
