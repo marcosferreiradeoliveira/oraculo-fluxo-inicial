@@ -80,8 +80,11 @@ const schema = {
   ],
 };
 
+const DEFAULT_GEMINI_MODEL =
+  (import.meta.env.VITE_GEMINI_MODEL as string | undefined)?.trim() || 'gemini-3.8-flash';
+
 export async function analyzeEdital(text: string): Promise<string> {
-  const model = 'gemini-2.5-flash';
+  const model = DEFAULT_GEMINI_MODEL;
 
   const prompt = `
       Você é um especialista em analisar editais culturais brasileiros. Extraia informações do texto e retorne JSON conforme o schema.
@@ -98,7 +101,6 @@ export async function analyzeEdital(text: string): Promise<string> {
     config: {
       responseMimeType: 'application/json',
       responseSchema: schema,
-      temperature: 0.2,
     },
   });
 

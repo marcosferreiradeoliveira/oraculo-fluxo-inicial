@@ -12,7 +12,6 @@ import {
   buildCadastroRedirectToCriarProjeto,
   clearCriarProjetoDraft,
   readCriarProjetoDraft,
-  readLandingNomeProjeto,
   saveCriarProjetoDraft,
 } from '@/lib/landingToCriarProjeto';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -203,21 +202,21 @@ const CriarProjeto = () => {
   const [searchParams] = useSearchParams();
   const editalIdParam = searchParams.get('edital');
 
-  // Restaura rascunho local ou pré-preenchimento da landing (?nome=)
+  // Restaura rascunho só ao voltar do cadastro (?continuar=true); nome vazio por padrão
   useEffect(() => {
-    const fromLandingFlow = searchParams.get('origem') === 'landing';
-    const draft = fromLandingFlow ? null : readCriarProjetoDraft();
-    if (draft && (draft.nome || draft.descricao || draft.editalAssociado)) {
-      setNome(draft.nome);
-      setDescricao(draft.descricao);
-      if (draft.editalAssociado) setEditalAssociado(draft.editalAssociado);
+    const continuar = searchParams.get('continuar') === 'true';
+    if (continuar) {
+      const draft = readCriarProjetoDraft();
+      if (draft) {
+        setNome(draft.nome);
+        setDescricao(draft.descricao);
+        if (draft.editalAssociado) setEditalAssociado(draft.editalAssociado);
+      }
       setDraftHydrated(true);
       return;
     }
     const fromUrl = searchParams.get('nome')?.trim();
-    const fromLanding = readLandingNomeProjeto();
-    const initialNome = fromUrl || fromLanding;
-    if (initialNome) setNome(initialNome);
+    if (fromUrl) setNome(fromUrl);
     setDraftHydrated(true);
   }, [searchParams]);
 
@@ -621,6 +620,17 @@ const CriarProjeto = () => {
       // Editais em destaque primeiro
       listaFinal.sort((a, b) => ((a as { destaque?: boolean }).destaque ? 0 : 1) - ((b as { destaque?: boolean }).destaque ? 0 : 1));
       setEditais(listaFinal);
+
+      if (editalIdFromUrl) {
+        const fromUrl = listaFinal.find((e) => e.id === editalIdFromUrl);
+        if (fromUrl?.nome) setEditalAssociado(fromUrl.nome);
+      } else {
+        setEditalAssociado((atual) => {
+          if (atual) return atual;
+          const rouanet = listaFinal.find((e) => /rouanet|pronac|salic/i.test(String(e.nome || '')));
+          return rouanet?.nome || atual;
+        });
+      }
     };
     fetchEditais();
     
@@ -1125,12 +1135,6 @@ const CriarProjeto = () => {
               <p className="text-gray-600 text-sm md:text-base break-words">
                 Preencha os detalhes do seu projeto cultural para começar a usar o Oráculo AI.
               </p>
-              {!user && (
-                <p className="mt-2 text-sm text-oraculo-blue/90 bg-oraculo-blue/5 border border-oraculo-blue/20 rounded-lg px-3 py-2">
-                  Você pode escrever sem conta — o rascunho fica salvo neste navegador. Ao clicar em{' '}
-                  <strong>Avaliar com IA</strong>, pedimos cadastro e voltamos com tudo preenchido.
-                </p>
-              )}
             </div>
 
             {/* Barra de progresso - no mobile só etapas 1, 2, 3 e "..."; no desktop todas */}
@@ -1168,16 +1172,6 @@ const CriarProjeto = () => {
                   style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                 ></div>
               </div>
-            </div>
-
-            {/* Box Como funciona a análise do Oráculo - em cima do formulário */}
-            <div className="mb-6 md:mb-8 p-4 md:p-8 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-2 border-oraculo-blue rounded-xl shadow-lg min-w-0">
-              <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-oraculo-blue flex items-center gap-3">
-                <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
-              </h2>
-              <p className="text-gray-700 text-sm md:text-base mb-0 leading-relaxed">
-                Preencha os detalhes abaixo e clique em &quot;Avaliar com IA&quot;. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
-              </p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
@@ -1220,6 +1214,7 @@ const CriarProjeto = () => {
                       className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
                       value={nome}
                       onChange={e => setNome(e.target.value)}
+                      placeholder="Ex.: Festival de música na praça"
                       required
                     />
                   </div>
@@ -1307,6 +1302,14 @@ const CriarProjeto = () => {
                     >
                       {loading || uploading ? 'Salvando...' : <>Avaliar com IA <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span></>}
                     </button>
+                  </div>
+                  <div className="mt-6 p-4 md:p-6 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-2 border-oraculo-blue/30 rounded-xl min-w-0">
+                    <h2 className="text-lg md:text-xl font-bold mb-3 text-oraculo-blue flex items-center gap-2">
+                      <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo
+                    </h2>
+                    <p className="text-gray-700 text-sm md:text-base leading-relaxed mb-0">
+                      Preencha os detalhes acima e clique em &quot;Avaliar com IA&quot;. O Oráculo analisa seu projeto como um avaliador, levando em conta não só os critérios do edital, mas também os últimos selecionados e uma base grande de projetos culturais bem-sucedidos.
+                    </p>
                   </div>
                 </form>
               </div>
