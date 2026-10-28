@@ -83,6 +83,37 @@ const schema = {
 const DEFAULT_GEMINI_MODEL =
   (import.meta.env.VITE_GEMINI_MODEL as string | undefined)?.trim() || 'gemini-3.8-flash';
 
+function formatGeminiApiError(err: unknown): Error {
+  const raw = err instanceof Error ? err.message : String(err);
+  let code: number | undefined;
+  let apiMessage: string | undefined;
+  try {
+    const jsonStart = raw.indexOf('{');
+    if (jsonStart >= 0) {
+      const parsed = JSON.parse(raw.slice(jsonStart)) as {
+        error?: { code?: number; message?: string };
+      };
+      code = parsed.error?.code;
+      apiMessage = parsed.error?.message;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  if (code === 402 || /prepayment credits are depleted|RESOURCE_EXHAUSTED/i.test(raw)) {
+    return new Error(
+      'Créditos prepagos do Gemini esgotados neste projeto Google. Em https://aistudio.google.com → Billing / pagamento, recarregue créditos ou vincule faturamento. Depois tente de novo.',
+    );
+  }
+  if (code === 404 || /no longer available/i.test(raw)) {
+    return new Error(
+      `Modelo Gemini indisponível (${DEFAULT_GEMINI_MODEL}). Ajuste VITE_GEMINI_MODEL no .env ou atualize o app.`,
+    );
+  }
+  if (apiMessage) return new Error(apiMessage);
+  return err instanceof Error ? err : new Error(raw);
+}
+
 export async function analyzeEdital(text: string): Promise<string> {
   const model = DEFAULT_GEMINI_MODEL;
 
@@ -95,14 +126,18 @@ export async function analyzeEdital(text: string): Promise<string> {
       ---
     `;
 
-  const response = await getAiClient().models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: schema,
-    },
-  });
+  try {
+    const response = await getAiClient().models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+      },
+    });
 
-  return response.text ?? '';
+    return response.text ?? '';
+  } catch (err) {
+    throw formatGeminiApiError(err);
+  }
 }
