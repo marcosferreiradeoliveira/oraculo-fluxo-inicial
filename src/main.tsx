@@ -39,7 +39,10 @@ const ErrorFallback = ({ onReload }: { onReload: () => void }) => (
 const initApp = async () => {
   // Se estivermos na rota /prestarcontasfacil, não inicializar a aplicação principal
   // Deixa o Firebase Hosting servir o index.html dessa pasta
-  if (window.location.pathname.startsWith('/prestarcontasfacil')) {
+  if (
+    window.location.pathname.startsWith('/prestarcontasfacil') ||
+    window.location.pathname.startsWith('/avalieseuprojeto')
+  ) {
     return; // Não inicializar - deixa a aplicação standalone carregar
   }
 

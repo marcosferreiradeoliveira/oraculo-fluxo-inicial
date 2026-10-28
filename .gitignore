@@ -25,5 +25,8 @@ dist-ssr
 
 .env
 
+# Landing ads (gerada por npm run build:landing-boost)
+public/avalieseuprojeto/
+
 # HubSpot config file
 hubspot.config.yml

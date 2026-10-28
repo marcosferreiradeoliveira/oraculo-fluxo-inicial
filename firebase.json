@@ -19,6 +19,17 @@
         "destination": "/prestarcontasfacil/index.html"
       },
       {
+        "source": "/avalieseuprojeto/**",
+        "destination": "/avalieseuprojeto/index.html"
+      },
+      {
+        "source": "/api/adicionar-contato-brevo",
+        "function": {
+          "functionId": "adicionarContatoBrevo",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
