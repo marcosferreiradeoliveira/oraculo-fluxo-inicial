@@ -17,9 +17,10 @@ import {
   stashRemarketingLandingMeta,
   syncEditalRemarketingToBrevo,
 } from '@/lib/brevoRemarketing';
+import { EditalLandingPageSkeleton } from '@/components/home/EditalLandingPageSkeleton';
 import { EditalLandingPareceristaPreview } from '@/components/home/EditalLandingPareceristaPreview';
 import NotFound from './NotFound';
-import { Calendar, DollarSign, Download, Lock, Check, Loader2 } from 'lucide-react';
+import { Calendar, DollarSign, Download, Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -143,11 +144,7 @@ export default function EditalLandingPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label="Carregando" />
-      </div>
-    );
+    return <EditalLandingPageSkeleton />;
   }
 
   if (notFound || !config) {
@@ -398,12 +395,6 @@ export default function EditalLandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-200 py-6 text-center text-xs text-zinc-500">
-        © {new Date().getFullYear()} Oráculo Cultural ·{' '}
-        <Link to="/privacidade" className="underline hover:text-zinc-700">
-          Privacidade
-        </Link>
-      </footer>
     </div>
   );
 }

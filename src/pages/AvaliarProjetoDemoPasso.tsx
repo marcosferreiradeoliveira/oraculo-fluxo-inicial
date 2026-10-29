@@ -44,8 +44,8 @@ const PASSOS: Record<
     titulo: 'Cronograma de execução (exemplo)',
     subtitulo: '23 marcos de jan a out/2026 — planejamento, festival, circulação e prestação de contas (demonstração).',
     voltar: '/avaliar-projeto/orcamento',
-    proximo: '/cadastro?redirect=/criar-projeto',
-    proximoLabel: 'Salvar e editar no seu projeto real →',
+    proximo: '/avaliar-projeto/documentos',
+    proximoLabel: 'Documentos de inscrição →',
   },
   documentos: {
     etapaAtiva: 6,
@@ -53,12 +53,12 @@ const PASSOS: Record<
     subtitulo: 'Checklist fictício de certidões e documentos societários.',
     voltar: '/avaliar-projeto/cronograma',
     proximo: '/avaliar-projeto/finalizar',
-    proximoLabel: 'Próximo: Finalizar e Inscrição →',
+    proximoLabel: 'Preencher anexos →',
   },
   finalizar: {
     etapaAtiva: 7,
-    titulo: 'Finalizar e inscrição (exemplo)',
-    subtitulo: 'Última etapa ilustrativa — anexos e envio ao edital no projeto real após cadastro.',
+    titulo: 'Preencher anexos (exemplo)',
+    subtitulo: 'Anexos fictícios do pacote de inscrição — no projeto real você envia PDFs após criar conta.',
     voltar: '/avaliar-projeto/documentos',
     proximo: '/cadastro?redirect=/criar-projeto',
     proximoLabel: 'Criar conta e montar meu projeto →',
@@ -134,8 +134,11 @@ export default function AvaliarProjetoDemoPasso() {
 
   const navegarStepDemo = (index: number) => {
     if (index <= 2) navigate('/avaliar-projeto');
+    else if (index === 3) navigate('/avaliar-projeto/gerar-textos');
     else if (index === 4) navigate('/avaliar-projeto/orcamento');
     else if (index === 5) navigate('/avaliar-projeto/cronograma');
+    else if (index === 6) navigate('/avaliar-projeto/documentos');
+    else if (index === 7) navigate('/avaliar-projeto/finalizar');
   };
 
   const conteudo = (() => {
@@ -283,9 +286,9 @@ export default function AvaliarProjetoDemoPasso() {
             proximoLabel={config.proximoLabel}
             onProximo={() => navigate(config.proximo)}
             onStepClick={navegarStepDemo}
-            verExemploStepIndexes={[4, 5]}
+            maxStepClickIndex={7}
             proximoClassName={
-              slug === 'cronograma'
+              slug === 'finalizar'
                 ? 'bg-[#22C55E] hover:bg-[#1ea34f] text-white font-bold py-3 px-6 rounded-xl w-full sm:w-auto sm:ml-auto border-0 shadow-md'
                 : undefined
             }

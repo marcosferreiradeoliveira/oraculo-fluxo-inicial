@@ -4,18 +4,9 @@ import App from './App';
 import './index.css';
 import { firebaseInit } from './lib/firebase';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AppShellSkeleton } from './components/AppShellSkeleton';
 
 firebaseInit();
-
-// Tela de carregamento
-const LoadingScreen = () => (
-  <div className="flex items-center justify-center min-h-screen bg-gray-50">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-      <p className="text-gray-600">Carregando...</p>
-    </div>
-  </div>
-);
 
 // Componente de erro
 const ErrorFallback = ({ onReload }: { onReload: () => void }) => (
@@ -77,7 +68,7 @@ const initApp = async () => {
 
   try {
     // Mostra tela de carregamento
-    safeRender(<LoadingScreen />);
+    safeRender(<AppShellSkeleton />);
 
     // Inicializa Firebase
     try {

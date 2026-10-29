@@ -11,13 +11,29 @@ import { trackProjectCreated, trackAnalysisStarted, trackAnalysisCompleted, trac
 import {
   buildCadastroRedirectToCriarProjeto,
   clearCriarProjetoDraft,
+  isCriarProjetoContinuarReturn,
+  readInitialCriarProjetoForm,
   readCriarProjetoDraft,
   saveCriarProjetoDraft,
 } from '@/lib/landingToCriarProjeto';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { toast } from 'sonner';
-import { Brain, Loader2, Mic, Square } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Brain, Loader2, Mic, Square, Lock } from 'lucide-react';
+import {
+  calcularNotaGlobalAnalise,
+  extrairPontosFortesPreview,
+  extrairResumoAdequacaoPreview,
+  extrairTrechoAbertoPreview,
+  formatarCorpoParecerParaUi,
+  streamAvaliarProjetoIA,
+} from '@/lib/avaliarProjetoPreview';
+import { fetchEditalParaAvaliacao } from '@/lib/fetchEditalParaAvaliacao';
+import {
+  clearPendingAnalisePreview,
+  pendingAnaliseMatchesForm,
+  readPendingAnalisePreview,
+  savePendingAnalisePreview,
+} from '@/lib/criarProjetoPreview';
 
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 
@@ -174,9 +190,12 @@ const formatarNomeEdital = (s: string) => {
 };
 
 const CriarProjeto = () => {
-  const [nome, setNome] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [editalAssociado, setEditalAssociado] = useState('');
+  const [searchParams] = useSearchParams();
+  const [nome, setNome] = useState(() => readInitialCriarProjetoForm(searchParams).nome);
+  const [descricao, setDescricao] = useState(() => readInitialCriarProjetoForm(searchParams).descricao);
+  const [editalAssociado, setEditalAssociado] = useState(
+    () => readInitialCriarProjetoForm(searchParams).editalAssociado
+  );
   const [editais, setEditais] = useState<any[]>([]);
   const [showUploadEdital, setShowUploadEdital] = useState(false);
   const [novoEdital, setNovoEdital] = useState({
@@ -192,37 +211,56 @@ const CriarProjeto = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
-  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(true);
+  const restoredFromDraftRef = useRef(
+    isCriarProjetoContinuarReturn(searchParams) && !!readCriarProjetoDraft()
+  );
+  const continuarFinalizeRef = useRef(false);
   const [etapasIA] = useState([
     'Salvando projeto',
   ]);
   const [etapaAtualIA, setEtapaAtualIA] = useState<number>(0);
   const [limiteProjetos, setLimiteProjetos] = useState<{ projetosAtivos: number; limite: number; planType: string } | null>(null);
   const [checkingLimit, setCheckingLimit] = useState(true);
-  const [searchParams] = useSearchParams();
   const editalIdParam = searchParams.get('edital');
 
-  // Restaura rascunho só ao voltar do cadastro (?continuar=true); nome vazio por padrão
   useEffect(() => {
-    const continuar = searchParams.get('continuar') === 'true';
-    if (continuar) {
-      const draft = readCriarProjetoDraft();
-      if (draft) {
-        setNome(draft.nome);
-        setDescricao(draft.descricao);
-        if (draft.editalAssociado) setEditalAssociado(draft.editalAssociado);
+    const emailParam = searchParams.get('email')?.trim().toLowerCase();
+    if (emailParam) {
+      try {
+        sessionStorage.setItem('oraculo_landing_email', emailParam);
+      } catch {
+        /* ignore */
       }
-      setDraftHydrated(true);
+    }
+  }, [searchParams]);
+
+  // Prévia da avaliação só aparece após clicar em "Avaliar meu projeto (grátis)" nesta sessão.
+  // O parecer pendente continua em sessionStorage para vincular ao projeto após o cadastro.
+
+  // Se a URL mudar (ex.: navegação interna), reaplica rascunho ao voltar do cadastro
+  useEffect(() => {
+    if (!isCriarProjetoContinuarReturn(searchParams)) {
+      const fromUrl = searchParams.get('nome')?.trim();
+      if (fromUrl) setNome(fromUrl);
       return;
     }
-    const fromUrl = searchParams.get('nome')?.trim();
-    if (fromUrl) setNome(fromUrl);
-    setDraftHydrated(true);
+    const draft = readCriarProjetoDraft();
+    if (draft) {
+      setNome(draft.nome);
+      setDescricao(draft.descricao);
+      if (draft.editalAssociado) setEditalAssociado(draft.editalAssociado);
+      restoredFromDraftRef.current = true;
+    }
   }, [searchParams]);
 
   // Persiste rascunho no navegador enquanto o visitante edita (até criar conta)
   useEffect(() => {
     if (!draftHydrated) return;
+    if (restoredFromDraftRef.current) {
+      restoredFromDraftRef.current = false;
+      return;
+    }
     const editalSel = editais.find((e) => e.nome === editalAssociado);
     saveCriarProjetoDraft({
       nome,
@@ -240,6 +278,123 @@ const CriarProjeto = () => {
   const [erroIA, setErroIA] = useState<string | null>(null);
   const [dicaAtual, setDicaAtual] = useState(0);
   const [projetoId, setProjetoId] = useState<string | null>(null);
+  const [previewVisitanteAtiva, setPreviewVisitanteAtiva] = useState(false);
+  const [analisePreviewVisitante, setAnalisePreviewVisitante] = useState('');
+
+  useEffect(() => {
+    if (!previewVisitanteAtiva || !analisePreviewVisitante.trim()) return;
+    const t = window.setTimeout(() => {
+      document.getElementById('previa-avaliacao-visitante')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [previewVisitanteAtiva, analisePreviewVisitante]);
+
+  /** Volta do cadastro: aplica prévia visitante ao projeto (cria ou atualiza) e abre a avaliação. */
+  useEffect(() => {
+    if (!user || checkingLimit || continuarFinalizeRef.current) return;
+    if (!isCriarProjetoContinuarReturn(searchParams)) return;
+
+    const pending = readPendingAnalisePreview();
+    if (!pending?.analiseConteudo?.trim()) return;
+    if (!pendingAnaliseMatchesForm(pending, nome, descricao)) return;
+
+    continuarFinalizeRef.current = true;
+
+    void (async () => {
+      setLoading(true);
+      setErro('');
+      try {
+        const verificacaoLimite = await verificarLimiteProjetos(user.uid);
+        if (!verificacaoLimite.podeCriar) {
+          continuarFinalizeRef.current = false;
+          setErro(verificacaoLimite.mensagem);
+          setLoading(false);
+          return;
+        }
+
+        const db = getFirestore();
+        const projetosSnap = await getDocs(
+          query(collection(db, 'projetos'), where('user_id', '==', user.uid)),
+        );
+        const nomeNorm = pending.nome.trim();
+        const semAnalise = projetosSnap.docs
+          .filter((d) => {
+            const data = d.data();
+            return (
+              String(data.nome || '').trim() === nomeNorm &&
+              !String(data.analise_ia || '').trim()
+            );
+          })
+          .sort((a, b) => {
+            const ta = a.data().data_criacao?.toMillis?.() ?? 0;
+            const tb = b.data().data_criacao?.toMillis?.() ?? 0;
+            return tb - ta;
+          });
+
+        if (semAnalise.length > 0) {
+          const alvo = semAnalise[0];
+          await updateDoc(alvo.ref, {
+            analise_ia: pending.analiseConteudo,
+            primeira_analise_completa: true,
+            data_atualizacao: serverTimestamp(),
+            etapa_atual: 2,
+          });
+          clearPendingAnalisePreview();
+          clearCriarProjetoDraft();
+          toast.success('Sua avaliação foi restaurada no projeto.');
+          navigate(`/projeto/${alvo.id}`);
+          return;
+        }
+
+        let editalId = pending.editalId || '';
+        if (!editalId && pending.editalAssociado) {
+          const editalSel = editais.find((e) => e.nome === pending.editalAssociado);
+          editalId = editalSel?.id || editalIdParam || '';
+        }
+
+        const projetoData: Record<string, unknown> = {
+          nome: pending.nome.trim(),
+          descricao: pending.descricao.trim(),
+          data_criacao: serverTimestamp(),
+          data_atualizacao: serverTimestamp(),
+          user_id: user.uid,
+          etapa_atual: 2,
+          analise_ia: pending.analiseConteudo,
+          primeira_analise_completa: true,
+        };
+        if (editalId) {
+          projetoData.edital_id = editalId;
+          projetoData.edital_associado = pending.editalAssociado;
+        }
+
+        const docRef = await addDoc(collection(db, 'projetos'), projetoData);
+        await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        trackProjectCreated({ projectId: docRef.id, hasEdital: !!editalId });
+        clearPendingAnalisePreview();
+        clearCriarProjetoDraft();
+        toast.success('Projeto criado com sua avaliação da prévia.');
+        navigate(`/projeto/${docRef.id}`);
+      } catch (err) {
+        console.error('[criar-projeto continuar]', err);
+        continuarFinalizeRef.current = false;
+        setErro('Não foi possível restaurar a avaliação. Tente salvar o projeto novamente.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [
+    user,
+    checkingLimit,
+    searchParams,
+    nome,
+    descricao,
+    editais,
+    editalIdParam,
+    navigate,
+  ]);
 
   // Áudio: gravação e transcrição por IA (até 2 min)
   const [isRecording, setIsRecording] = useState(false);
@@ -917,16 +1072,64 @@ const CriarProjeto = () => {
           editalAssociado,
           editalId: editalSel?.id || editalId || editalIdParam || undefined,
         });
-        const params = new URLSearchParams();
-        if (editalIdParam) params.set('edital', editalIdParam);
-        else if (editalSel?.id) params.set('edital', editalSel.id);
-        params.set('continuar', '1');
-        const returnPath = `/criar-projeto${params.toString() ? `?${params.toString()}` : ''}`;
-        toast.message('Rascunho salvo neste navegador', {
-          description: 'Crie sua conta para salvar o projeto e rodar a avaliação com IA.',
-        });
-        navigate(buildCadastroRedirectToCriarProjeto(returnPath));
-        setLoading(false);
+
+        setMostrarAnalise(true);
+        setAnalisando(true);
+        setErroIA(null);
+        setStatusIA('Analisando seu projeto com IA...');
+        setSubEtapasIA(['Lendo edital e critérios...']);
+
+        try {
+          const editalData = await fetchEditalParaAvaliacao({
+            editalId: editalSel?.id || editalId || editalIdParam || null,
+            nomeHint: editalAssociado,
+            tituloFallback: editalAssociado,
+          });
+
+          if (!editalData.criterios.trim()) {
+            throw new Error(
+              'Selecione um edital com critérios cadastrados ou aguarde o catálogo carregar.',
+            );
+          }
+
+          const fullContent = await streamAvaliarProjetoIA(
+            {
+              projetoId: null,
+              textoProjeto: descricao.trim().slice(0, 2000),
+              nomeProjeto: nome.trim(),
+              nomeEdital: editalData.nomeEdital,
+              criteriosEdital: editalData.criterios,
+              textoEdital: editalData.texto_edital,
+              portfolio: '',
+              projetosSelecionados: editalData.texto_selecionados.slice(0, 2000),
+              stream: true,
+            },
+            (partial) => setAnalisePreviewVisitante(partial),
+          );
+
+          if (!fullContent.trim()) {
+            throw new Error('A análise não retornou conteúdo. Tente novamente.');
+          }
+
+          setAnalisePreviewVisitante(fullContent);
+          savePendingAnalisePreview({
+            analiseConteudo: fullContent,
+            nome: nome.trim(),
+            descricao: descricao.trim(),
+            editalAssociado,
+            editalId: editalSel?.id || editalId || editalIdParam || undefined,
+          });
+          setPreviewVisitanteAtiva(true);
+          toast.success('Prévia da avaliação pronta — crie sua conta para ver o parecer completo.');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Erro ao analisar. Tente novamente.';
+          setErro(msg);
+          toast.error(msg);
+        } finally {
+          setAnalisando(false);
+          setMostrarAnalise(false);
+          setLoading(false);
+        }
         return;
       }
 
@@ -945,14 +1148,21 @@ const CriarProjeto = () => {
       console.log('Salvando projeto no Firestore...');
       // Salva no Firestore
       const db = getFirestore();
+      const pending = readPendingAnalisePreview();
+      const pendingCombina = pendingAnaliseMatchesForm(pending, nome, descricao);
+
       const projetoData: any = {
         nome,
         descricao,
         data_criacao: serverTimestamp(),
         data_atualizacao: serverTimestamp(),
         user_id: user.uid,
-        etapa_atual: 1, // já vai para Avaliar com IA
+        etapa_atual: 1,
       };
+
+      if (pendingCombina) {
+        projetoData.analise_ia = pending.analiseConteudo;
+      }
       
       console.log('Dados do projeto a serem salvos:', projetoData);
       
@@ -967,7 +1177,8 @@ const CriarProjeto = () => {
       console.log('Projeto criado com ID:', docRef.id);
 
       clearCriarProjetoDraft();
-      
+      if (pendingCombina) clearPendingAnalisePreview();
+
       const userRef = doc(db, 'usuarios', user.uid);
       await updateDoc(userRef, { projetos_criados_count: increment(1) });
       
@@ -979,8 +1190,11 @@ const CriarProjeto = () => {
       
       // Iniciar análise imediatamente na mesma tela
       setProjetoId(docRef.id);
-      // Não fazer setLoading(false) aqui, pois a análise vai continuar
-      // O loading será desabilitado quando a análise terminar ou houver erro
+      if (pendingCombina) {
+        setLoading(false);
+        navigate(`/projeto/${docRef.id}`);
+        return;
+      }
       await analisarComIA(nome, descricao, editalAssociado || null, docRef.id);
     } catch (err) {
       console.error('Erro ao criar projeto:', err);
@@ -988,6 +1202,22 @@ const CriarProjeto = () => {
       setLoading(false);
     }
   };
+
+  const previewNotaVisitante = calcularNotaGlobalAnalise(analisePreviewVisitante);
+  const previewPontosLista = extrairPontosFortesPreview(analisePreviewVisitante);
+  const previewAdequacao = extrairResumoAdequacaoPreview(analisePreviewVisitante);
+  const previewTrechoFallback = extrairTrechoAbertoPreview(analisePreviewVisitante);
+  const previewCorpoBlur = formatarCorpoParecerParaUi(analisePreviewVisitante, 3200);
+
+  const cadastroAposPreviewUrl = (() => {
+    const params = new URLSearchParams();
+    const editalSel = editais.find((e) => e.nome === editalAssociado);
+    if (editalIdParam) params.set('edital', editalIdParam);
+    else if (editalSel?.id) params.set('edital', editalSel.id);
+    params.set('continuar', 'true');
+    const qs = params.toString();
+    return buildCadastroRedirectToCriarProjeto(qs ? `/criar-projeto?${qs}` : '/criar-projeto');
+  })();
 
   // Show loading popup when analyzing
   if (mostrarAnalise && analisando) {
@@ -1245,46 +1475,49 @@ const CriarProjeto = () => {
                   </div>
                   <div className="min-w-0">
                     <label className="block text-sm font-medium mb-1 text-gray-700">Descrição do projeto</label>
-                    <div className="flex flex-col gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={isRecording ? () => stopRecordingRef.current() : startRecording}
-                        disabled={transcribing && !isRecording}
-                        className={`w-full sm:w-auto border-2 rounded-xl py-4 px-6 font-semibold flex items-center justify-center gap-2 ${
-                          isRecording
-                            ? 'border-red-400 bg-red-50 text-red-700 hover:bg-red-100'
-                            : 'border-oraculo-blue bg-oraculo-blue/5 text-oraculo-blue hover:bg-oraculo-blue/10'
-                        }`}
-                      >
-                        {isRecording ? (
-                          <>
-                            <Square className="h-5 w-5" />
-                            Parar gravação ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}/2:00)
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="h-5 w-5" />
-                            Conte sobre seu projeto em 2 minutos
-                          </>
-                        )}
-                      </Button>
-                      {isRecording && transcriptLive && (
-                        <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 max-h-32 overflow-y-auto">
-                          <p className="font-medium text-gray-500 mb-1">Transcrição em tempo real:</p>
-                          <p className="whitespace-pre-wrap">{transcriptLive}</p>
-                          <span className="inline-block w-2 h-4 bg-oraculo-blue animate-pulse align-middle ml-0.5" />
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500">ou escreva sobre o projeto abaixo</p>
-                    </div>
                     <textarea
-                      className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[160px] box-border mt-2"
+                      className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition min-h-[160px] box-border"
                       value={descricao}
                       onChange={e => setDescricao(e.target.value)}
                       required
-                      placeholder="Cole ou escreva aqui todas as informações do seu projeto cultural. Você também pode usar o botão acima para falar (até 2 minutos). Depois vamos refinar o projeto com uso de IA."
+                      placeholder="Cole ou escreva aqui todas as informações do seu projeto cultural. Depois vamos refinar o projeto com uso de IA."
                     />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={isRecording ? () => stopRecordingRef.current() : startRecording}
+                        disabled={transcribing && !isRecording}
+                        aria-label={
+                          isRecording
+                            ? 'Parar gravação de voz'
+                            : 'Contar sobre o projeto em voz, até 2 minutos'
+                        }
+                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:ring-offset-1 disabled:opacity-50 ${
+                          isRecording
+                            ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100'
+                            : 'border-gray-300 bg-white text-gray-600 hover:border-oraculo-blue/40 hover:text-oraculo-blue'
+                        }`}
+                      >
+                        {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      </button>
+                      {transcribing && !isRecording ? (
+                        <span className="text-xs text-gray-500">Transcrevendo áudio…</span>
+                      ) : isRecording ? (
+                        <span className="text-xs font-medium text-red-600">
+                          Gravando {Math.floor(recordingSeconds / 60)}:
+                          {(recordingSeconds % 60).toString().padStart(2, '0')} / 2:00 — toque para parar
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">Conte em voz (até 2 min)</span>
+                      )}
+                    </div>
+                    {isRecording && transcriptLive && (
+                      <div className="mt-2 p-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 max-h-32 overflow-y-auto">
+                        <p className="font-medium text-gray-500 mb-1 text-xs">Transcrição em tempo real</p>
+                        <p className="whitespace-pre-wrap">{transcriptLive}</p>
+                        <span className="inline-block w-2 h-4 bg-oraculo-blue animate-pulse align-middle ml-0.5" />
+                      </div>
+                    )}
                   </div>
                   {erro && <div className="text-red-500 text-sm text-center">{erro}</div>}
                   {loading && (
@@ -1300,9 +1533,91 @@ const CriarProjeto = () => {
                       className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition disabled:opacity-70"
                       disabled={loading || uploading || (showUploadEdital && !novoEdital.nome)}
                     >
-                      {loading || uploading ? 'Salvando...' : <>Avaliar com IA <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span></>}
+                      {loading || uploading
+                        ? 'Analisando...'
+                        : user
+                          ? <>Avaliar com IA <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span></>
+                          : 'Avaliar meu projeto (grátis)'}
                     </button>
                   </div>
+
+                  {previewVisitanteAtiva && analisePreviewVisitante && !user && (
+                    <div
+                      id="previa-avaliacao-visitante"
+                      className="mt-8 overflow-hidden rounded-xl shadow-lg border-t-4 border-oraculo-blue"
+                    >
+                      <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white px-5 py-4 flex items-center gap-3">
+                        <Brain className="h-7 w-7 shrink-0" aria-hidden />
+                        <div>
+                          <h2 className="text-lg font-bold">Análise do Oráculo</h2>
+                          <p className="text-xs text-white/85">Prévia do seu projeto — parecer completo após cadastro</p>
+                        </div>
+                      </div>
+                      <div className="bg-white p-5 md:p-6 space-y-5">
+                        {previewNotaVisitante ? (
+                          <div className="rounded-2xl bg-gradient-to-r from-oraculo-blue/85 to-oraculo-purple/85 p-5 text-white text-center">
+                            <p className="text-xs uppercase tracking-wide text-white/80 mb-1">Nota estimada</p>
+                            <p className="text-5xl font-black tabular-nums">{previewNotaVisitante.notaGlobal}</p>
+                            <p className="text-sm opacity-90">de {previewNotaVisitante.notaMaximaTotal} pontos</p>
+                          </div>
+                        ) : null}
+                        {previewAdequacao ? (
+                          <div className="rounded-xl border border-oraculo-blue/20 bg-oraculo-blue/5 p-4 md:p-5">
+                            <p className="text-xs font-semibold uppercase text-oraculo-purple mb-2">
+                              Prévia — adequação ao edital
+                            </p>
+                            <p className="text-sm md:text-base text-gray-800 leading-relaxed whitespace-pre-wrap">
+                              {previewAdequacao}
+                            </p>
+                          </div>
+                        ) : null}
+                        {previewPontosLista.length > 0 ? (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 md:p-5">
+                            <p className="text-xs font-semibold uppercase text-emerald-800 mb-3">
+                              Pontos fortes do seu projeto (prévia)
+                            </p>
+                            <ul className="space-y-3 text-sm md:text-base text-gray-800 leading-relaxed list-none">
+                              {previewPontosLista.map((item, idx) => (
+                                <li key={idx} className="flex gap-2">
+                                  <span className="text-emerald-600 font-bold shrink-0">{idx + 1}.</span>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : previewTrechoFallback ? (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
+                            <p className="text-xs font-semibold uppercase text-emerald-800 mb-2">
+                              Trecho do parecer
+                            </p>
+                            <p className="text-sm text-gray-800 leading-relaxed">{previewTrechoFallback}</p>
+                          </div>
+                        ) : null}
+                        <div className="relative rounded-xl border-2 border-gray-200 overflow-hidden min-h-[280px]">
+                          <div
+                            className="p-5 md:p-6 blur-[5px] select-none pointer-events-none text-sm md:text-base text-gray-700 leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-hidden"
+                            aria-hidden
+                          >
+                            {previewCorpoBlur || analisePreviewVisitante}
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 top-[38%] flex flex-col items-center justify-end bg-gradient-to-b from-transparent via-white/75 to-white/95 px-5 pb-8 pt-16 text-center gap-3">
+                            <Lock className="h-9 w-9 text-oraculo-purple" aria-hidden />
+                            <p className="text-sm font-semibold text-gray-900 max-w-sm">
+                              Critérios, pontos fracos, sugestões e nota detalhada — desbloqueie criando sua conta
+                              gratuita.
+                            </p>
+                            <Link
+                              to={cadastroAposPreviewUrl}
+                              className="inline-flex items-center justify-center bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 px-5 rounded-lg font-semibold shadow hover:opacity-90 transition text-sm"
+                            >
+                              Criar conta e ver parecer completo →
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-6 p-4 md:p-6 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 border-2 border-oraculo-blue/30 rounded-xl min-w-0">
                     <h2 className="text-lg md:text-xl font-bold mb-3 text-oraculo-blue flex items-center gap-2">
                       <span role="img" aria-label="Dica">🤖</span> Como funciona a análise do Oráculo

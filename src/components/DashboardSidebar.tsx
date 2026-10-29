@@ -44,7 +44,7 @@ const menuItems: MenuItem[] = [
   { title: 'Início', url: '/', icon: Home, menuItem: 'inicio' },
   { title: 'Meus Projetos', url: '/oraculo-ai', icon: Plus, menuItem: 'meus_projetos' },
   { title: 'Editais Abertos', url: '/editais-abertos', icon: Calendar, menuItem: 'editais' },
-  { title: 'Fornecedores', url: '/#fornecedores', icon: Users, menuItem: 'fornecedores' },
+  { title: 'Fornecedores', url: '/fornecedores', icon: Users, menuItem: 'fornecedores' },
   { title: 'Conta', url: '/conta', icon: User, menuItem: 'perfil' },
   { title: 'Suporte', url: '/suporte', icon: HelpCircle, menuItem: 'suporte' },
   {
@@ -72,21 +72,11 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-function normalizeHash(hash: string): string {
-  const h = (hash || '').trim().toLowerCase();
-  if (!h) return '';
-  return h.startsWith('#') ? h : `#${h}`;
-}
-
 function isMenuItemActive(item: MenuItem, location: Location): boolean {
   const { pathname } = location;
-  const hash = normalizeHash(location.hash);
 
   if (item.menuItem === 'inicio') {
-    return pathname === '/' && hash !== '#fornecedores';
-  }
-  if (item.menuItem === 'fornecedores') {
-    return pathname === '/' && hash === '#fornecedores';
+    return pathname === '/';
   }
 
   const path = item.url.split('#')[0];
@@ -98,6 +88,7 @@ function isMenuItemActive(item: MenuItem, location: Location): boolean {
     '/suporte',
     '/oraculo-ai',
     '/inteligencia-mercado',
+    '/fornecedores',
   ]);
   if (exactPaths.has(path)) {
     return pathname === path || pathname.startsWith(`${path}/`);
@@ -109,9 +100,6 @@ function isMenuItemActive(item: MenuItem, location: Location): boolean {
 function menuItemNavTo(item: MenuItem): string | { pathname: string; hash?: string } {
   if (item.menuItem === 'inicio') {
     return '/';
-  }
-  if (item.menuItem === 'fornecedores') {
-    return { pathname: '/', hash: 'fornecedores' };
   }
   return item.url.split('#')[0] || item.url;
 }
@@ -284,7 +272,7 @@ export function DashboardSidebar() {
             </button>
           ) : (
             <Link
-              to="/cadastro?mode=login"
+              to="/cadastro"
               className="flex items-center justify-center w-full gap-2 px-4 py-3 rounded-lg text-white bg-gradient-to-r from-oraculo-blue to-oraculo-purple font-medium transition-opacity hover:opacity-95"
             >
               <User className="h-5 w-5" />

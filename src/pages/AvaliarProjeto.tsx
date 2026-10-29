@@ -9,7 +9,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import CriarImg from '@/assets/Criar.jpeg';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, Loader2, Check, CheckCircle, ChevronDown } from 'lucide-react';
+import { Brain, Loader2, Check, CheckCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
 import {
@@ -21,8 +21,17 @@ import {
 import {
   saveAvaliarProjetoDemoSession,
   ensureDemoSessionWithTextos,
+  loadAvaliarProjetoDemoSession,
   DEMO_AVALIAR_ROUTES,
 } from '@/lib/avaliarProjetoDemoSession';
+import {
+  calcularNotaGlobalAnalise,
+  extrairPrimeiroPontoForte,
+  extrairTrechoAbertoPreview,
+  formatarCorpoParecerParaUi,
+  streamAvaliarProjetoIA,
+} from '@/lib/avaliarProjetoPreview';
+import { fetchEditalParaAvaliacao } from '@/lib/fetchEditalParaAvaliacao';
 
 const dicasProjetos = [
   "💡 Dica: Seja específico e detalhado na descrição do seu projeto. Quanto mais informações você fornecer, melhor será a avaliação.",
@@ -107,21 +116,72 @@ const parsearSecoesAnalise = (texto: string): Array<{ titulo?: string; conteudo:
   return resultado;
 };
 
-const extrairItensListaAnalise = (conteudo: string, maxItems: number): string[] =>
-  conteudo
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith('-'))
-    .slice(0, maxItems)
-    .map((l) => l.replace(/^[-•]\s*/, '').trim())
-    .filter(Boolean);
+/** Renderiza corpo de seção com listas e rótulos em negrito (mesmo visual durante e após o streaming). */
+const renderizarConteudoSecaoAnalise = (conteudo: string): React.ReactNode => {
+  if (!conteudo.trim()) return null;
+  const linhas = conteudo.split('\n');
+  const nodes: React.ReactNode[] = [];
+  let listBuffer: string[] = [];
 
-const acharSecaoAnalise = (
-  secoes: Array<{ titulo?: string; conteudo: string }>,
-  padrao: RegExp,
-): { titulo?: string; conteudo: string } | undefined => secoes.find((s) => s.titulo && padrao.test(s.titulo));
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    nodes.push(
+      <ul key={`ul-${nodes.length}`} className="list-disc pl-5 space-y-2 my-3 text-gray-700">
+        {listBuffer.map((item, i) => {
+          const txt = item.replace(/^[-•]\s*/, '').trim();
+          const colon = txt.indexOf(':');
+          if (colon > 0 && colon < 96) {
+            const label = txt.slice(0, colon + 1);
+            const rest = txt.slice(colon + 1).trim();
+            return (
+              <li key={i} className="leading-relaxed text-sm md:text-base">
+                <span className="font-semibold text-gray-900">{label}</span>
+                {rest ? ` ${rest}` : null}
+              </li>
+            );
+          }
+          const sug = txt.match(/^Sugestão:\s*(.*)/i);
+          if (sug) {
+            return (
+              <li key={i} className="leading-relaxed list-none -ml-5 pl-0 text-sm md:text-base">
+                <span className="font-semibold text-oraculo-purple">Sugestão:</span> {sug[1]}
+              </li>
+            );
+          }
+          return (
+            <li key={i} className="leading-relaxed text-sm md:text-base">
+              {txt}
+            </li>
+          );
+        })}
+      </ul>,
+    );
+    listBuffer = [];
+  };
 
-const DEMO_ETAPAS_TOUR_EXEMPLO = [4, 5];
+  for (const raw of linhas) {
+    const line = raw.trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+    if (line.startsWith('-') || line.startsWith('•')) {
+      listBuffer.push(line);
+      continue;
+    }
+    flushList();
+    nodes.push(
+      <p key={`p-${nodes.length}`} className="text-sm md:text-base leading-relaxed text-gray-700 my-2">
+        {limparMarkdown(line)}
+      </p>,
+    );
+  }
+  flushList();
+  return <div className="space-y-1">{nodes}</div>;
+};
+
+/** Etapas clicáveis no tour visitante (após análise pronta) */
+const DEMO_ETAPAS_NAVEGAVEIS_MAX = 7;
 
 // Função para extrair sugestões (igual Projeto.tsx)
 const extrairSugestoes = (analiseTexto: string): string[] => {
@@ -257,6 +317,7 @@ const AvaliarProjeto = () => {
   const editalNomeParam = searchParams.get('editalNome')?.trim() ?? '';
   const origemParam = searchParams.get('origem')?.trim() ?? '';
   const emailLandingParam = searchParams.get('email')?.trim().toLowerCase() ?? '';
+  const resumeLanding = searchParams.get('resumeLanding') === '1';
   const iniciarDireto = searchParams.get('iniciar') === '1';
   const [user] = useAuthState(auth);
   const modoDemoVisitante = !user;
@@ -287,8 +348,11 @@ const AvaliarProjeto = () => {
   const [textoAnterior, setTextoAnterior] = useState<string>('');
   const [sugestaoPersonalizada, setSugestaoPersonalizada] = useState('');
   const [aplicandoSugestaoPersonalizada, setAplicandoSugestaoPersonalizada] = useState(false);
+  /** Visitante recebeu parecer da IA (prévia antes do cadastro) */
+  const [analiseRealVisitante, setAnaliseRealVisitante] = useState(false);
   const refSecaoAnalise = useRef<HTMLDivElement>(null);
   const resolvendoEditalLanding = useRef(false);
+  const sessaoVisitanteRestaurada = useRef(false);
 
   useEffect(() => {
     if (origemParam === 'landing-ads' && emailLandingParam) {
@@ -318,18 +382,20 @@ const AvaliarProjeto = () => {
   }, [analisando, mostrarAnalise]);
 
   const fetchEditalData = async (editalNome: string) => {
-    const db = getFirestore();
-    const q = query(collection(db, 'editais'), where('nome', '==', editalNome));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      const d = snap.docs[0].data();
-      return {
-        texto_edital: d.texto_edital || '',
-        criterios: d.criterios || '',
-        texto_selecionados: d.texto_selecionados || '',
-      };
-    }
-    return { texto_edital: '', criterios: '', texto_selecionados: '' };
+    const editalId =
+      editalIdParam ||
+      editais.find((e) => e.nome === editalNome)?.id ||
+      null;
+    const data = await fetchEditalParaAvaliacao({
+      editalId,
+      nomeHint: editalNomeParam || editalNome,
+      tituloFallback: editalNome,
+    });
+    return {
+      texto_edital: data.texto_edital,
+      criterios: data.criterios,
+      texto_selecionados: data.texto_selecionados,
+    };
   };
 
   useEffect(() => {
@@ -450,7 +516,8 @@ const AvaliarProjeto = () => {
     return 'Lei Rouanet (PRONAC)';
   };
 
-  const persistirSessaoDemo = (fullContent: string) => {
+  const persistirSessaoDemo = (fullContent: string, opts?: { analiseReal?: boolean }) => {
+    const real = opts?.analiseReal ?? analiseRealVisitante;
     saveAvaliarProjetoDemoSession(
       ensureDemoSessionWithTextos({
         nome,
@@ -461,11 +528,40 @@ const AvaliarProjeto = () => {
         origem: origemParam || 'demo',
         email: emailLandingParam || undefined,
         modoDemonstracao: true,
+        analiseReal: real,
+        parecerDesbloqueado: false,
       }),
     );
   };
 
-  // Landing / ?iniciar=1: análise direta (visitante = parecer pré-gravado com streaming)
+  // Visitante: restaurar prévia real da landing ou sessão anterior
+  useEffect(() => {
+    if (user || sessaoVisitanteRestaurada.current) return;
+    const session = loadAvaliarProjetoDemoSession();
+    const conteudo = session?.analiseConteudo?.trim();
+    if (!conteudo || conteudo === 'demonstracao-modulo1' || session.parecerDesbloqueado) return;
+    sessaoVisitanteRestaurada.current = true;
+    if (session.nome) setNome(session.nome);
+    if (session.descricao) {
+      setDescricao(session.descricao);
+      setDescricaoEditada(session.descricao);
+    }
+    if (session.editalAssociado) setEditalAssociado(session.editalAssociado);
+    setAnaliseConteudo(conteudo);
+    setAnaliseRealVisitante(session.analiseReal !== false);
+    const sugestoesExtraidas = extrairSugestoes(conteudo);
+    setSugestoes(sugestoesExtraidas);
+    setAprovacoes(new Array(sugestoesExtraidas.length).fill(false));
+    setVeioDiretoParaAnalise(false);
+    if (resumeLanding) {
+      const qs = new URLSearchParams(searchParams);
+      qs.delete('resumeLanding');
+      const tail = qs.toString();
+      navigate(tail ? `/avaliar-projeto?${tail}` : '/avaliar-projeto', { replace: true });
+    }
+  }, [user, resumeLanding, searchParams, navigate]);
+
+  // Landing / ?iniciar=1: análise direta (visitante = IA real com prévia antes do cadastro)
   useEffect(() => {
     if (!autoIniciarDemo || iniciarJaDisparado.current) return;
 
@@ -514,35 +610,78 @@ const AvaliarProjeto = () => {
       setErroIA(null);
       setAnaliseConteudo('');
       setAnalisando(true);
-      setStatusIA('Analisando critérios do edital (demonstração)...');
-      setSubEtapasIA(['Projeto fictício — parecer já pronto, efeito de streaming']);
+      setStatusIA('Analisando seu projeto com IA...');
+      setSubEtapasIA(['Lendo edital e critérios...', 'Gerando parecer personalizado...']);
 
       await new Promise((resolve) => {
         requestAnimationFrame(() => setTimeout(resolve, 80));
       });
 
       try {
-        const fullContent = await executarAvaliacaoDemonstracao({
-          setStatus: setStatusIA,
-          setSubEtapas: setSubEtapasIA,
-          setConteudo: setAnaliseConteudo,
+        const editalData = await fetchEditalData(editalDemo);
+        if (!editalData.criterios?.trim()) {
+          setAnaliseRealVisitante(false);
+          setStatusIA('Analisando critérios do edital (demonstração)...');
+          setSubEtapasIA(['Exemplo guiado — edital sem critérios no catálogo']);
+          const fullContent = await executarAvaliacaoDemonstracao({
+            setStatus: setStatusIA,
+            setSubEtapas: setSubEtapasIA,
+            setConteudo: setAnaliseConteudo,
+          });
+          const sugestoesExtraidas = extrairSugestoes(fullContent);
+          setSugestoes(sugestoesExtraidas);
+          setAprovacoes(new Array(sugestoesExtraidas.length).fill(false));
+          setDescricaoEditada(descricao);
+          persistirSessaoDemo(fullContent, { analiseReal: false });
+          setAnalisando(false);
+          setMostrarAnalise(false);
+          setStatusIA('');
+          setVeioDiretoParaAnalise(false);
+          return;
+        }
+
+        setAnaliseRealVisitante(true);
+        const payload = {
+          projetoId: null as null,
+          textoProjeto: descricao.slice(0, 2000),
+          nomeProjeto: nome,
+          nomeEdital: editalDemo,
+          criteriosEdital: editalData.criterios,
+          textoEdital: editalData.texto_edital,
+          portfolio: '',
+          projetosSelecionados: (editalData.texto_selecionados || '').slice(0, 2000),
+          stream: true as const,
+        };
+
+        const fullContent = await streamAvaliarProjetoIA(payload, (partial) => {
+          setAnaliseConteudo(partial);
         });
 
+        if (!fullContent.trim()) {
+          setErroIA('A análise não retornou conteúdo. Tente novamente.');
+          setAnalisando(false);
+          setMostrarAnalise(false);
+          setStatusIA('');
+          return;
+        }
+
+        setAnaliseConteudo(fullContent);
         const sugestoesExtraidas = extrairSugestoes(fullContent);
         setSugestoes(sugestoesExtraidas);
         setAprovacoes(new Array(sugestoesExtraidas.length).fill(false));
         setDescricaoEditada(descricao);
-        persistirSessaoDemo(fullContent);
+        persistirSessaoDemo(fullContent, { analiseReal: true });
         setAnalisando(false);
         setMostrarAnalise(false);
         setStatusIA('');
         setVeioDiretoParaAnalise(false);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Erro na demonstração.';
+        const msg = err instanceof Error ? err.message : 'Erro na análise.';
         setErroIA(msg);
         setAnalisando(false);
         setMostrarAnalise(false);
         setStatusIA('');
+        setAnaliseRealVisitante(false);
       }
       return;
     }
@@ -1023,10 +1162,10 @@ const AvaliarProjeto = () => {
         setEditalAssociado(dados.editalAssociado || editalAssociado);
         if (dados.analiseConteudo) {
           setAnaliseConteudo(dados.analiseConteudo);
-          // Extrair sugestões da análise restaurada
+          setAnaliseRealVisitante(Boolean(dados.analiseReal));
           const sugestoesExtraidas = extrairSugestoes(dados.analiseConteudo);
           setSugestoes(sugestoesExtraidas);
-          setAprovacoes(new Array(sugestoesExtraidas.length).fill(false)); // Inicializar array de aprovações
+          setAprovacoes(new Array(sugestoesExtraidas.length).fill(false));
         }
         sessionStorage.removeItem('avaliarProjeto_dados');
         // Se tem análise, criar projeto automaticamente
@@ -1039,8 +1178,14 @@ const AvaliarProjeto = () => {
 
   // Mostrar tela das musas só até chegar o primeiro chunk; depois exibir análise em streaming
   const sugestoesAplicadasDemo = aprovacoes.filter(Boolean).length;
-  const usarResumoAnaliseDemo = modoDemoVisitante && !analisando && Boolean(analiseConteudo.trim());
   const cadastroDemoUrl = '/cadastro?redirect=/avaliar-projeto';
+  const parecerBloqueadoVisitante = modoDemoVisitante && analiseRealVisitante;
+  const previewNotaResumo = calcularNotaGlobalAnalise(analiseConteudo);
+  const previewPontoForte = extrairPrimeiroPontoForte(analiseConteudo);
+  const previewTrechoAberto =
+    previewPontoForte || extrairTrechoAbertoPreview(analiseConteudo);
+  const previewCorpoBlur = formatarCorpoParecerParaUi(analiseConteudo);
+  const exibirParecerCompleto = !parecerBloqueadoVisitante;
 
   const soMostrarMusas =
     !modoDemoVisitante && mostrarAnalise && analisando && !analiseConteudo.trim();
@@ -1353,9 +1498,8 @@ const AvaliarProjeto = () => {
                     {steps.map((step, index) => {
                       const etapaAtualAnalise = 2; // Alterar com IA = step atual quando está na tela de análise
                       const analisePronta = Boolean(analiseConteudo.trim());
-                      const etapaExemplo = modoDemoVisitante && DEMO_ETAPAS_TOUR_EXEMPLO.includes(index);
                       const podeNavegar = modoDemoVisitante
-                        ? analisePronta && (index <= etapaAtualAnalise || etapaExemplo)
+                        ? analisePronta && index <= DEMO_ETAPAS_NAVEGAVEIS_MAX
                         : index <= etapaAtualAnalise || (index === 3 && analiseConteudo);
                       return (
                         <div key={index} className="flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0">
@@ -1363,9 +1507,9 @@ const AvaliarProjeto = () => {
                             onClick={() => podeNavegar && criarProjetoEContinuar(index)}
                             className={`h-8 w-8 rounded-full flex items-center justify-center ${
                               podeNavegar
-                                ? etapaExemplo
-                                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer ring-2 ring-indigo-200'
-                                  : 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90 cursor-pointer'
+                                ? index === etapaAtualAnalise
+                                  ? 'bg-oraculo-blue text-white hover:bg-oraculo-blue/90 cursor-pointer ring-2 ring-oraculo-blue/30'
+                                  : 'bg-oraculo-blue/90 text-white hover:bg-oraculo-blue cursor-pointer'
                                 : 'bg-gray-200 text-gray-600 cursor-not-allowed'
                             }`}
                             disabled={!podeNavegar}
@@ -1378,21 +1522,14 @@ const AvaliarProjeto = () => {
                             disabled={!podeNavegar}
                             className={`text-xs mt-1 text-center whitespace-nowrap max-w-[5.5rem] leading-tight ${
                               index === etapaAtualAnalise 
-                                ? 'font-medium text-oraculo-blue' 
-                                : etapaExemplo
-                                  ? 'font-semibold text-indigo-700 hover:underline cursor-pointer'
-                                  : podeNavegar
-                                    ? 'text-oraculo-blue hover:underline cursor-pointer' 
-                                    : 'text-gray-500 cursor-not-allowed'
+                                ? 'font-semibold text-oraculo-blue' 
+                                : podeNavegar
+                                  ? 'text-oraculo-blue/90 hover:underline cursor-pointer' 
+                                  : 'text-gray-500 cursor-not-allowed'
                             }`}
                           >
                             {step}
                           </button>
-                          {etapaExemplo && analisePronta ? (
-                            <span className="text-[9px] uppercase tracking-wide text-indigo-600 font-semibold mt-0.5">
-                              ver exemplo
-                            </span>
-                          ) : null}
                         </div>
                       );
                     })}
@@ -1478,46 +1615,97 @@ const AvaliarProjeto = () => {
                     </div>
                     <div className="bg-white border-2 border-gray-200 rounded-b-xl shadow-xl overflow-hidden">
                       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+                        {parecerBloqueadoVisitante && (
+                          <>
+                            <p className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 leading-relaxed">
+                              Esta é uma <strong>prévia real</strong> da avaliação do seu projeto neste edital. Crie
+                              sua conta para ver o parecer completo, sugestões e próximos passos.
+                            </p>
+                            {previewNotaResumo && (
+                              <div className="bg-gradient-to-r from-oraculo-blue/85 to-oraculo-purple/85 rounded-2xl p-6 md:p-8 text-white text-center">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-white/80 mb-2">
+                                  Prévia — nota estimada
+                                </p>
+                                <div
+                                  key={previewNotaResumo.notaGlobal}
+                                  className="text-5xl md:text-6xl font-black mb-2 transition-all duration-700"
+                                >
+                                  {previewNotaResumo.notaGlobal}
+                                </div>
+                                <p className="text-base opacity-90">
+                                  de {previewNotaResumo.notaMaximaTotal} pontos
+                                </p>
+                                <div className="mt-4 w-full bg-white/20 rounded-full h-2.5 max-w-md mx-auto">
+                                  <div
+                                    className="bg-white rounded-full h-2.5 transition-all duration-1000"
+                                    style={{ width: `${previewNotaResumo.notaGlobal}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {previewTrechoAberto && (
+                              <div className="rounded-xl border border-oraculo-blue/25 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 p-5 md:p-6">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-oraculo-purple mb-2">
+                                  {previewPontoForte
+                                    ? 'Prévia — um ponto forte do seu projeto'
+                                    : 'Prévia — trecho do parecer'}
+                                </p>
+                                <p className="text-gray-800 text-sm md:text-base leading-relaxed">{previewTrechoAberto}</p>
+                              </div>
+                            )}
+                            {analisando && !previewNotaResumo && !previewPontoForte && (
+                              <p className="text-sm text-gray-600 flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-oraculo-purple shrink-0" />
+                                A IA está analisando seu projeto — a prévia aparece em instantes…
+                              </p>
+                            )}
+                            {analisando && (previewNotaResumo || previewPontoForte) && (
+                              <p className="text-sm text-oraculo-purple font-medium flex items-center gap-2 animate-pulse">
+                                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                                Finalizando parecer…
+                                <span className="inline-block w-2 h-4 bg-oraculo-purple/80 animate-pulse" />
+                              </p>
+                            )}
+                            {!analisando && (
+                              <div className="relative rounded-2xl border-2 border-dashed border-gray-300 overflow-hidden min-h-[240px]">
+                                <div
+                                  className="p-6 md:p-8 blur-[7px] select-none pointer-events-none text-sm md:text-base text-gray-700 leading-relaxed whitespace-pre-wrap max-h-[360px] overflow-hidden"
+                                  aria-hidden
+                                >
+                                  {previewCorpoBlur || analiseConteudo}
+                                </div>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/92 px-6 py-8 text-center gap-3">
+                                  <Lock className="h-9 w-9 text-oraculo-purple" aria-hidden />
+                                  <h3 className="text-lg md:text-xl font-bold text-gray-900">Parecer completo reservado</h3>
+                                  <p className="text-sm text-gray-600 max-w-md leading-relaxed">
+                                    Adequação por critério, pontos fracos, gaps e todas as sugestões de melhoria ficam
+                                    disponíveis após o cadastro gratuito.
+                                  </p>
+                                  <Button
+                                    asChild
+                                    size="lg"
+                                    className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white font-semibold mt-1"
+                                  >
+                                    <Link to={cadastroDemoUrl}>Criar conta grátis e desbloquear →</Link>
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {exibirParecerCompleto && (
+                          <>
                         {/* Nota Estimada - Card Especial */}
                         {(() => {
-                          const notaPattern = /Nota:\s*(\d+)\/(\d+)\.?/gi;
-                          const notas: Array<{ obtida: number; maxima: number }> = [];
-                          let match;
-                          while ((match = notaPattern.exec(analiseConteudo)) !== null) {
-                            const obtida = parseInt(match[1]);
-                            const maxima = parseInt(match[2]);
-                            if (!isNaN(obtida) && !isNaN(maxima) && maxima > 0) {
-                              notas.push({ obtida, maxima });
-                            }
-                          }
-                          let notaGlobal = 0;
-                          let notaMaximaTotal = 0;
-                          if (notas.length > 0) {
-                            const somaObtidas = notas.reduce((acc, n) => acc + n.obtida, 0);
-                            const somaMaximas = notas.reduce((acc, n) => acc + n.maxima, 0);
-                            notaGlobal = Math.round((somaObtidas / somaMaximas) * 100);
-                            notaMaximaTotal = somaMaximas;
-                          } else {
-                            const notaSection = analiseConteudo.match(/5\.\s*\*\*Nota estimada.*?:\*\*\s*(\d+)/i);
-                            if (notaSection && notaSection[1]) {
-                              notaGlobal = parseInt(notaSection[1]);
-                              notaMaximaTotal = 100;
-                            } else {
-                              const patterns = [/Nota estimada.*?:\s*(\d+)/i, /Nota estimada.*?\):\s*(\d+)/i];
-                              for (const pattern of patterns) {
-                                const m = analiseConteudo.match(pattern);
-                                if (m && m[1]) {
-                                  const nota = parseInt(m[1]);
-                                  if (nota >= 0 && nota <= 100) {
-                                    notaGlobal = nota;
-                                    notaMaximaTotal = 100;
-                                    break;
-                                  }
-                                }
-                              }
-                            }
-                          }
-                          if (modoDemoVisitante && notaMaximaTotal === 100) {
+                          const resumo = calcularNotaGlobalAnalise(analiseConteudo);
+                          let notaGlobal = resumo?.notaGlobal ?? 0;
+                          let notaMaximaTotal = resumo?.notaMaximaTotal ?? 0;
+                          if (
+                            modoDemoVisitante &&
+                            !analiseRealVisitante &&
+                            notaMaximaTotal === 100
+                          ) {
                             notaGlobal = calcularNotaDemoVisitante(sugestoesAplicadasDemo);
                           }
                           if (notaGlobal === 0 && notaMaximaTotal === 0) return null;
@@ -1535,14 +1723,7 @@ const AvaliarProjeto = () => {
                               >
                                 {notaGlobal}
                               </div>
-                              <div className="text-lg opacity-90">
-                                de {notaMaximaTotal} pontos
-                                {notas.length > 0 && (
-                                  <span className="block text-sm mt-1 opacity-75">
-                                    ({notas.reduce((acc, n) => acc + n.obtida, 0)}/{notaMaximaTotal} pontos obtidos)
-                                  </span>
-                                )}
-                              </div>
+                              <div className="text-lg opacity-90">de {notaMaximaTotal} pontos</div>
                               <div className="mt-4 w-full bg-white/20 rounded-full h-3">
                                 <div 
                                   className="bg-white rounded-full h-3 transition-all duration-1000 ease-out"
@@ -1550,7 +1731,7 @@ const AvaliarProjeto = () => {
                                 ></div>
                               </div>
                               <p className="mt-6 text-white/90 text-sm md:text-base font-medium">
-                                {modoDemoVisitante && sugestoesAplicadasDemo > 0
+                                {modoDemoVisitante && !analiseRealVisitante && sugestoesAplicadasDemo > 0
                                   ? 'A nota reflete as sugestões que você aplicou nesta demonstração.'
                                   : 'Esta é a mesma análise que você receberá no seu projeto real.'}
                               </p>
@@ -1558,120 +1739,8 @@ const AvaliarProjeto = () => {
                           );
                         })()}
 
-                        {/* Sugestões antes do parecer completo (demo) — gancho “Aplicar” */}
-                        {usarResumoAnaliseDemo && sugestoes.length > 0 && (
-                          <>
-                            <div className="border-b-2 border-gray-300 pb-4 mb-6">
-                              <h2 className="text-2xl font-bold text-gray-900">Sugestões de Melhoria</h2>
-                              <p className="text-sm text-gray-600 mt-2">
-                                Aplique uma sugestão e veja a nota subir — depois confira orçamento e cronograma gerados.
-                              </p>
-                            </div>
-                            {sugestoes.map((sugestao, idx) => (
-                              <div key={`sugestao-resumo-${idx}`} className={`bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 shadow-sm mb-4 ${aprovacoes[idx] ? 'border-green-500 bg-green-50/50' : 'border-oraculo-blue'}`}>
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1">
-                                    <span className={`text-lg font-medium ${aprovacoes[idx] ? 'text-green-700' : 'text-gray-800'}`}>
-                                      💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    className={aprovacoes[idx] 
-                                      ? 'bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm font-medium' 
-                                      : 'bg-oraculo-blue hover:bg-oraculo-blue/90 text-white px-4 py-2 text-sm font-medium'}
-                                    onClick={() => handleAprovar(idx)}
-                                    disabled={gerandoSugestao !== null || aprovacoes[idx]}
-                                  >
-                                    {gerandoSugestao === idx ? (
-                                      <>
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Aplicando...
-                                      </>
-                                    ) : aprovacoes[idx] ? (
-                                      <>
-                                        <CheckCircle className="h-4 w-4 mr-1" />
-                                        Sugestão aplicada
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Check className="h-4 w-4 mr-1" />
-                                        Aplicar
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        )}
-
-                        {usarResumoAnaliseDemo ? (() => {
-                          const secoes = parsearSecoesAnalise(removerSugestoesDoTexto(analiseConteudo));
-                          const fortes = acharSecaoAnalise(secoes, /PONTOS\s+FORTES/i);
-                          const fracos = acharSecaoAnalise(secoes, /PONTOS\s+FRACOS/i);
-                          const adequacao = acharSecaoAnalise(secoes, /ADEQUAÇÃO/i);
-                          const bulletsFortes = fortes ? extrairItensListaAnalise(fortes.conteudo, 3) : [];
-                          const bulletsFracos = fracos ? extrairItensListaAnalise(fracos.conteudo, 3) : [];
-                          const linhaAdequacao = adequacao?.conteudo
-                            ?.split('\n')
-                            .map((l) => l.trim())
-                            .find((l) => l.startsWith('-'));
-                          return (
-                            <div className="space-y-6 mb-8">
-                              <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-5 md:p-6">
-                                <h3 className="text-lg font-bold text-gray-900 mb-3">Resumo do parecer</h3>
-                                {linhaAdequacao ? (
-                                  <p className="text-sm text-gray-700 leading-relaxed mb-4">{linhaAdequacao.replace(/^[-•]\s*/, '')}</p>
-                                ) : null}
-                                <div className="grid md:grid-cols-2 gap-6 text-sm">
-                                  {bulletsFortes.length > 0 ? (
-                                    <div>
-                                      <p className="font-semibold text-gray-900 mb-2">Pontos fortes</p>
-                                      <ul className="space-y-1.5 text-gray-700 list-disc pl-4">
-                                        {bulletsFortes.map((b) => (
-                                          <li key={b.slice(0, 40)}>{b}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ) : null}
-                                  {bulletsFracos.length > 0 ? (
-                                    <div>
-                                      <p className="font-semibold text-gray-900 mb-2">Gaps principais</p>
-                                      <ul className="space-y-1.5 text-gray-700 list-disc pl-4">
-                                        {bulletsFracos.map((b) => (
-                                          <li key={b.slice(0, 40)}>{b}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                              <details className="group rounded-xl border border-gray-200 bg-white overflow-hidden">
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-gray-800 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-                                  Ver parecer completo
-                                  <ChevronDown className="h-4 w-4 shrink-0 opacity-70 transition-transform group-open:rotate-180" />
-                                </summary>
-                                <div className="px-4 pb-6 pt-2 space-y-8 border-t border-gray-100">
-                                  {secoes.map((sec, idx) => (
-                                    <div key={`sec-coll-${idx}`}>
-                                      {sec.titulo ? (
-                                        <div className="border-b-2 border-gray-300 pb-3 mb-4">
-                                          <h2 className="text-xl font-bold text-gray-900 uppercase tracking-tight">{sec.titulo}</h2>
-                                        </div>
-                                      ) : null}
-                                      {sec.conteudo ? (
-                                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-700">{sec.conteudo}</pre>
-                                      ) : null}
-                                    </div>
-                                  ))}
-                                </div>
-                              </details>
-                            </div>
-                          );
-                        })() : (
                         <div
-                          className={`prose prose-sm max-w-none text-gray-700 space-y-8 transition-opacity duration-300 ${
+                          className={`max-w-none text-gray-700 space-y-8 transition-opacity duration-300 ${
                             analisando ? 'opacity-95' : 'opacity-100'
                           }`}
                         >
@@ -1684,46 +1753,52 @@ const AvaliarProjeto = () => {
                                   </h2>
                                 </div>
                               )}
-                              {sec.conteudo ? (
-                                <pre className="whitespace-pre-wrap font-sans text-sm md:text-base leading-relaxed text-gray-700 mt-2">
-                                  {sec.conteudo}
-                                </pre>
-                              ) : null}
+                              {sec.conteudo ? renderizarConteudoSecaoAnalise(sec.conteudo) : null}
                             </div>
                           ))}
                           {analisando && (
                             <p className="text-sm text-oraculo-purple font-medium flex items-center gap-2 mt-4 animate-pulse">
                               <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                              Gerando parecer em tempo real (demonstração)…
+                              {modoDemoVisitante && !analiseRealVisitante
+                                ? 'Gerando parecer em tempo real (demonstração)…'
+                                : 'Gerando parecer em tempo real…'}
                               <span className="inline-block w-2 h-4 bg-oraculo-purple/80 animate-pulse" />
                             </p>
                           )}
                         </div>
+                          </>
                         )}
 
-                        {/* Sugestões de Melhoria (fluxo logado / streaming) */}
-                        {!usarResumoAnaliseDemo && sugestoes.length > 0 && !analisando && (
+                        {exibirParecerCompleto && sugestoes.length > 0 && !analisando && (
                           <>
                             <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
-                              <h2 className="text-2xl font-bold text-gray-900">
-                                Sugestões de Melhoria
-                              </h2>
+                              <h2 className="text-2xl font-bold text-gray-900">Sugestões de Melhoria</h2>
+                              {modoDemoVisitante && (
+                                <p className="text-sm text-gray-600 mt-2">
+                                  Aplique uma sugestão e veja a nota subir — depois confira orçamento e cronograma gerados.
+                                </p>
+                              )}
                             </div>
                             {sugestoes.map((sugestao, idx) => (
-                              <div key={`sugestao-${idx}`} className={`bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 shadow-sm mb-4 ${aprovacoes[idx] ? 'border-green-500 bg-green-50/50' : 'border-oraculo-blue'}`}>
+                              <div
+                                key={`sugestao-${idx}`}
+                                className={`bg-gradient-to-r from-oraculo-blue/5 to-oraculo-purple/5 p-6 rounded-xl border-l-4 shadow-sm mb-4 ${aprovacoes[idx] ? 'border-green-500 bg-green-50/50' : 'border-oraculo-blue'}`}
+                              >
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="flex-1">
-                                    <div className="text-base text-gray-800 leading-relaxed">
-                                      <span className={`text-lg font-medium ${aprovacoes[idx] ? 'text-green-700' : 'text-gray-800'}`}>
-                                        💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
-                                      </span>
-                                    </div>
+                                    <span
+                                      className={`text-lg font-medium ${aprovacoes[idx] ? 'text-green-700' : 'text-gray-800'}`}
+                                    >
+                                      💡 Sugestão {idx + 1}: {limparMarkdown(sugestao)}
+                                    </span>
                                   </div>
                                   <Button
                                     size="sm"
-                                    className={aprovacoes[idx] 
-                                      ? 'bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm font-medium' 
-                                      : 'bg-oraculo-blue hover:bg-oraculo-blue/90 text-white px-4 py-2 text-sm font-medium'}
+                                    className={
+                                      aprovacoes[idx]
+                                        ? 'bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm font-medium'
+                                        : 'bg-oraculo-blue hover:bg-oraculo-blue/90 text-white px-4 py-2 text-sm font-medium'
+                                    }
                                     onClick={() => handleAprovar(idx)}
                                     disabled={gerandoSugestao !== null || aprovacoes[idx]}
                                   >
@@ -1758,28 +1833,59 @@ const AvaliarProjeto = () => {
                       {modoDemoVisitante ? (
                         <div className="rounded-[10px] border border-[#E5E7EB] bg-white p-6 md:p-8 shadow-sm">
                           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Próximo passo</p>
-                          <h3 className="text-xl md:text-2xl font-semibold text-gray-900 leading-snug mb-2">
-                            Veja orçamento e cronograma gerados para este exemplo
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-5 max-w-2xl">
-                            Duas telas rápidas — planilha ~R$ 600 mil e cronograma com marcos de execução. Depois você decide se cria conta para salvar no seu projeto.
-                          </p>
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                            <Button
-                              size="lg"
-                              type="button"
-                              onClick={() => criarProjetoEContinuar(4)}
-                              className="bg-oraculo-purple hover:bg-oraculo-purple/90 text-white font-semibold text-base min-h-[48px] px-6 rounded-[10px] shadow-md border-0"
-                            >
-                              Ver o orçamento e o cronograma gerados →
-                            </Button>
-                            <Link
-                              to={cadastroDemoUrl}
-                              className="text-sm font-medium text-gray-600 hover:text-oraculo-purple underline underline-offset-2 text-center sm:text-left"
-                            >
-                              Criar conta
-                            </Link>
-                          </div>
+                          {analiseRealVisitante ? (
+                            <>
+                              <h3 className="text-xl md:text-2xl font-semibold text-gray-900 leading-snug mb-2">
+                                Desbloqueie o parecer completo do seu projeto
+                              </h3>
+                              <p className="text-sm text-gray-600 mb-5 max-w-2xl">
+                                Você já viu a nota e um ponto forte reais. Com conta gratuita, abra o parecer inteiro,
+                                aplique sugestões da IA e salve tudo no seu projeto.
+                              </p>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                                <Button
+                                  asChild
+                                  size="lg"
+                                  className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white font-semibold text-base min-h-[48px] px-6 rounded-[10px] shadow-md border-0"
+                                >
+                                  <Link to={cadastroDemoUrl}>Criar conta grátis e ver parecer completo →</Link>
+                                </Button>
+                                <button
+                                  type="button"
+                                  onClick={() => criarProjetoEContinuar(4)}
+                                  className="text-sm font-medium text-gray-600 hover:text-oraculo-purple underline underline-offset-2 text-center sm:text-left"
+                                >
+                                  Ver exemplo de orçamento e cronograma
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <h3 className="text-xl md:text-2xl font-semibold text-gray-900 leading-snug mb-2">
+                                Veja orçamento e cronograma gerados para este exemplo
+                              </h3>
+                              <p className="text-sm text-gray-600 mb-5 max-w-2xl">
+                                Duas telas rápidas — planilha ~R$ 600 mil e cronograma com marcos de execução. Depois
+                                você decide se cria conta para salvar no seu projeto.
+                              </p>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                                <Button
+                                  size="lg"
+                                  type="button"
+                                  onClick={() => criarProjetoEContinuar(4)}
+                                  className="bg-oraculo-blue hover:bg-oraculo-blue/90 text-white font-semibold text-base min-h-[48px] px-6 rounded-[10px] shadow-md border-0"
+                                >
+                                  Ver o orçamento e o cronograma gerados →
+                                </Button>
+                                <Link
+                                  to={cadastroDemoUrl}
+                                  className="text-sm font-medium text-gray-600 hover:text-oraculo-purple underline underline-offset-2 text-center sm:text-left"
+                                >
+                                  Criar conta
+                                </Link>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-8 md:p-10 shadow-sm">

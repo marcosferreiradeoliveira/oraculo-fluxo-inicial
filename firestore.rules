@@ -388,9 +388,8 @@ service cloud.firestore {
 
     match /editais/{editalId} {
       // Oráculo Cultural — editais abertos visíveis para todos (get, list e queries sem login)
-      allow get, list: if true;
-      allow read: if true;
-      allow write: if isAuth();
+      allow get, list, read: if true;
+      allow create, update, delete: if isAuth() || isAdmin();
     }
 
     // Newsletter "Receba editais por email" — qualquer visitante pode se cadastrar

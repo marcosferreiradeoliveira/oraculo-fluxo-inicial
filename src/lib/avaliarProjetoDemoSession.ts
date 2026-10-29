@@ -12,6 +12,10 @@ export type AvaliarProjetoDemoSession = {
   textos_gerados?: Record<string, string>;
   /** Tour público: textos/orçamento/cronograma sem chamar Cloud Functions */
   modoDemonstracao?: boolean;
+  /** Parecer gerado pela IA com os dados reais do visitante (não só demo fictícia) */
+  analiseReal?: boolean;
+  /** Após cadastro, visitante pode ver o parecer completo salvo na sessão */
+  parecerDesbloqueado?: boolean;
 };
 
 export const DEMO_AVALIAR_ROUTES = [

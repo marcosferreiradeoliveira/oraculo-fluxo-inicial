@@ -6,9 +6,88 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Sparkles, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { trackLoginSuccess, identifyMixpanelUser } from '@/lib/analytics';
-import criarImage from '@/assets/Criar.jpeg';
+import {
+  trackMetaCompleteRegistration,
+  trackMetaCompleteRegistrationAndWait,
+} from '@/lib/metaPixel';
+import {
+  buildNovoUsuarioFirestore,
+  bumpAccessCountIfNewSession,
+  deveMostrarFormularioPerfil,
+} from '@/lib/perfilUsuario';
 import { Card, CardContent } from '@/components/ui/card';
+import { markCadastroCelebrationPending } from '@/lib/cadastroCelebration';
 import logo from '@/assets/logo.png';
+
+const YOUTUBE_APRESENTACAO_URL = 'https://www.youtube.com/watch?v=3bCt7Hjb5tk';
+
+function CadastroBeneficiosAside({ compact }: { compact?: boolean }) {
+  return (
+    <Card className="border-2 border-oraculo-blue/20 shadow-xl overflow-hidden bg-white">
+      <CardContent className={compact ? 'p-4' : 'p-6'}>
+        <div className={`flex items-center gap-3 ${compact ? 'mb-3' : 'mb-4'}`}>
+          <div
+            className={`bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-xl flex items-center justify-center flex-shrink-0 ${
+              compact ? 'w-10 h-10' : 'w-12 h-12'
+            }`}
+          >
+            <Sparkles className={compact ? 'h-5 w-5 text-white' : 'h-6 w-6 text-white'} />
+          </div>
+          <h2 className={`font-bold text-gray-900 ${compact ? 'text-lg' : 'text-2xl'}`}>
+            Transforme seu projeto com Inteligência Artificial
+          </h2>
+        </div>
+
+        <p className={`text-gray-600 ${compact ? 'text-sm mb-4' : 'text-base mb-6'}`}>
+          O Oráculo Cultural utiliza IA para analisar, otimizar e aumentar as chances de aprovação do seu
+          projeto cultural.
+        </p>
+
+        <ul className={`space-y-2 ${compact ? 'mb-4 text-xs' : 'mb-6 text-sm'} list-none`}>
+          {[
+            'Análise inteligente do seu projeto contra os critérios do edital',
+            'Geração automática de textos otimizados (justificativa, objetivos, metodologia)',
+            'Sugestões personalizadas de melhorias',
+            'Avaliação de aderência com nota estimada',
+            'Aplicação instantânea das sugestões da IA',
+          ].map((text) => (
+            <li key={text} className="flex items-start gap-2">
+              <CheckCircle2
+                className={`text-oraculo-blue flex-shrink-0 mt-0.5 ${compact ? 'h-4 w-4' : 'h-5 w-5'}`}
+                aria-hidden
+              />
+              <span className="text-gray-700">{text}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div
+          className={`bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-lg text-center ${
+            compact ? 'p-3' : 'p-4'
+          }`}
+        >
+          <p className={`font-semibold text-gray-900 ${compact ? 'text-sm' : 'text-base'}`}>
+            Cadastro gratuito · 15 créditos para começar
+          </p>
+          <p className={`text-gray-600 mt-1 ${compact ? 'text-xs' : 'text-sm'}`}>
+            Crie sua conta em poucos minutos e continue de onde parou.
+          </p>
+        </div>
+
+        <p className={`text-center ${compact ? 'mt-3 text-xs' : 'mt-4 text-sm'}`}>
+          <a
+            href={YOUTUBE_APRESENTACAO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-oraculo-blue font-medium hover:underline"
+          >
+            Ver vídeo de apresentação no YouTube
+          </a>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 const Cadastro = () => {
   const [searchParams] = useSearchParams();
@@ -28,8 +107,13 @@ const Cadastro = () => {
   const [showSenha, setShowSenha] = useState(false);
   const [showRepitaSenha, setShowRepitaSenha] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [cadastroConcluido, setCadastroConcluido] = useState(false);
   const navigate = useNavigate();
+
+  const finishNewUserSignup = (redirectPath?: string | null) => {
+    const target = redirectPath && redirectPath.startsWith('/') ? redirectPath : '/';
+    markCadastroCelebrationPending(target === '/' ? undefined : target);
+    navigate('/');
+  };
 
   useEffect(() => {
     try {
@@ -39,6 +123,25 @@ const Cadastro = () => {
       /* ignore */
     }
   }, []);
+
+  const completarPerfil = searchParams.get('completar') === 'perfil';
+
+  useEffect(() => {
+    if (!completarPerfil) return;
+    const current = auth.currentUser;
+    if (!current) return;
+    setUserUid(current.uid);
+    setShowExtra(true);
+    void (async () => {
+      const db = getFirestore();
+      const snap = await getDoc(doc(db, 'usuarios', current.uid));
+      if (snap.exists()) {
+        const data = snap.data();
+        setNomeCompleto(data.nome_completo || current.displayName || '');
+        setEmpresa(data.empresa || '');
+      }
+    })();
+  }, [completarPerfil]);
 
   const handleGoogleSignIn = async () => {
     setErro('');
@@ -53,39 +156,38 @@ const Cadastro = () => {
       const userDocRef = doc(db, 'usuarios', user.uid);
       const userDoc = await getDoc(userDocRef);
 
-      if (!userDoc.exists()) {
-        // Usuário novo - mostrar formulário para coletar nome e empresa
-        setUserUid(user.uid);
-        setNomeCompleto(user.displayName || '');
-        setEmpresa('');
-        setShowExtra(true);
-        setLoadingGoogle(false);
-        return;
-      }
-
-      // Usuário existente - verificar se tem nome completo e empresa
-      const userData = userDoc.data();
-      const hasNomeCompleto = userData.nome_completo && userData.nome_completo.trim() !== '';
-      const hasEmpresa = userData.empresa && userData.empresa.trim() !== '';
-
-      if (!hasNomeCompleto || !hasEmpresa) {
-        // Falta informação - mostrar formulário para completar
-        setUserUid(user.uid);
-        setNomeCompleto(userData.nome_completo || user.displayName || '');
-        setEmpresa(userData.empresa || '');
-        setShowExtra(true);
-        setLoadingGoogle(false);
-        return;
-      }
-
-      // Usuário completo - atualizar último login e redirecionar
       const timestamp = serverTimestamp();
+
+      if (!userDoc.exists()) {
+        await setDoc(
+          userDocRef,
+          buildNovoUsuarioFirestore({
+            uid: user.uid,
+            email: user.email || '',
+            nomeCompletoInicial: user.displayName || '',
+            timestamp,
+          }),
+        );
+        await trackMetaCompleteRegistrationAndWait(user.email || undefined, user.uid);
+        finishNewUserSignup(redirect);
+        setLoadingGoogle(false);
+        return;
+      }
+
+      const userData = userDoc.data();
+      const access = bumpAccessCountIfNewSession(user.uid);
+      if (deveMostrarFormularioPerfil(userData, access)) {
+        const target = redirect && redirect.startsWith('/') ? redirect : '/';
+        navigate(`/cadastro?completar=perfil&redirect=${encodeURIComponent(target)}`);
+        setLoadingGoogle(false);
+        return;
+      }
+
       await updateDoc(userDocRef, {
         lastLoginAt: timestamp,
         ultimo_login: timestamp,
       });
 
-      // Track login success
       trackLoginSuccess({ tipoLogin: 'social' });
 
       const target = redirect && redirect.startsWith('/') ? redirect : '/';
@@ -126,31 +228,30 @@ const Cadastro = () => {
     try {
       if (isLogin) {
         const cred = await signInWithEmailAndPassword(auth, email, senha);
-        // COMENTADO: Verificação de email confirmado
-        // if (!cred.user.emailVerified) {
-        //   navigate('/confirmar-email');
-        //   return;
-        // }
-        
-        // Track login success
         trackLoginSuccess({ tipoLogin: 'email' });
-        
-        // Atualizar lastLoginAt e ultimo_login
+
+        const db = getFirestore();
+        const userDocRef = doc(db, 'usuarios', cred.user.uid);
+        const timestamp = serverTimestamp();
+        const userSnap = await getDoc(userDocRef);
+        const access = bumpAccessCountIfNewSession(cred.user.uid);
+        const target = redirect && redirect.startsWith('/') ? redirect : '/';
+
+        if (userSnap.exists() && deveMostrarFormularioPerfil(userSnap.data(), access)) {
+          navigate(`/cadastro?completar=perfil&redirect=${encodeURIComponent(target)}`);
+          setLoading(false);
+          return;
+        }
+
         try {
-          const { getFirestore, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-          const db = getFirestore();
-          const userDocRef = doc(db, 'usuarios', cred.user.uid);
-          const timestamp = serverTimestamp();
           await updateDoc(userDocRef, {
             lastLoginAt: timestamp,
             ultimo_login: timestamp,
           });
         } catch (updateError) {
           console.warn('Erro ao atualizar último login:', updateError);
-          // Não bloquear o login se a atualização falhar
         }
-        
-        const target = redirect && redirect.startsWith('/') ? redirect : '/';
+
         navigate(target);
       } else {
         if (senha !== repitaSenha) {
@@ -165,7 +266,23 @@ const Cadastro = () => {
         }
         const cred = await createUserWithEmailAndPassword(auth, email, senha);
         setUserUid(cred.user.uid);
-        
+
+        const db = getFirestore();
+        const userDocRef = doc(db, 'usuarios', cred.user.uid);
+        const timestamp = serverTimestamp();
+        await setDoc(
+          userDocRef,
+          buildNovoUsuarioFirestore({
+            uid: cred.user.uid,
+            email: cred.user.email || email,
+            timestamp,
+          }),
+        );
+        await trackMetaCompleteRegistrationAndWait(cred.user.email || email, cred.user.uid);
+        setLoading(false);
+        finishNewUserSignup(redirect);
+        return;
+
         // COMENTADO: Envio de email de confirmação
         // console.log('👤 Usuário criado:', {
         //   uid: cred.user.uid,
@@ -197,10 +314,6 @@ const Cadastro = () => {
         //   setLoading(false);
         // }
         
-        // Limpar campos antes de mostrar o formulário extra
-        setNomeCompleto('');
-        setEmpresa('');
-        setShowExtra(true);
       }
     } catch (err: any) {
       setErro(err.message);
@@ -239,40 +352,27 @@ const Cadastro = () => {
       
       if (!userDoc.exists()) {
         // Criar novo documento (cadastro com email)
-        const dadosParaSalvar = {
-          createdAt: timestamp,
-          creditos: 15,
-          dadosCadastrais: '',
-          data_cadastro: timestamp,
-          email: userEmail,
-          empresa: empresaTrimmed || '',
-          equipeBio: '',
-          isPremium: false,
-          planType: 'free',
-          lastLoginAt: timestamp,
+        await setDoc(userDocRef, {
+          ...buildNovoUsuarioFirestore({
+            uid: userUid,
+            email: userEmail,
+            timestamp,
+          }),
           nome_completo: nomeCompletoTrimmed,
-          origem: 'captacao',
-          portfolio: '',
-          role: 'super_admin',
-          ultimo_login: timestamp,
-          uid: userUid,
-        };
-        
-        await setDoc(userDocRef, dadosParaSalvar);
-        setCadastroConcluido(true);
+          empresa: empresaTrimmed || '',
+          perfil_dados_coletados: true,
+        });
+        trackMetaCompleteRegistration(userEmail, userUid);
+        finishNewUserSignup(redirect);
       } else {
-        // Atualizar documento existente (login com Google que precisa completar dados)
         await updateDoc(userDocRef, {
           nome_completo: nomeCompletoTrimmed,
           empresa: empresaTrimmed || '',
+          perfil_dados_coletados: true,
           lastLoginAt: timestamp,
           ultimo_login: timestamp,
         });
-        
-        // Track login success se for login com Google
-        if (currentUser) {
-          trackLoginSuccess({ tipoLogin: 'social' });
-        }
+
         const target = redirect && redirect.startsWith('/') ? redirect : '/';
         navigate(target);
       }
@@ -284,34 +384,6 @@ const Cadastro = () => {
     }
   };
 
-  if (cadastroConcluido) {
-    const target = redirect && redirect.startsWith('/') ? redirect : '/';
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 text-center">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-8 w-8 md:h-10 md:w-10 text-white" />
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">Conta criada com sucesso!</h1>
-            <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 border-2 border-oraculo-blue/20">
-              <p className="text-base md:text-lg text-gray-800 font-medium leading-relaxed">
-                Parabéns, você ganhou 15 créditos gratuitamente para testar a plataforma!
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate(target)}
-              className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
-            >
-              Ir para a plataforma
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (showExtra) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-oraculo-blue/10 via-white to-oraculo-purple/10 p-4">
@@ -322,14 +394,19 @@ const Cadastro = () => {
             </div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1 text-center">Precisamos de mais algumas informações suas</h1>
             <p className="text-gray-500 text-xs md:text-sm text-center">
-              {auth.currentUser ? 'Complete seu perfil para continuar' : 'Preencha para completar seu cadastro'}
+              Complete seu perfil para personalizar sua experiência na plataforma
             </p>
           </div>
           <form onSubmit={handleExtraSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Nome completo</label>
+              <label htmlFor="cadastro-nome-completo" className="block text-sm font-medium mb-1 text-gray-700">
+                Nome completo
+              </label>
               <input
+                id="cadastro-nome-completo"
+                name="nomeCompleto"
                 type="text"
+                autoComplete="name"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={nomeCompleto}
                 onChange={e => setNomeCompleto(e.target.value)}
@@ -338,9 +415,14 @@ const Cadastro = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Empresa <span className="text-gray-400 text-xs">(opcional)</span></label>
+              <label htmlFor="cadastro-empresa" className="block text-sm font-medium mb-1 text-gray-700">
+                Empresa <span className="text-gray-400 text-xs">(opcional)</span>
+              </label>
               <input
+                id="cadastro-empresa"
+                name="empresa"
                 type="text"
+                autoComplete="organization"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={empresa}
                 onChange={e => setEmpresa(e.target.value)}
@@ -353,7 +435,7 @@ const Cadastro = () => {
               className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold text-sm md:text-base shadow hover:opacity-90 transition"
               disabled={loading}
             >
-              {loading ? 'Salvando...' : 'Finalizar cadastro'}
+              {loading ? 'Salvando...' : 'Salvar e continuar'}
             </button>
           </form>
         </div>
@@ -367,71 +449,8 @@ const Cadastro = () => {
         <div className={`grid gap-0 ${isLogin ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
           {/* Coluna da Esquerda - Vídeo e Box IA (apenas no modo cadastro) */}
           {!isLogin && (
-            <div className="hidden md:flex flex-col p-8 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 space-y-6">
-              {/* Vídeo do YouTube */}
-              <div className="w-full rounded-xl overflow-hidden shadow-lg">
-                <div className="relative" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    className="absolute top-0 left-0 w-full h-full"
-                    src="https://www.youtube.com/embed/3bCt7Hjb5tk"
-                    title="Oráculo Cultural - Inteligência Artificial"
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              </div>
-              
-              {/* Box Informativo */}
-              <Card className="border-2 border-oraculo-blue/20 shadow-xl overflow-hidden bg-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-xl flex items-center justify-center">
-                      <Sparkles className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-900">
-                      Transforme seu projeto com Inteligência Artificial
-                    </h3>
-                  </div>
-                  
-                  <p className="text-gray-600 text-base mb-6">
-                    O Oráculo Cultural utiliza IA de última geração para analisar, otimizar e aumentar as chances de aprovação do seu projeto cultural. Veja como podemos ajudar:
-                  </p>
-                  
-                  {/* Lista de features */}
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 text-sm">Análise inteligente do seu projeto contra os critérios do edital</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 text-sm">Geração automática de textos otimizados (justificativa, objetivos, metodologia)</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 text-sm">Sugestões personalizadas de melhorias baseadas no seu portfolio</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 text-sm">Avaliação de aderência com nota estimada</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 text-sm">Aplicação instantânea das sugestões da IA</span>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-lg p-4 text-center">
-                    <p className="text-sm font-medium text-gray-800 mb-2">
-                      Área restrita para usuários cadastrados.
-                    </p>
-                    <p className="text-sm font-semibold text-oraculo-blue">
-                      Crie sua conta - é gratuito!
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="hidden md:flex flex-col p-6 lg:p-8 bg-gradient-to-br from-oraculo-blue/5 to-oraculo-purple/5 justify-center">
+              <CadastroBeneficiosAside />
             </div>
           )}
           
@@ -448,7 +467,7 @@ const Cadastro = () => {
             )}
             
             <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1">
-              {isLogin ? 'Entrar na sua conta' : 'Para acessar, é necessário criar uma conta'}
+              {isLogin ? 'Entrar na sua conta' : 'Crie sua conta gratuita'}
             </h1>
             {isLogin ? (
               <p className="text-gray-500 text-xs md:text-sm mb-6">
@@ -507,9 +526,14 @@ const Cadastro = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">E-mail</label>
+            <label htmlFor="cadastro-email" className="block text-sm font-medium mb-1 text-gray-700">
+              E-mail
+            </label>
             <input
+              id="cadastro-email"
+              name="email"
               type="email"
+              autoComplete="email"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -517,14 +541,20 @@ const Cadastro = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">Senha</label>
+            <label htmlFor="cadastro-senha" className="block text-sm font-medium mb-1 text-gray-700">
+              Senha
+            </label>
             <div className="relative">
               <input
+                id="cadastro-senha"
+                name="senha"
                 type={showSenha ? 'text' : 'password'}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                 value={senha}
                 onChange={e => setSenha(e.target.value)}
                 required
+                aria-describedby={!isLogin ? 'cadastro-requisitos-senha' : undefined}
               />
               <button
                 type="button"
@@ -536,7 +566,7 @@ const Cadastro = () => {
               </button>
             </div>
             {!isLogin && (
-              <div className="mt-2 space-y-1.5">
+              <div id="cadastro-requisitos-senha" className="mt-2 space-y-1.5" role="group" aria-label="Requisitos da senha">
                 {(() => {
                   const c = senhaChecks(senha);
                   const items: { key: keyof typeof c; label: string }[] = [
@@ -562,10 +592,15 @@ const Cadastro = () => {
           </div>
           {!isLogin && (
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Repita a senha</label>
+              <label htmlFor="cadastro-repita-senha" className="block text-sm font-medium mb-1 text-gray-700">
+                Repita a senha
+              </label>
               <div className="relative">
                 <input
+                  id="cadastro-repita-senha"
+                  name="repitaSenha"
                   type={showRepitaSenha ? 'text' : 'password'}
+                  autoComplete="new-password"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition"
                   value={repitaSenha}
                   onChange={e => setRepitaSenha(e.target.value)}
@@ -626,64 +661,8 @@ const Cadastro = () => {
 
             {/* Vídeo e Box IA – apenas mobile, após o formulário (modo cadastro) */}
             {!isLogin && (
-              <div className="md:hidden mt-8 space-y-4">
-                <div className="w-full rounded-xl overflow-hidden shadow-lg">
-                  <div className="relative" style={{ paddingBottom: '56.25%' }}>
-                    <iframe
-                      className="absolute top-0 left-0 w-full h-full"
-                      src="https://www.youtube.com/embed/3bCt7Hjb5tk"
-                      title="Oráculo Cultural - Inteligência Artificial"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                </div>
-                <Card className="border-2 border-oraculo-blue/20 shadow-xl overflow-hidden bg-white">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-oraculo-blue to-oraculo-purple rounded-xl flex items-center justify-center">
-                        <Sparkles className="h-5 w-5 text-white" />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900">
-                        Transforme seu projeto com Inteligência Artificial
-                      </h3>
-                    </div>
-                    <p className="text-gray-600 text-sm mb-4">
-                      O Oráculo Cultural utiliza IA de última geração para analisar, otimizar e aumentar as chances de aprovação do seu projeto cultural. Veja como podemos ajudar:
-                    </p>
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 text-xs">Análise inteligente do seu projeto contra os critérios do edital</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 text-xs">Geração automática de textos otimizados (justificativa, objetivos, metodologia)</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 text-xs">Sugestões personalizadas de melhorias baseadas no seu portfolio</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 text-xs">Avaliação de aderência com nota estimada</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-oraculo-blue flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 text-xs">Aplicação instantânea das sugestões da IA</span>
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 rounded-lg p-3 text-center">
-                      <p className="text-xs font-medium text-gray-800 mb-1">
-                        Área restrita para usuários cadastrados.
-                      </p>
-                      <p className="text-xs font-semibold text-oraculo-blue">
-                        Crie sua conta - é gratuito!
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+              <div className="md:hidden mt-8">
+                <CadastroBeneficiosAside compact />
               </div>
             )}
           </div>

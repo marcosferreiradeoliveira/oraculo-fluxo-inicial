@@ -1,4 +1,4 @@
-import { db, storage } from '@/lib/firebase';
+import { auth, db, storage } from '@/lib/firebase';
 import { assignLandingFieldsForNewEdital, getEditalLandingPublicUrl } from '@/lib/editalLandingFirestore';
 import {
   collection,
@@ -51,20 +51,39 @@ function mapDoc(id: string, data: Record<string, unknown>): AnaliseEdital {
   return { id, ...processed } as AnaliseEdital;
 }
 
+async function requireAuthUser() {
+  await auth.authStateReady();
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Sessão expirada ou você não está logado. Entre de novo e tente salvar.');
+  }
+  try {
+    await user.getIdToken(true);
+  } catch {
+    throw new Error('Não foi possível renovar sua sessão. Saia e entre de novo no Oráculo.');
+  }
+  return user;
+}
+
 export async function salvarAnalise(
   analise: Omit<AnaliseEdital, 'id' | 'dataAnalise'>,
   pdfFile?: File | null
 ): Promise<{ id: string; landingSlug?: string }> {
+  const user = await requireAuthUser();
+
   const payload: Record<string, unknown> = {
     ...analise,
     dataEncerramento: toTimestamp(analise.dataEncerramento),
     data_encerramento: toTimestamp(analise.data_encerramento),
     criado_em: Timestamp.now(),
+    criadoPorUserId: user.uid,
+    criadoPorEmail: user.email ?? null,
   };
 
   if (pdfFile) {
     const pdfRef = storageRef(storage, `editais/${Date.now()}_${pdfFile.name}`);
-    await uploadBytes(pdfRef, pdfFile);
+    const contentType = pdfFile.type || 'application/pdf';
+    await uploadBytes(pdfRef, pdfFile, { contentType });
     payload.pdf_url = await getDownloadURL(pdfRef);
   }
 

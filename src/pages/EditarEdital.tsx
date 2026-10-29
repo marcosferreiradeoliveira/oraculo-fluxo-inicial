@@ -9,7 +9,9 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { db, storage, auth } from '@/lib/firebase';
 import { parseEditalEncerramento } from '@/lib/editalDates';
 import { toast } from 'sonner';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import { ImagePlus, Loader2, Star } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 
 type EditalForm = {
   nome: string;
@@ -24,6 +26,7 @@ type EditalForm = {
   dataEncerramentoInput: string;
   thumbnail: string;
   pdf_url: string;
+  destaque: boolean;
 };
 
 function dateToInputValue(raw: unknown): string {
@@ -63,6 +66,7 @@ function firestoreToForm(data: Record<string, unknown>): EditalForm {
     dataEncerramentoInput: dateToInputValue(encRaw),
     thumbnail: typeof data.thumbnail === 'string' ? data.thumbnail : '',
     pdf_url: typeof data.pdf_url === 'string' ? data.pdf_url : '',
+    destaque: data.destaque === true,
   };
 }
 
@@ -166,6 +170,7 @@ const EditarEdital = () => {
         valor_maximo_premiacao: form.valor_maximo_premiacao.trim(),
         link_edital: form.link_edital.trim(),
         thumbnail: form.thumbnail.trim(),
+        destaque: form.destaque === true,
         ...(data_encerramento ? { data_encerramento, dataEncerramento } : {}),
       });
 
@@ -217,10 +222,39 @@ const EditarEdital = () => {
               ← Voltar
             </Button>
 
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Editar edital</h1>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Editar edital</h1>
+              {form.destaque ? (
+                <Badge className="bg-amber-500 hover:bg-amber-500 text-white gap-1">
+                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden />
+                  Em destaque
+                </Badge>
+              ) : null}
+            </div>
             <p className="text-gray-600 text-sm mb-6">Atualize os dados exibidos na listagem e na página do edital.</p>
 
             <div className="bg-white rounded-xl shadow-md p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                    <Star className="h-4 w-4 text-amber-600 shrink-0" aria-hidden />
+                    Exibir edital em destaque
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                    Editais em destaque ficam no topo da home e da listagem Editais Abertos.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <label htmlFor="edital-destaque" className="text-sm font-medium text-gray-700">
+                    {form.destaque ? 'Ativo' : 'Inativo'}
+                  </label>
+                  <Switch
+                    id="edital-destaque"
+                    checked={form.destaque}
+                    onCheckedChange={(checked) => patch({ destaque: checked })}
+                  />
+                </div>
+              </div>
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700">Foto / capa do edital</label>
                 {form.thumbnail ? (

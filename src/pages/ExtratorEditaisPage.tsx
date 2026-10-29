@@ -99,7 +99,11 @@ export default function ExtratorEditaisPage() {
         }
       } catch (firebaseError) {
         console.warn('Erro ao salvar no Firebase:', firebaseError);
-        toast.error('Análise ok, mas falhou ao salvar no Firestore.');
+        const msg =
+          firebaseError instanceof Error
+            ? firebaseError.message
+            : 'Verifique se está logado e tente de novo.';
+        toast.error('Análise ok, mas falhou ao salvar no Firestore.', { description: msg });
       }
     } catch (e: unknown) {
       console.error('Analysis failed:', e);

@@ -40,6 +40,7 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 // Definir secret para Brevo
 const brevoApiKey = defineSecret("BREVO_API_KEY");
+// CAPI: configure META_CONVERSIONS_ACCESS_TOKEN em functions/.env (local) ou variável de ambiente no Cloud Run.
 
 function getBrevoApiKey() {
   try {
@@ -55,6 +56,16 @@ function getBrevoApiKey() {
 }
 
 const BREVO_AXIOS_OPTS = { timeout: 20000, maxRedirects: 0 };
+
+const {
+  sendMetaConversionEvent,
+  DEFAULT_PIXEL_ID: META_DEFAULT_PIXEL_ID,
+} = require("./metaConversions");
+
+function getMetaConversionsAccessToken() {
+  const fromEnv = process.env.META_CONVERSIONS_ACCESS_TOKEN;
+  return typeof fromEnv === "string" ? fromEnv.trim().replace(/\r?\n/g, "") : "";
+}
 
 /** POST contato Brevo; payload mínimo se atributos customizados falharem. */
 async function createBrevoContact(apiKey, { email, listId, nome }) {
@@ -716,20 +727,20 @@ exports.gerarTextosProjeto = onRequest(
     const TEXTO_COOLDOWN_MS = 30 * 1000;
     const textoLockId = `texto_${userId || 'anon'}_${projetoId}_${String(tipo).slice(0, 50)}`;
     const textoLockRef = db.collection('locks').doc(textoLockId);
-    const textoLockSnap = await textoLockRef.get();
+      const textoLockSnap = await textoLockRef.get();
     const textoNow = Date.now();
-    if (textoLockSnap.exists) {
-      const lockedUntil = textoLockSnap.data().lockedUntil;
-      if (lockedUntil && lockedUntil > textoNow) {
-        const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
-        return res.status(429).json({
-          error: 'Aguarde antes de gerar novamente',
-          retryAfterSeconds: secLeft,
-          message: `Aguarde ${secLeft} segundos antes de gerar este texto novamente.`
-        });
+      if (textoLockSnap.exists) {
+        const lockedUntil = textoLockSnap.data().lockedUntil;
+        if (lockedUntil && lockedUntil > textoNow) {
+          const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
+          return res.status(429).json({
+            error: 'Aguarde antes de gerar novamente',
+            retryAfterSeconds: secLeft,
+            message: `Aguarde ${secLeft} segundos antes de gerar este texto novamente.`
+          });
+        }
       }
-    }
-    await textoLockRef.set({ lockedUntil: textoNow + TEXTO_COOLDOWN_MS });
+      await textoLockRef.set({ lockedUntil: textoNow + TEXTO_COOLDOWN_MS });
     
     // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
     let equipeBio = dadosProjeto.equipeBio || '';
@@ -814,12 +825,12 @@ REGRA CRÍTICA DE FORMATAÇÃO:
       
       console.log('[gerarTextosProjeto] Teto máximo detectado para orçamento:', tetoMaximo);
       
-      const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-      const cronogramaProjeto = dadosProjeto.cronograma || {};
-      const duracaoMesesCron = inferirDuracaoMesesCronograma(cronogramaProjeto);
-      const resumoCron = resumoCronogramaParaOrcamento(cronogramaProjeto);
-      const blocoCronogramaOrcamento = resumoCron
-        ? `
+        const tetoFormatado = tetoMaximo > 0 ? tetoMaximo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+        const cronogramaProjeto = dadosProjeto.cronograma || {};
+        const duracaoMesesCron = inferirDuracaoMesesCronograma(cronogramaProjeto);
+        const resumoCron = resumoCronogramaParaOrcamento(cronogramaProjeto);
+        const blocoCronogramaOrcamento = resumoCron
+          ? `
 
 ALINHAMENTO COM CRONOGRAMA (OBRIGATÓRIO):
 ${instrucoesOrcamentoAlinhadoCronograma(duracaoMesesCron)}
@@ -829,7 +840,7 @@ ${resumoCron}
 Distribua custos de acordo com as etapas e o prazo acima. Rubricas de locação/aluguel/mensalidade devem refletir a quantidade de meses do cronograma (${duracaoMesesCron}), não apenas 1 mês.
 
 `
-        : '';
+          : '';
       
       promptEspecifico = `${blocoCronogramaOrcamento}Você é um especialista em elaboração de orçamentos para projetos culturais. 
 Crie um orçamento COMPLETO, DETALHADO E ABRANGENTE para o projeto cultural descrito abaixo.
@@ -1054,11 +1065,11 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
 exports.gerarCronogramaIA = registerGerarCronogramaIA(onRequest, openaiApiKey, db, getOpenAI);
 
 exports.criarCheckoutPremium = onRequest(
-  { 
+  {
     cors: true,
     maxInstances: 10,
     invoker: 'public'
-  }, 
+  },
   async (req, res) => {
     // Set CORS headers explicitly
     res.set('Access-Control-Allow-Origin', '*');
@@ -1071,7 +1082,7 @@ exports.criarCheckoutPremium = onRequest(
       res.status(204).send('');
       return;
     }
-    
+
     console.log('[criarCheckoutPremium] Request received:', req.method);
     console.log('[criarCheckoutPremium] Request body:', req.body);
     
@@ -1278,7 +1289,7 @@ exports.criarAssinaturaPremium = onRequest(
       let accessToken;
       try {
         accessToken = mercadoPagoAccessToken.value();
-      } catch (e) {
+        } catch (e) {
         accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
       }
       accessToken = accessToken || "APP_USR-783906941666085-010213-a7124ca4d6ae0e9ad0fb28935a13a1b4-2448199655";
@@ -1759,7 +1770,7 @@ exports.criarCheckoutGuiaStripe = onRequest(
               quantity: 1,
             }];
           }
-        } catch (error) {
+    } catch (error) {
           console.error(`[criarCheckoutGuiaStripe] Erro ao usar Product ID ${stripeProductId}:`, error);
           // Fallback para criação dinâmica
           lineItems = [{
@@ -4183,6 +4194,25 @@ exports.sincronizarUsuarioBrevo = onDocumentCreated(
       const empresa = userData.empresa || null;
 
       const result = await adicionarContatoBrevo(email, nome, empresa);
+
+      const metaToken = getMetaConversionsAccessToken();
+      if (metaToken) {
+        try {
+          await sendMetaConversionEvent({
+            accessToken: metaToken,
+            eventName: "CompleteRegistration",
+            eventId: `complete-reg-${userId}`,
+            eventSourceUrl: "https://oraculocultural.com.br/cadastro",
+            email,
+            customData: { status: "completed", origem: "firestore_usuario_criado" },
+          });
+          console.log(`[sincronizarUsuarioBrevo] Meta CompleteRegistration enviado: ${userId}`);
+        } catch (metaErr) {
+          console.error("[sincronizarUsuarioBrevo] Meta CAPI:", metaErr.message);
+        }
+      } else {
+        console.warn("[sincronizarUsuarioBrevo] META_CONVERSIONS_ACCESS_TOKEN ausente — CAPI ignorada");
+      }
       
       console.log(`[sincronizarUsuarioBrevo] ✅ Usuário ${email} sincronizado com Brevo:`, result);
       
@@ -4305,6 +4335,81 @@ exports.sincronizarTodosUsuariosBrevo = onRequest(
       });
     }
   }
+);
+
+/** Conversions API — eventos duplicados do Pixel (PageView, Lead, CompleteRegistration). */
+exports.enviarEventoMeta = onRequest(
+  {
+    cors: true,
+    invoker: "public",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+  },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Método não permitido" });
+      return;
+    }
+
+    try {
+      const {
+        eventName,
+        eventId,
+        eventSourceUrl,
+        email,
+        fbp,
+        fbc,
+        customData,
+        pixelId,
+      } = req.body || {};
+
+      if (!eventName || !eventId) {
+        res.status(400).json({ error: "eventName e eventId são obrigatórios" });
+        return;
+      }
+
+      const accessToken = getMetaConversionsAccessToken();
+      if (!accessToken) {
+        res.status(503).json({
+          success: false,
+          error: "META_CONVERSIONS_ACCESS_TOKEN não configurada",
+          message:
+            "Configure o secret META_CONVERSIONS_ACCESS_TOKEN no Firebase (Conversions API) e redeploy enviarEventoMeta.",
+        });
+        return;
+      }
+
+      const result = await sendMetaConversionEvent({
+        accessToken,
+        pixelId: pixelId || META_DEFAULT_PIXEL_ID,
+        eventName,
+        eventId,
+        eventSourceUrl,
+        email,
+        fbp,
+        fbc,
+        customData,
+      });
+
+      res.status(200).json({ success: true, meta: result });
+    } catch (error) {
+      console.error("[enviarEventoMeta]", error.response?.data || error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        details: error.response?.data,
+      });
+    }
+  },
 );
 
 // Create and deploy your first functions

@@ -191,7 +191,7 @@ export function DashboardHeader() {
             ) : (
               <div className="text-right flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-oraculo-blue" />
-                <Link to="/cadastro?mode=login" onClick={() => trackIntentLogin({ source: 'header' })}>
+                <Link to="/cadastro" onClick={() => trackIntentLogin({ source: 'header' })}>
                   <Button size="sm" className="mt-0.5 bg-oraculo-blue text-white hover:bg-oraculo-purple">
                     Entrar ou criar conta
                   </Button>

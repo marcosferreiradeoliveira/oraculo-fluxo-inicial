@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
@@ -20,6 +20,14 @@ import {
   trackSuggestionApplied
 } from '@/lib/analytics';
 import { canAccessProjectStepIndex, starterPaywallUrl, type UserPlanFields } from '@/lib/starterPlan';
+import {
+  clearPendingAnalisePreview,
+  pendingAnaliseMatchesForm,
+  pendingAnaliseMatchesNome,
+  readPendingAnalisePreview,
+} from '@/lib/criarProjetoPreview';
+import { clearCriarProjetoDraft } from '@/lib/landingToCriarProjeto';
+import { toast } from 'sonner';
 
 const steps = [
   'Criar Projeto',
@@ -248,6 +256,7 @@ const Projeto = () => {
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
   const [primeiraAnaliseCompleta, setPrimeiraAnaliseCompleta] = useState(false);
   const [analiseIniciada, setAnaliseIniciada] = useState(false); // Para evitar iniciar análise múltiplas vezes
+  const pendingAnaliseRestoreRef = useRef(false);
   const [streamingAnaliseContent, setStreamingAnaliseContent] = useState(''); // Conteúdo da análise em streaming
   const [user] = useAuthState(auth);
   const navigate = useNavigate();
@@ -304,12 +313,12 @@ const Projeto = () => {
 
   useEffect(() => {
     if (!id) return;
-    
+
     setLoading(true);
     setAnaliseIniciada(false); // Reset quando carregar novo projeto
     const db = getFirestore();
     const ref = doc(db, 'projetos', id);
-    
+
     // Se está em modo streaming (veio do Criar Projeto), não mostrar modal; exibir página com caixa de análise em tempo real
     if (isStreaming) {
       setMostrarAnalise(false);
@@ -350,71 +359,127 @@ const Projeto = () => {
       return () => unsubscribe();
     } else {
       // Modo normal: buscar uma vez
-      const fetchProjeto = async () => {
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = { id: snap.id, ...(snap.data() as any) };
-          setProjeto(data);
-          setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
-          setDescricaoEditada(data.descricao || '');
-          
+    const fetchProjeto = async () => {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = { id: snap.id, ...(snap.data() as any) };
+        setProjeto(data);
+        setEtapaAtual(typeof data.etapa_atual === 'number' ? data.etapa_atual : 1);
+        setDescricaoEditada(data.descricao || '');
+
           // Check if first analysis was already completed
           // Se já existe análise mas não tem o campo, considerar como primeira análise completa (para projetos antigos)
-          if (data.analise_ia && data.primeira_analise_completa === undefined) {
+        if (data.analise_ia && data.primeira_analise_completa === undefined) {
             // Projeto antigo com análise mas sem campo - marcar como primeira análise completa
             const ref = doc(db, 'projetos', id);
-            await updateDoc(ref, { primeira_analise_completa: true });
-            setPrimeiraAnaliseCompleta(true);
-          } else {
-            setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
-          }
-          
+          await updateDoc(ref, { primeira_analise_completa: true });
+          setPrimeiraAnaliseCompleta(true);
+        } else {
+          setPrimeiraAnaliseCompleta(data.primeira_analise_completa === true);
+        }
+
           // If analysis exists, process it
-          if (data.analise_ia) {
-            setAnalise(data.analise_ia);
-            setStatusIA('Análise carregada');
-            
+        if (data.analise_ia) {
+          setAnalise(data.analise_ia);
+          setStatusIA('Análise carregada');
+
             // Extract suggestions using the new robust function
-            const matches = extrairSugestoes(data.analise_ia);
+          const matches = extrairSugestoes(data.analise_ia);
             console.log('Sugestões extraídas em Projeto.tsx:', matches);
             console.log('Total de sugestões:', matches.length);
-            setSugestoes(matches);
+          setSugestoes(matches);
             
             // Initialize approvals
-            setAprovacoes(Array(matches.length).fill(false));
-          }
-          
+          setAprovacoes(Array(matches.length).fill(false));
+        }
+
           // Track project viewed
-          if (user) {
+        if (user) {
             const db = getFirestore();
             const userRef = doc(db, 'usuarios', user.uid);
             const userSnap = await getDoc(userRef);
             const userData = userSnap.exists() ? userSnap.data() : {};
             const planType = userData?.planType || 'free';
             
-            trackProjectViewed({
-              projectId: id,
-              hasAnalysis: !!data.analise_ia,
-              hasTexts: !!data.textos,
+          trackProjectViewed({
+            projectId: id,
+            hasAnalysis: !!data.analise_ia,
+            hasTexts: !!data.textos,
               planType: planType,
-            });
-          }
+          });
         }
-        setLoading(false);
-      };
-      fetchProjeto();
+      }
+      setLoading(false);
+    };
+    fetchProjeto();
     }
   }, [id, user, isStreaming]);
+
+  /** Prévia visitante (landing → criar-projeto): aplica parecer salvo sem cobrar nova análise. */
+  useEffect(() => {
+    if (!id || loading || !projeto || !user || pendingAnaliseRestoreRef.current) return;
+    if (String(projeto.analise_ia || '').trim()) return;
+
+    const pending = readPendingAnalisePreview();
+    if (!pending?.analiseConteudo?.trim()) return;
+
+    const nomeProj = String(projeto.nome || '');
+    const descProj = String(projeto.descricao || '');
+    const combina =
+      pendingAnaliseMatchesForm(pending, nomeProj, descProj) ||
+      pendingAnaliseMatchesNome(pending, nomeProj);
+    if (!combina) return;
+
+    pendingAnaliseRestoreRef.current = true;
+    setAnaliseIniciada(true);
+
+    void (async () => {
+      try {
+        const ref = doc(getFirestore(), 'projetos', id);
+        await updateDoc(ref, {
+          analise_ia: pending.analiseConteudo,
+          primeira_analise_completa: true,
+          data_atualizacao: serverTimestamp(),
+          etapa_atual: Math.max(typeof projeto.etapa_atual === 'number' ? projeto.etapa_atual : 1, 2),
+        });
+        clearPendingAnalisePreview();
+        clearCriarProjetoDraft();
+
+        setProjeto((prev: typeof projeto) =>
+          prev
+            ? {
+                ...prev,
+                analise_ia: pending.analiseConteudo,
+                primeira_analise_completa: true,
+                etapa_atual: Math.max(prev.etapa_atual ?? 1, 2),
+              }
+            : prev,
+        );
+        setAnalise(pending.analiseConteudo);
+        setEtapaAtual(2);
+        setStatusIA('Análise carregada');
+        const matches = extrairSugestoes(pending.analiseConteudo);
+        setSugestoes(matches);
+        setAprovacoes(Array(matches.length).fill(false));
+        setPrimeiraAnaliseCompleta(true);
+        toast.success('Sua avaliação da prévia foi aplicada ao projeto.');
+      } catch (err) {
+        console.error('[projeto] restaurar prévia visitante', err);
+        pendingAnaliseRestoreRef.current = false;
+        setAnaliseIniciada(false);
+      }
+    })();
+  }, [id, loading, projeto, user]);
 
   // Iniciar análise automaticamente quando o projeto é carregado sem análise
   useEffect(() => {
     if (!loading && projeto && !projeto.analise_ia && !analisando && !analiseIniciada && user) {
       setAnaliseIniciada(true); // Marcar como iniciada para evitar múltiplas chamadas
       // Pequeno delay para garantir que o componente está totalmente renderizado
-      const timer = setTimeout(() => {
+    const timer = setTimeout(() => {
         analisarComIA();
       }, 800);
-      return () => clearTimeout(timer);
+    return () => clearTimeout(timer);
     }
   }, [loading, projeto, analisando, analiseIniciada, user]);
 
@@ -430,14 +495,14 @@ const Projeto = () => {
     
     try {
       // Use the current edited description as base, or fallback to original
-      const textoBase = descricaoEditada || projeto?.descricao || '';
+    const textoBase = descricaoEditada || projeto?.descricao || '';
       
-      if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
-        console.error('Texto ou sugestão vazios');
-        alert('Erro: texto ou sugestão inválidos');
+    if (!textoBase.trim() || !sugestoes[idx]?.trim()) {
+      console.error('Texto ou sugestão vazios');
+      alert('Erro: texto ou sugestão inválidos');
         setGerandoSugestao(null);
-        return;
-      }
+      return;
+    }
       
       // Buscar portfolio do usuário
       let portfolioTexto = '';
@@ -662,14 +727,14 @@ const Projeto = () => {
     
     try {
       // Use the current edited description as base, or fallback to original
-      const textoBase = descricaoEditada || projeto?.descricao || '';
+    const textoBase = descricaoEditada || projeto?.descricao || '';
       
-      if (!textoBase.trim()) {
+    if (!textoBase.trim()) {
         console.error('Texto do projeto vazio');
-        alert('Erro: texto do projeto inválido');
+      alert('Erro: texto do projeto inválido');
         setAplicandoSugestaoPersonalizada(false);
-        return;
-      }
+      return;
+    }
       
       // Buscar portfolio do usuário
       let portfolioTexto = '';
@@ -910,16 +975,16 @@ const Projeto = () => {
       const userData = userSnap.exists() ? userSnap.data() : {};
       const planType = userData?.planType || 'free';
       const projetoSnap = await getDoc(doc(db, 'projetos', id));
-      const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
+        const projetoData = projetoSnap.exists() ? projetoSnap.data() : null;
       const isFirstAnalysis = !projetoData?.analise_ia;
       
-      trackAnalysisStarted({
-        projectId: id,
+        trackAnalysisStarted({
+          projectId: id,
         planType: planType,
         isFirstAnalysis: isFirstAnalysis,
-      });
+        });
     }
-    
+
     // Primeiro, mostra o modal e configura os estados iniciais
     setMostrarAnalise(true);
     setAnalise(null);
@@ -927,7 +992,7 @@ const Projeto = () => {
     setStatusIA('O Oráculo está consultando as musas...');
     setSubEtapasIA(['Consultando as musas da inspiração...']);
     setAnalisando(true);
-    
+
     // Força uma atualização síncrona do DOM
     await new Promise(resolve => {
       // Usa requestAnimationFrame para garantir que o React tenha tempo de renderizar
@@ -1052,7 +1117,7 @@ const Projeto = () => {
             const data = JSON.parse(line.slice(6));
             if (data.content) {
               fullContent += data.content;
-              scheduleFlush();
+                scheduleFlush();
             }
             if (data.done) {
               fullContent = data.fullContent ?? fullContent;
@@ -2069,11 +2134,11 @@ const Projeto = () => {
                                   if (index === primeiroCriterioIndex && primeiroCriterioIndex < primeirasSecoes.length) {
                                     return (
                                       <React.Fragment key={`fragment-${index}`}>
-                                        <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
-                                          <h2 className="text-2xl font-bold text-gray-900">
+                            <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
+                              <h2 className="text-2xl font-bold text-gray-900">
                                             Avaliação final
-                                          </h2>
-                                        </div>
+                              </h2>
+                            </div>
                                         {renderizarSecao(section, index)}
                                       </React.Fragment>
                                     );
@@ -2088,7 +2153,7 @@ const Projeto = () => {
                                     const idxGlobal = primeirasSecoes.length + index;
                                     // Se este é o primeiro critério após PONTOS FRACOS, adicionar título antes
                                     if (idxGlobal === primeiroCriterioIndex && primeiroCriterioIndex >= primeirasSecoes.length) {
-                                      return (
+                              return (
                                         <React.Fragment key={`fragment-${idxGlobal}`}>
                                           <div className="border-b-2 border-gray-300 pb-4 mb-6 mt-8">
                                             <h2 className="text-2xl font-bold text-gray-900">
@@ -2307,7 +2372,7 @@ const Projeto = () => {
                               <Button
                                 onClick={() => {
                                   if (!checkPremiumAccess()) return;
-                                  analisarComIA();
+                                                                analisarComIA();
                                 }}
                                 disabled={analisando}
                                 variant="outline"
@@ -2315,7 +2380,7 @@ const Projeto = () => {
                               >
                                 {analisando ? 'Avaliando...' : 'Avaliar de novo com IA'}
                                 <span className="ml-1.5 opacity-80 text-xs">(5 créditos)</span>
-                              </Button>
+                                                              </Button>
                             </div>
                         </div>
                       )}
@@ -2340,7 +2405,7 @@ const Projeto = () => {
                       <Brain className="h-8 w-8" />
                       {analisando ? 'Analisando...' : 'Analisar com IA'}
                       <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span>
-                    </Button>
+                                          </Button>
                     {analisando && (
                       <div className="mt-4 bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-700 text-sm font-medium text-center animate-pulse">
                         {statusIA || 'Iniciando análise...'}

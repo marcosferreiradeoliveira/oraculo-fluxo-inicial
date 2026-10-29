@@ -57,8 +57,8 @@ type DemoWizardShellProps = {
   onProximo: () => void;
   /** Etapas clicáveis no tour demo (índice 0-based) */
   onStepClick?: (index: number) => void;
-  /** Destaque “ver exemplo” nos passos do wizard */
-  verExemploStepIndexes?: number[];
+  /** Até qual índice o visitante pode pular no stepper (inclusive) */
+  maxStepClickIndex?: number;
   proximoClassName?: string;
 };
 
@@ -74,7 +74,7 @@ export function DemoWizardShell({
   proximoLabel,
   onProximo,
   onStepClick,
-  verExemploStepIndexes = [],
+  maxStepClickIndex = 5,
   proximoClassName,
 }: DemoWizardShellProps) {
   const editalLinha = editalNome
@@ -98,17 +98,16 @@ export function DemoWizardShell({
           {DEMO_WIZARD_STEPS.map((label, index) => {
             const concluido = index < etapaAtiva;
             const ativo = index === etapaAtiva;
-            const verExemplo = verExemploStepIndexes.includes(index);
-            const clicavel = Boolean(onStepClick) && (verExemplo || index <= etapaAtiva);
+            const clicavel = Boolean(onStepClick) && index <= maxStepClickIndex;
             const StepCircle = (
               <div
                 className={`h-8 w-8 rounded-full flex items-center justify-center ${
                   concluido
                     ? 'bg-emerald-600 text-white'
                     : ativo
-                      ? 'bg-purple-600 text-white ring-2 ring-purple-300 ring-offset-2'
-                      : verExemplo
-                        ? 'bg-indigo-100 text-indigo-800 ring-2 ring-indigo-300'
+                      ? 'bg-oraculo-blue text-white ring-2 ring-oraculo-blue/30 ring-offset-2'
+                      : clicavel
+                        ? 'bg-oraculo-blue/85 text-white'
                         : 'bg-zinc-200 text-zinc-600'
                 } ${clicavel ? 'cursor-pointer hover:opacity-90' : ''}`}
               >
@@ -122,7 +121,7 @@ export function DemoWizardShell({
                     <button
                       type="button"
                       onClick={() => onStepClick?.(index)}
-                      className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                      className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-oraculo-blue"
                       aria-label={`Ir para ${label}`}
                     >
                       {StepCircle}
@@ -132,16 +131,17 @@ export function DemoWizardShell({
                   )}
                   <span
                     className={`text-[10px] md:text-xs mt-1.5 text-center leading-tight px-0.5 ${
-                      ativo ? 'font-bold text-purple-700' : concluido ? 'text-emerald-800 font-medium' : verExemplo ? 'text-indigo-700 font-semibold' : 'text-zinc-500'
+                      ativo
+                        ? 'font-bold text-oraculo-blue'
+                        : concluido
+                          ? 'text-emerald-800 font-medium'
+                          : clicavel
+                            ? 'text-oraculo-blue/90 font-medium'
+                            : 'text-zinc-500'
                     }`}
                   >
                     {index + 1}. {label}
                   </span>
-                  {verExemplo ? (
-                    <Badge variant="outline" className="mt-1 text-[9px] px-1.5 py-0 border-indigo-200 text-indigo-700 bg-indigo-50">
-                      ver exemplo
-                    </Badge>
-                  ) : null}
                 </div>
                 {index < DEMO_WIZARD_STEPS.length - 1 && (
                   <ChevronRight className="hidden lg:block h-4 w-4 text-zinc-300 shrink-0" aria-hidden />
@@ -152,7 +152,7 @@ export function DemoWizardShell({
         </div>
         <div className="w-full bg-zinc-200 rounded-full h-2">
           <div
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
+            className="bg-oraculo-blue h-2 rounded-full transition-all duration-500"
             style={{ width: `${((etapaAtiva + 1) / DEMO_WIZARD_STEPS.length) * 100}%` }}
           />
         </div>
@@ -167,7 +167,7 @@ export function DemoWizardShell({
       />
 
       <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 md:px-6 py-4">
+        <div className="bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white px-4 md:px-6 py-4">
           <h2 className="text-lg md:text-xl font-bold">{tituloPainel}</h2>
           {subtituloPainel ? <p className="text-sm text-white/85 mt-1">{subtituloPainel}</p> : null}
         </div>

@@ -207,7 +207,7 @@ const ProjetoEquipe = () => {
                   variant="outline"
                   size="sm"
                   className="w-full sm:w-auto"
-                  onClick={() => navigate({ pathname: '/', hash: 'fornecedores' })}
+                  onClick={() => navigate('/fornecedores')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Gerenciar cadastro na página inicial

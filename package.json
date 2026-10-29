@@ -7,7 +7,7 @@
     "dev": "vite --mode culturalapp",
     "build:landing-boost": "node scripts/build-landing-boost.mjs",
     "build": "npm run build:landing-boost && tsc && vite build --mode culturalapp",
-    "deploy:hosting": "npm run build && npx -y firebase-tools@latest deploy --only hosting --project culturalapp-fb9b0",
+    "deploy:hosting": "npm run build && npx -y firebase-tools@latest deploy --only hosting,functions:enviarEventoMeta --project culturalapp-fb9b0",
     "deploy:firestore-rules": "npx -y firebase-tools@latest deploy --only firestore:rules --project culturalapp-fb9b0",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
@@ -24,6 +24,7 @@
     "@radix-ui/react-label": "^2.0.2",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-switch": "^1.4.1",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-tooltip": "^1.0.7",

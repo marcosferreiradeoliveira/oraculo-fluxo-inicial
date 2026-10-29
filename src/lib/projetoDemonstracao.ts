@@ -570,13 +570,13 @@ export const DEMO_PARECER_UI = {
 /** Wizard e conteúdo rico — espelho do fluxo real (visitante /avaliar-projeto) */
 export const DEMO_WIZARD_STEPS = [
   'Criar Projeto',
-  'Profundidade e Escopo',
-  'Leitura do Edital',
+  'Avaliar com IA',
+  'Alterar com IA',
   'Gerar Textos',
-  'Definir Orçamento',
+  'Criar Orçamento',
   'Criar Cronograma',
-  'Documentos e Inscrição',
-  'Finalizar e Inscrição',
+  'Documentos de Inscrição',
+  'Preencher Anexos',
 ] as const;
 
 export type DemoCriterioMatriz = {

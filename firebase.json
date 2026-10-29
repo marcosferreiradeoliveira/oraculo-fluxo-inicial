@@ -30,6 +30,13 @@
         }
       },
       {
+        "source": "/api/meta-conversion",
+        "function": {
+          "functionId": "enviarEventoMeta",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

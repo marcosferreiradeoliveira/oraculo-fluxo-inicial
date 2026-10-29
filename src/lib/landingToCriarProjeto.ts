@@ -19,6 +19,32 @@ export function readLandingNomeProjeto(): string {
   return sessionStorage.getItem(STORAGE_NOME)?.trim() || '';
 }
 
+/** Volta do cadastro para criar-projeto (?continuar=true|1) */
+export function isCriarProjetoContinuarReturn(params: URLSearchParams): boolean {
+  const v = (params.get('continuar') || '').trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+/** Estado inicial do formulário (rascunho local ou ?nome= na URL). */
+export function readInitialCriarProjetoForm(params: URLSearchParams): {
+  nome: string;
+  descricao: string;
+  editalAssociado: string;
+} {
+  if (isCriarProjetoContinuarReturn(params)) {
+    const draft = readCriarProjetoDraft();
+    if (draft) {
+      return {
+        nome: draft.nome,
+        descricao: draft.descricao,
+        editalAssociado: draft.editalAssociado || '',
+      };
+    }
+  }
+  const fromUrl = params.get('nome')?.trim();
+  return { nome: fromUrl || '', descricao: '', editalAssociado: '' };
+}
+
 export function readCriarProjetoDraft(): CriarProjetoDraft | null {
   if (typeof localStorage === 'undefined') return null;
   try {

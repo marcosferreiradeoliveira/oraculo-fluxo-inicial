@@ -19,8 +19,12 @@ import { trackNewsletterSubscribed, trackCtaVerComoFunciona } from '@/lib/analyt
 import analisarImage from '@/assets/Analisar.jpeg';
 import { DashboardPremiumHero } from '@/components/home/DashboardPremiumHero';
 import { filterEditaisAbertos, findEditalMaisUrgente, type EditalUrgenteInfo } from '@/lib/editalDates';
-import { FornecedoresPainel } from '@/components/fornecedores/FornecedoresPainel';
 import { contentCardDescription } from '@/lib/contentExcerpt';
+import { CadastroCelebrationModal } from '@/components/CadastroCelebrationModal';
+import {
+  peekCadastroCelebrationPending,
+  type CadastroCelebrationPayload,
+} from '@/lib/cadastroCelebration';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -54,11 +58,22 @@ const Index = () => {
   const [redirectPremium, setRedirectPremium] = useState(false);
   const [emailNewsletter, setEmailNewsletter] = useState('');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [showCadastroCelebration, setShowCadastroCelebration] = useState(false);
+  const [cadastroCelebrationPayload, setCadastroCelebrationPayload] =
+    useState<CadastroCelebrationPayload | null>(null);
 
-  // Scroll para seções quando a URL tiver hash (#editais-abertos, #fornecedores)
+  useEffect(() => {
+    if (profileLoading || !user) return;
+    const pending = peekCadastroCelebrationPending();
+    if (!pending) return;
+    setCadastroCelebrationPayload(pending);
+    setShowCadastroCelebration(true);
+  }, [user, profileLoading]);
+
+  // Scroll para seções quando a URL tiver hash (#editais-abertos)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    if (hash === 'editais-abertos' || hash === 'fornecedores') {
+    if (hash === 'editais-abertos') {
       const el = document.getElementById(hash);
       if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
     }
@@ -282,9 +297,6 @@ const Index = () => {
                 </div>
               </div>
             )}
-
-            {/* Editais Abertos */}
-            {user && <FornecedoresPainel />}
 
             <div id="editais-abertos" className="mb-12 scroll-mt-24">
               <div className="flex items-center justify-between mb-6">
@@ -568,6 +580,11 @@ const Index = () => {
           </div>
         </main>
       </div>
+      <CadastroCelebrationModal
+        open={showCadastroCelebration}
+        payload={cadastroCelebrationPayload}
+        onClose={() => setShowCadastroCelebration(false)}
+      />
       <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
         <DialogContent className="max-w-xs text-center">
           <DialogHeader>

@@ -501,7 +501,7 @@ export const trackIntentLogin = (params?: { source?: string }) => {
   trackEvent('intent_login', {
     menu_name: params?.source ?? 'cta',
     menu_item: 'login',
-    destination: '/cadastro?mode=login',
+    destination: '/cadastro',
     section: params?.source ?? 'header',
     cta_type: 'nav_link',
   });

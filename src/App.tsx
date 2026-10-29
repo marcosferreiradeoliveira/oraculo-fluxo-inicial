@@ -53,7 +53,10 @@ import { StarterPlanGuard } from './components/StarterPlanGuard';
 import AvaliarProjeto from './pages/AvaliarProjeto';
 import GerarTextosAvaliar from './pages/GerarTextosAvaliar';
 import AvaliarProjetoDemoPasso from './pages/AvaliarProjetoDemoPasso';
+import Fornecedores from './pages/Fornecedores';
 import ProjetoEquipe from './pages/ProjetoEquipe';
+import { SiteFooter } from './components/SiteFooter';
+import { PerfilCompletionGate } from './components/PerfilCompletionGate';
 
 const queryClient = new QueryClient();
 
@@ -87,7 +90,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AnalyticsListener />
+        <PerfilCompletionGate />
         <GoogleTagManagerRouteTracker />
+        <div className="flex min-h-screen flex-col">
+          <div className="flex-1 min-h-0">
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/cadastro" element={<Cadastro />} />
@@ -110,6 +116,7 @@ const App = () => (
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/infograficos" element={<ProtectedRoute><Infograficos /></ProtectedRoute>} />
           <Route path="/conta" element={<ProtectedRoute><Conta /></ProtectedRoute>} />
+          <Route path="/fornecedores" element={<ProtectedRoute><Fornecedores /></ProtectedRoute>} />
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/cadastro-premium" element={<CadastroPremium />} />
           <Route path="/contato-premium" element={<ProtectedRoute><ContatoPremium /></ProtectedRoute>} />
@@ -137,6 +144,9 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+          </div>
+          <SiteFooter />
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

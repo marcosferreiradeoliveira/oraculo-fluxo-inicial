@@ -200,9 +200,15 @@ export function FornecedoresPainel() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          Carregando…
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true" aria-label="Carregando fornecedores">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 space-y-3 animate-pulse">
+              <div className="h-5 w-3/4 rounded bg-gray-200" />
+              <div className="h-3 w-full rounded bg-gray-100" />
+              <div className="h-3 w-2/3 rounded bg-gray-100" />
+              <div className="h-16 w-full rounded-lg bg-gray-50" />
+            </div>
+          ))}
         </div>
       ) : lista.length === 0 ? (
         <Card className="border-dashed border-2 border-gray-200 bg-white">
