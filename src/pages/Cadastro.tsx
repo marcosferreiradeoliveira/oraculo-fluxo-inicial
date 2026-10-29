@@ -5,7 +5,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithP
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Sparkles, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { trackLoginSuccess, identifyMixpanelUser } from '@/lib/analytics';
+import { trackLoginSuccess, identifyMixpanelUser, trackCompleteRegistration } from '@/lib/analytics';
 import {
   trackMetaCompleteRegistration,
   trackMetaCompleteRegistrationAndWait,
@@ -109,7 +109,12 @@ const Cadastro = () => {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const navigate = useNavigate();
 
-  const finishNewUserSignup = (redirectPath?: string | null) => {
+  const finishNewUserSignup = (
+    redirectPath?: string | null,
+    registrationMethod: 'email' | 'google' = 'email',
+    userId?: string,
+  ) => {
+    trackCompleteRegistration({ registrationMethod, userId });
     const target = redirectPath && redirectPath.startsWith('/') ? redirectPath : '/';
     markCadastroCelebrationPending(target === '/' ? undefined : target);
     navigate('/');
@@ -169,7 +174,7 @@ const Cadastro = () => {
           }),
         );
         await trackMetaCompleteRegistrationAndWait(user.email || undefined, user.uid);
-        finishNewUserSignup(redirect);
+        finishNewUserSignup(redirect, 'google', user.uid);
         setLoadingGoogle(false);
         return;
       }
@@ -280,7 +285,7 @@ const Cadastro = () => {
         );
         await trackMetaCompleteRegistrationAndWait(cred.user.email || email, cred.user.uid);
         setLoading(false);
-        finishNewUserSignup(redirect);
+        finishNewUserSignup(redirect, 'email', cred.user.uid);
         return;
 
         // COMENTADO: Envio de email de confirmação
@@ -363,8 +368,9 @@ const Cadastro = () => {
           perfil_dados_coletados: true,
         });
         trackMetaCompleteRegistration(userEmail, userUid);
-        finishNewUserSignup(redirect);
+        finishNewUserSignup(redirect, 'email', userUid);
       } else {
+        const isNewUser = !userDoc.data()?.nome_completo || !userDoc.data()?.empresa;
         await updateDoc(userDocRef, {
           nome_completo: nomeCompletoTrimmed,
           empresa: empresaTrimmed || '',
@@ -372,7 +378,14 @@ const Cadastro = () => {
           lastLoginAt: timestamp,
           ultimo_login: timestamp,
         });
-
+        if (currentUser) {
+          trackLoginSuccess({ tipoLogin: 'social' });
+          if (isNewUser) {
+            trackMetaCompleteRegistration(userEmail, userUid);
+            finishNewUserSignup(redirect, 'google', userUid);
+            return;
+          }
+        }
         const target = redirect && redirect.startsWith('/') ? redirect : '/';
         navigate(target);
       }

@@ -769,3 +769,24 @@ export const identifyMixpanelUser = (userId: string, userProperties?: {
     }
   }
 };
+
+// ==========================================
+// EVENTOS DE CONVERSÃO (META/FACEBOOK)
+// ==========================================
+
+/**
+ * Cadastro completo (CompleteRegistration)
+ * 🔴 CRÍTICO: Conversão de cadastro para Meta Ads
+ * Dispara evento CompleteRegistration para o Meta Pixel quando um novo usuário completa o cadastro
+ */
+export const trackCompleteRegistration = (params: {
+  registrationMethod: 'email' | 'google';
+  userId?: string;
+}) => {
+  // Evento para Firebase Analytics, GTM e Mixpanel
+  trackEvent('complete_registration', {
+    registration_method: params.registrationMethod,
+    user_id: params.userId,
+  });
+  // Meta Pixel + CAPI: @/lib/metaPixel (trackMetaCompleteRegistration*)
+};
