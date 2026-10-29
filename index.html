@@ -28,16 +28,26 @@
     
     <!-- Meta Pixel Code -->
     <script>
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '642831091634391');
-      fbq('track', 'PageView');
+      // Only load Meta Pixel on production domain (oraculocultural.com.br)
+      if (window.location.hostname === 'oraculocultural.com.br') {
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '642831091634391');
+        fbq('track', 'PageView');
+        console.log('[Meta Pixel] Loaded on production domain');
+      } else {
+        // Stub fbq function for non-production environments to prevent errors
+        window.fbq = function() {
+          console.log('[Meta Pixel] Disabled on', window.location.hostname, '- Event:', arguments);
+        };
+        console.log('[Meta Pixel] Disabled on non-production domain:', window.location.hostname);
+      }
     </script>
     <!-- End Meta Pixel Code -->
 
@@ -56,11 +66,12 @@
   </head>
 
   <body>
-    <!-- Meta Pixel Noscript -->
-    <noscript>
-      <img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=642831091634391&ev=PageView&noscript=1" />
-    </noscript>
+    <!-- Meta Pixel Noscript - Only on production -->
+    <script>
+      if (window.location.hostname === 'oraculocultural.com.br') {
+        document.write('<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=642831091634391&ev=PageView&noscript=1" /></noscript>');
+      }
+    </script>
     
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

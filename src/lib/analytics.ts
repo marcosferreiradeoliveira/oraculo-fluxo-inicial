@@ -748,3 +748,38 @@ export const identifyMixpanelUser = (userId: string, userProperties?: {
     }
   }
 };
+
+// ==========================================
+// EVENTOS DE CONVERSÃO (META/FACEBOOK)
+// ==========================================
+
+/**
+ * Cadastro completo (CompleteRegistration)
+ * 🔴 CRÍTICO: Conversão de cadastro para Meta Ads
+ * Dispara evento CompleteRegistration para o Meta Pixel quando um novo usuário completa o cadastro
+ */
+export const trackCompleteRegistration = (params: {
+  registrationMethod: 'email' | 'google';
+  userId?: string;
+}) => {
+  // Evento para Firebase Analytics, GTM e Mixpanel
+  trackEvent('complete_registration', {
+    registration_method: params.registrationMethod,
+    user_id: params.userId,
+  });
+
+  // Meta Pixel: CompleteRegistration (evento padrão)
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    try {
+      (window as any).fbq('track', 'CompleteRegistration', {
+        content_name: 'Cadastro Oráculo Cultural',
+        status: 'completed',
+      });
+      console.log('[Meta Pixel] Evento CompleteRegistration disparado:', {
+        registration_method: params.registrationMethod,
+      });
+    } catch (error) {
+      console.error('[Meta Pixel] Erro ao disparar CompleteRegistration:', error);
+    }
+  }
+};

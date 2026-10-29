@@ -5,7 +5,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithP
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Sparkles, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { trackLoginSuccess, identifyMixpanelUser } from '@/lib/analytics';
+import { trackLoginSuccess, identifyMixpanelUser, trackCompleteRegistration } from '@/lib/analytics';
 import criarImage from '@/assets/Criar.jpeg';
 import { Card, CardContent } from '@/components/ui/card';
 import logo from '@/assets/logo.png';
@@ -249,9 +249,18 @@ const Cadastro = () => {
         };
         
         await setDoc(userDocRef, dadosParaSalvar);
+        
+        // Disparar evento CompleteRegistration para Meta Pixel
+        trackCompleteRegistration({
+          registrationMethod: 'email',
+          userId: userUid,
+        });
+        
         setCadastroConcluido(true);
       } else {
         // Atualizar documento existente (login com Google que precisa completar dados)
+        const isNewUser = !userDoc.data()?.nome_completo || !userDoc.data()?.empresa;
+        
         await updateDoc(userDocRef, {
           nome_completo: nomeCompletoTrimmed,
           empresa: empresaTrimmed || '',
@@ -262,6 +271,14 @@ const Cadastro = () => {
         // Track login success se for login com Google
         if (currentUser) {
           trackLoginSuccess({ tipoLogin: 'social' });
+          
+          // Se for um novo usuário completando o perfil pela primeira vez, disparar CompleteRegistration
+          if (isNewUser) {
+            trackCompleteRegistration({
+              registrationMethod: 'google',
+              userId: userUid,
+            });
+          }
         }
         const target = redirect && redirect.startsWith('/') ? redirect : '/';
         navigate(target);
