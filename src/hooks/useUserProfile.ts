@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { deriveEntitlements, hasPaidPlan, type Entitlements } from '@/lib/entitlements';
 
 export type PremiumProjectSummary = {
   id: string;
@@ -21,6 +22,7 @@ export type UserProfileState = {
   planType: string | null;
   creditos: number;
   metrics: HomeDashboardMetrics;
+  entitlements: Entitlements;
 };
 
 const defaultMetrics: HomeDashboardMetrics = {
@@ -44,11 +46,22 @@ export function etapaLabel(index: number): string {
   return 'Em andamento';
 }
 
-function planLabelFromType(planType: string | null | undefined, isPremium: boolean): string {
+function planLabelFromType(planType: string | null | undefined, planId: string | null | undefined, isPremium: boolean): string {
+  // Check new plan ID first
+  if (planId) {
+    if (planId === 'proponente') return 'Proponente';
+    if (planId === 'produtora') return 'Produtora';
+    if (planId === 'institucional') return 'Institucional';
+    if (planId === 'gestor_pro') return 'Gestor Pro';
+    if (planId === 'free') return 'Starter';
+  }
+  
+  // Legacy planType mapping
   const pt = (planType || '').toLowerCase();
-  if (pt === 'essencial') return 'Essencial';
-  if (pt === 'basico') return 'Básico';
-  if (pt === 'premium' || isPremium) return 'Premium';
+  if (pt === 'essencial' || pt === 'intermediario') return 'Produtora';
+  if (pt === 'basico') return 'Proponente';
+  if (pt === 'premium' || pt === 'avancado') return 'Institucional';
+  if (pt === 'gestor_pro') return 'Gestor Pro';
   if (pt === 'free') return 'Starter';
   return isPremium ? 'Premium' : 'Starter';
 }
@@ -115,12 +128,22 @@ export function useUserProfile() {
           }
         }
 
+        const entitlements = deriveEntitlements({
+          plan: data.plan,
+          planStatus: data.planStatus,
+          entitlements: data.entitlements,
+          isPremium: data.isPremium,
+          planType: data.planType,
+          isAdmin: data.isAdmin,
+        });
+
         setProfile({
           nome,
           isPremium,
           planType: (data.planType as string) ?? null,
           creditos: typeof data.creditos === 'number' ? data.creditos : Number(data.creditos ?? 0),
           metrics,
+          entitlements,
         });
         setProfileLoading(false);
       },
@@ -134,12 +157,21 @@ export function useUserProfile() {
 
   const loading = authLoading || profileLoading;
 
+  const profileData = profile ? {
+    plan: (profile as any).plan,
+    planStatus: (profile as any).planStatus,
+    entitlements: profile.entitlements,
+    isPremium: profile.isPremium,
+    planType: profile.planType,
+    isAdmin: (profile as any).isAdmin,
+  } : null;
+
   return {
     user,
     loading,
-    isPremium: profile?.isPremium === true,
+    isPremium: hasPaidPlan(profileData),
     profile,
-    planLabel: planLabelFromType(profile?.planType, profile?.isPremium === true),
+    planLabel: planLabelFromType(profile?.planType, (profile as any)?.plan, profile?.isPremium === true),
   };
 }
 

@@ -1,24 +1,26 @@
 /** Plano gratuito Starter (Freemium): Módulo 1 — simulador de avaliação */
 
+import { hasPaidPlan as hasPaidPlanEntitlements, isStarterPlan as isStarterPlanEntitlements, type UserEntitlementsData } from './entitlements';
+
 export const STARTER_CREDITS_ON_SIGNUP = 15;
 
 /** Índices das etapas do fluxo (0=Criar … 7=Anexos). Starter inclui até Alterar com IA. */
 export const STARTER_MAX_STEP_INDEX = 2;
 
-export type UserPlanFields = {
-  isPremium?: boolean;
-  planType?: string | null;
-};
+export type UserPlanFields = UserEntitlementsData;
 
+/**
+ * Check if user has paid plan using unified entitlements model
+ */
 export function hasPaidPlan(data: UserPlanFields | null | undefined): boolean {
-  if (!data) return false;
-  if (data.isPremium === true) return true;
-  const pt = (data.planType || '').toString().toLowerCase();
-  return pt === 'basico' || pt === 'essencial' || pt === 'premium';
+  return hasPaidPlanEntitlements(data);
 }
 
+/**
+ * Check if user is on starter/free plan using unified entitlements model
+ */
 export function isStarterPlan(data: UserPlanFields | null | undefined): boolean {
-  return !hasPaidPlan(data);
+  return isStarterPlanEntitlements(data);
 }
 
 export function starterPaywallUrl(motivo: 'starter_modulo2' | 'creditos_insuficientes' = 'starter_modulo2'): string {

@@ -181,7 +181,50 @@ const CadastroPremium = () => {
     try {
       console.log('[CadastroPremium] Iniciando criação de checkout Stripe:', { planType, userEmail, userId });
       
-      // Criar assinatura recorrente mensal no Stripe com o tipo de plano selecionado
+      // Map legacy planType to new planId
+      const planIdMap: Record<string, string> = {
+        basico: 'proponente',
+        essencial: 'produtora',
+        premium: 'institucional',
+      };
+      const planId = planIdMap[planType] || planType;
+      const ciclo = isAnnual ? 'anual' : 'mensal';
+
+      // Try new server-priced createCheckout callable first
+      try {
+        console.log('[CadastroPremium] Tentando novo createCheckout callable:', { planId, ciclo });
+        const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/createCheckout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            data: {
+              planId,
+              ciclo,
+            },
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[CadastroPremium] Success data from createCheckout:', data);
+          
+          const checkoutUrl = data.result?.checkout_url || data.checkout_url;
+          if (checkoutUrl) {
+            // Redirecionar para o checkout do Stripe
+            window.location.href = checkoutUrl;
+            return;
+          }
+        } else {
+          console.log('[CadastroPremium] createCheckout não disponível, usando fallback');
+        }
+      } catch (err) {
+        console.log('[CadastroPremium] createCheckout não disponível, usando fallback:', err);
+      }
+
+      // Fallback to legacy criarAssinaturaPremiumStripe
+      console.log('[CadastroPremium] Usando criarAssinaturaPremiumStripe (fallback)');
       const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarAssinaturaPremiumStripe', {
         method: 'POST',
         headers: {
@@ -190,8 +233,8 @@ const CadastroPremium = () => {
         body: JSON.stringify({
           userId: userId,
           email: userEmail,
-          planType: planType, // Passar o tipo de plano selecionado
-          isAnnual: isAnnual, // Passar se é anual ou mensal
+          planType: planType,
+          isAnnual: isAnnual,
         }),
       });
 

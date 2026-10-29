@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc, increment } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -644,10 +645,12 @@ const CriarProjeto = () => {
                   
                   // Deduzir 5 créditos para usuário não premium (avaliação = 5 créditos)
                   try {
-                    const userRef = doc(db, 'usuarios', user.uid);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-                      await updateDoc(userRef, { creditos: increment(-5) });
+                    const result = await consumirCreditos(user.uid, 'analise_projeto', {
+                      skipIfPremium: true,
+                    });
+                    
+                    if (!result.success) {
+                      console.warn('Aviso ao descontar créditos:', result.error);
                     }
                   } catch (err) {
                     console.error('Erro ao descontar créditos:', err);

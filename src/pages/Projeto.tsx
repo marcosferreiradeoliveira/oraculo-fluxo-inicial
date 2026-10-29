@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -1162,11 +1163,15 @@ const Projeto = () => {
 
         if (user) {
           try {
-            const userRef = doc(db, 'usuarios', user.uid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-              await updateDoc(userRef, { creditos: increment(-CREDITOS_ANALISE) });
-              setCreditos((c) => Math.max(0, c - CREDITOS_ANALISE));
+            const result = await consumirCreditos(user.uid, 'analise_projeto', {
+              skipIfPremium: true,
+              onCreditsUpdated: (newBalance) => {
+                setCreditos(newBalance);
+              },
+            });
+            
+            if (!result.success) {
+              console.warn('Aviso ao descontar créditos:', result.error);
             }
           } catch (e) {
             console.error('Erro ao descontar créditos:', e);
