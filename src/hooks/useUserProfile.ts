@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { deriveEntitlements, type Entitlements } from '@/lib/entitlements';
 
 export type PremiumProjectSummary = {
   id: string;
@@ -21,6 +22,7 @@ export type UserProfileState = {
   planType: string | null;
   creditos: number;
   metrics: HomeDashboardMetrics;
+  entitlements: Entitlements;
 };
 
 const defaultMetrics: HomeDashboardMetrics = {
@@ -115,12 +117,22 @@ export function useUserProfile() {
           }
         }
 
+        const entitlements = deriveEntitlements({
+          plan: data.plan,
+          planStatus: data.planStatus,
+          entitlements: data.entitlements,
+          isPremium,
+          planType: (data.planType as string) ?? null,
+          isAdmin: data.isAdmin === true,
+        });
+
         setProfile({
           nome,
           isPremium,
           planType: (data.planType as string) ?? null,
           creditos: typeof data.creditos === 'number' ? data.creditos : Number(data.creditos ?? 0),
           metrics,
+          entitlements,
         });
         setProfileLoading(false);
       },

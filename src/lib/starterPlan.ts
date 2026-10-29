@@ -1,4 +1,10 @@
-/** Plano gratuito Starter (Freemium): avaliação + uso de créditos no Módulo 2 */
+/** 
+ * Plano gratuito Starter (Freemium): avaliação + uso de créditos no Módulo 2
+ * 
+ * This module now re-exports from the unified entitlements model for backward compatibility.
+ */
+
+import { hasPaidPlan as hasPaidPlanEntitlements, isStarterPlan as isStarterPlanEntitlements, type UserEntitlementsData } from './entitlements';
 
 export const STARTER_CREDITS_ON_SIGNUP = 15;
 
@@ -21,20 +27,17 @@ export const PROJECT_STEP_CREDIT_COST: Partial<Record<number, number>> = {
   5: CREDITOS_ORCAMENTO,
 };
 
-export type UserPlanFields = {
-  isPremium?: boolean;
-  planType?: string | null;
-};
+export type UserPlanFields = UserEntitlementsData;
 
+/**
+ * Re-export from entitlements with backward-compatible signature
+ */
 export function hasPaidPlan(data: UserPlanFields | null | undefined): boolean {
-  if (!data) return false;
-  if (data.isPremium === true) return true;
-  const pt = (data.planType || '').toString().toLowerCase();
-  return pt === 'basico' || pt === 'essencial' || pt === 'premium';
+  return hasPaidPlanEntitlements(data);
 }
 
 export function isStarterPlan(data: UserPlanFields | null | undefined): boolean {
-  return !hasPaidPlan(data);
+  return isStarterPlanEntitlements(data);
 }
 
 export function starterPaywallUrl(motivo: 'starter_modulo2' | 'creditos_insuficientes' = 'starter_modulo2'): string {

@@ -150,8 +150,15 @@ const DetalhesEdital = () => {
     (async () => {
       try {
         const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
-        const isPremium = userSnap.exists() && userSnap.data()?.isPremium === true;
-        if (!cancelled) setCanManageEdital(isPremium);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          // Use entitlements to check Criação access
+          const hasCriacao = userData.entitlements?.criacao === true ||
+                            userData.isPremium === true; // legacy fallback
+          if (!cancelled) setCanManageEdital(hasCriacao);
+        } else {
+          if (!cancelled) setCanManageEdital(false);
+        }
       } catch {
         if (!cancelled) setCanManageEdital(false);
       }

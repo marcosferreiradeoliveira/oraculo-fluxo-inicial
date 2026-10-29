@@ -11,8 +11,6 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
-import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
-import { CREDITOS_CRONOGRAMA } from '@/lib/starterPlan';
 import * as XLSX from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -227,11 +225,20 @@ const CriarCronograma = () => {
         durationSeconds: (Date.now() - startTime) / 1000,
         textLength: etapasGeradas.length,
         });
+      
+      // Debit credits for cronograma generation (3 credits)
       try {
-        await spendCreditsIfStarter(db, user.uid, CREDITOS_CRONOGRAMA);
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
+          skipIfPremium: true,
+        });
+        
+        if (!result.success) {
+          console.warn('[CriarCronograma] Aviso ao descontar créditos:', result.error);
+        }
       } catch (e) {
-        console.error('Erro ao descontar créditos (cronograma):', e);
+        console.error('[CriarCronograma] Erro ao descontar créditos:', e);
       }
+      
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
@@ -292,6 +299,20 @@ const CriarCronograma = () => {
         rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
       setSugestoesCronograma('');
+      
+      // Debit credits for cronograma alterations (3 credits)
+      try {
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
+          skipIfPremium: true,
+        });
+        
+        if (!result.success) {
+          console.warn('[CriarCronograma] Aviso ao descontar créditos (alterações):', result.error);
+        }
+      } catch (e) {
+        console.error('[CriarCronograma] Erro ao descontar créditos (alterações):', e);
+      }
+      
       toast.success('Alterações aplicadas. Aprove ou volte ao estado anterior.');
     } catch (err) {
       console.error(err);

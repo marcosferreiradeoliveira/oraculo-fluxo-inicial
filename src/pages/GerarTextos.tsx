@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,6 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
-import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
-import { CREDITOS_GERAR_TEXTO } from '@/lib/starterPlan';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -304,12 +303,6 @@ const GerarTextos = () => {
         log(errorMsg);
         return false; // Indica que não foi possível iniciar a geração
       }
-
-      if (user) {
-        const db = getFirestore();
-        const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_GERAR_TEXTO, navigate);
-        if (!ok) return false;
-      }
       
       // 2. Inicialização do estado
       setProgresso('Inicializando geração...');
@@ -497,6 +490,22 @@ const GerarTextos = () => {
               durationSeconds: (Date.now() - startTime) / 1000,
               textLength: fullTextData.length,
                   });
+            
+            // Debit credits for text generation (1 credit)
+            if (user) {
+              try {
+                const result = await consumirCreditos(user.uid, 'gerar_texto', {
+                  skipIfPremium: true,
+                });
+                
+                if (!result.success) {
+                  console.warn('[GerarTextos] Aviso ao descontar créditos:', result.error);
+                }
+              } catch (e) {
+                console.error('[GerarTextos] Erro ao descontar créditos:', e);
+              }
+            }
+            
             setTimeout(() => {
               const el = document.getElementById('pedidos-alteracao-texto');
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -606,13 +615,22 @@ const GerarTextos = () => {
             durationSeconds: (Date.now() - startTime) / 1000,
             textLength: fullText.length,
               });
+          
+          // Debit credits for text generation (1 credit)
           if (user) {
             try {
-              await spendCreditsIfStarter(getFirestore(), user.uid, CREDITOS_GERAR_TEXTO);
+              const result = await consumirCreditos(user.uid, 'gerar_texto', {
+                skipIfPremium: true,
+              });
+              
+              if (!result.success) {
+                console.warn('[GerarTextos] Aviso ao descontar créditos (streaming):', result.error);
+              }
             } catch (e) {
-              console.error('Erro ao descontar créditos (gerar texto):', e);
+              console.error('[GerarTextos] Erro ao descontar créditos (streaming):', e);
             }
           }
+          
           setTimeout(() => {
             const el = document.getElementById('pedidos-alteracao-texto');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
