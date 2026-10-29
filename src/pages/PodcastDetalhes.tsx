@@ -50,7 +50,10 @@ const PodcastDetalhes = () => {
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          setIsPremium(userData.isPremium === true);
+          // Use entitlements to check Criação access
+          const hasCriacao = userData.entitlements?.criacao === true ||
+                            userData.isPremium === true; // legacy fallback
+          setIsPremium(hasCriacao);
           setPodcastsBaixados(userData.podcastsBaixados || []);
         }
       } catch (error) {
@@ -120,7 +123,9 @@ const PodcastDetalhes = () => {
       
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        isUserPremium = userData.isPremium === true;
+        // Use entitlements to check Criação access (content access)
+        isUserPremium = userData.entitlements?.criacao === true ||
+                        userData.isPremium === true; // legacy fallback
         currentDownloads = userData.podcastsBaixados || [];
       }
 

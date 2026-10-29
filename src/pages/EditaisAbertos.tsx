@@ -104,9 +104,11 @@ const EditaisAbertos = () => {
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        const isPremium = userData.isPremium === true;
+        // Use entitlements to check Criação access
+        const hasCriacao = userData.entitlements?.criacao === true ||
+                          userData.isPremium === true; // legacy fallback
 
-        if (!isPremium) {
+        if (!hasCriacao) {
           setShowPremiumDialog(true);
           return;
         }

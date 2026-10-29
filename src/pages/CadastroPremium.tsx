@@ -4,6 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
@@ -174,6 +175,27 @@ const CadastroPremium = () => {
 
     setLoading(true);
     try {
+      const planIdMap: Record<CheckoutPlanType, string> = {
+        basico: 'proponente',
+        essencial: 'produtora',
+      };
+
+      try {
+        const functions = getFunctions(undefined, 'us-central1');
+        const createCheckoutCallable = httpsCallable(functions, 'createCheckout');
+        const result = await createCheckoutCallable({
+          planId: planIdMap[planType],
+          ciclo: checkoutCiclo,
+        });
+        const checkoutUrl = (result.data as { url?: string })?.url;
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl;
+          return;
+        }
+      } catch (callableErr) {
+        console.warn('[CadastroPremium] createCheckout callable indisponível, usando HTTP:', callableErr);
+      }
+
       const data = await createCheckout({
         userId,
         email: userEmail,
@@ -209,6 +231,7 @@ const CadastroPremium = () => {
         'Importação automática e detalhamento de Editais',
         'Acesso ao Polo de Conhecimento (e-books, podcasts)',
         'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
+        '💳 50 créditos/mês (renovam no dia 1º)',
       ],
       buttonText: 'Escolher Plano',
       icon: Users,
@@ -219,13 +242,18 @@ const CadastroPremium = () => {
       planType: 'essencial' as const,
       subtitle: 'Produtora pequena/média',
       description: 'Até 5 usuários, infinitos projetos',
-      focus: 'Criação e execução (captação e conformidade)',
+      focus: 'Criação + Finance + Gestor (captação, execução e conformidade)',
       monthlyPrice: 'R$ 349,00',
       monthlyPeriod: '/mês',
       annualInstallment: 'R$ 314,10',
       annualStrikethrough: 'R$ 4.188,00',
       annualCashLine: 'ou R$ 3.769,20 à vista',
-      features: ['Todas as funcionalidades do Proponente com infinitos projetos'],
+      features: [
+        'Todas as funcionalidades do Proponente com infinitos projetos',
+        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
+        'Gestão completa de captação, execução e conformidade',
+        '💳 200 créditos/mês (renovam no dia 1º)',
+      ],
       buttonText: 'Escolher Plano',
       icon: Building2,
       popular: true,
@@ -235,12 +263,14 @@ const CadastroPremium = () => {
       planType: 'premium' as const,
       subtitle: 'Agências e produtoras grandes',
       description: 'Usuários ilimitados, projetos ilimitados',
-      focus: 'Performance e auditoria rigorosa',
+      focus: 'Criação + Finance + Gestor (performance e auditoria rigorosa)',
       features: [
         'Todas as funcionalidades da Produtora',
+        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
         'Desenvolvimento de módulos customizados',
+        '💳 500 créditos/mês (renovam no dia 1º)',
       ],
       buttonText: 'Solicitar Contato',
       icon: Crown,
@@ -261,14 +291,14 @@ const CadastroPremium = () => {
             {motivoCreditosInsuficientes && (
               <div className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-900">
                 <p className="text-sm md:text-base font-medium">
-                  Você não tem créditos suficientes para esta ação. Assine um plano para uso ilimitado.
+                  Você não tem créditos suficientes para esta ação. Assine um plano para receber créditos mensais.
                 </p>
               </div>
             )}
             {motivoStarterModulo2 && (
               <div className="mb-6 p-4 rounded-xl bg-oraculo-blue/5 border-2 border-oraculo-blue/30 text-gray-900">
                 <p className="text-sm md:text-base font-medium">
-                  O plano <strong>Starter (gratuito)</strong> inclui avaliação, textos, cronograma e orçamento enquanto você tiver créditos.
+                  O plano <strong>Starter (gratuito)</strong> começa com 30 créditos e inclui avaliação, textos, cronograma e orçamento.
                   Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos.
                 </p>
               </div>
@@ -280,6 +310,9 @@ const CadastroPremium = () => {
               </h1>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
                 Escolha o plano ideal para o seu perfil e acelere seus projetos culturais
+              </p>
+              <p className="text-sm text-gray-500 max-w-2xl mx-auto mb-8">
+                💡 <strong>Plano Starter:</strong> 30 créditos iniciais. <strong>Planos pagos:</strong> créditos mensais que renovam no dia 1º e não acumulam.
               </p>
               
               {/* Toggle Anual/Mensal */}

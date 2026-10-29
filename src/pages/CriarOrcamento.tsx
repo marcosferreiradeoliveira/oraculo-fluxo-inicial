@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -32,8 +33,6 @@ import {
   resumoCronogramaParaOrcamento,
 } from '@/lib/cronogramaDuracao';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
-import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
-import { CREDITOS_ORCAMENTO } from '@/lib/starterPlan';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
 import {
@@ -700,9 +699,15 @@ const CriarOrcamento = () => {
         });
         if (user) {
           try {
-            await spendCreditsIfStarter(getFirestore(), user.uid, CREDITOS_ORCAMENTO);
+            const result = await consumirCreditos(user.uid, 'gerar_orcamento', {
+              skipIfPremium: true,
+            });
+            
+            if (!result.success) {
+              console.warn('[CriarOrcamento] Aviso ao descontar créditos:', result.error);
+            }
           } catch (e) {
-            console.error('Erro ao descontar créditos (orçamento):', e);
+            console.error('[CriarOrcamento] Erro ao descontar créditos:', e);
           }
         }
         if (rubricasFinaisGeracao.length > 0) {

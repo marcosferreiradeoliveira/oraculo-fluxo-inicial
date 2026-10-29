@@ -179,7 +179,9 @@ const Index = () => {
       if (userSnap.exists()) {
         const data = userSnap.data();
         guiasBaixados = data.guiasBaixados || [];
-        isPremium = data.isPremium || false;
+        // Use entitlements to check Criação access (content access)
+        isPremium = data.entitlements?.criacao === true ||
+                   data.isPremium === true; // legacy fallback
       }
       // Se não for premium e já baixou 1 guia diferente
       if (!isPremium && guiasBaixados.length >= 1 && !guiasBaixados.includes(guiaId)) {
