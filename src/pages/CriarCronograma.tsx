@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -222,6 +223,20 @@ const CriarCronograma = () => {
         durationSeconds: (Date.now() - startTime) / 1000,
         textLength: etapasGeradas.length,
         });
+      
+      // Debit credits for cronograma generation (3 credits)
+      try {
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
+          skipIfPremium: true,
+        });
+        
+        if (!result.success) {
+          console.warn('[CriarCronograma] Aviso ao descontar créditos:', result.error);
+        }
+      } catch (creditErr) {
+        console.error('[CriarCronograma] Erro ao descontar créditos:', creditErr);
+      }
+      
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
@@ -282,6 +297,20 @@ const CriarCronograma = () => {
         rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
       setSugestoesCronograma('');
+      
+      // Debit credits for cronograma alterations (3 credits)
+      try {
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
+          skipIfPremium: true,
+        });
+        
+        if (!result.success) {
+          console.warn('[CriarCronograma] Aviso ao descontar créditos (alterações):', result.error);
+        }
+      } catch (creditErr) {
+        console.error('[CriarCronograma] Erro ao descontar créditos (alterações):', creditErr);
+      }
+      
       toast.success('Alterações aplicadas. Aprove ou volte ao estado anterior.');
     } catch (err) {
       console.error(err);

@@ -4,16 +4,30 @@
  * Routes IA credit debits through consumirCreditos callable with fallback
  */
 
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-export type CreditAction = 'analise_projeto' | 'gerar_texto' | 'alterar_texto' | 'avaliar_edital';
+/**
+ * Credit action types - must match server-side plans.ts in cultura-fluxo-finance
+ * Costs from spec: análise/avaliação 5, gerar texto 1, cronograma 3, orçamento 3
+ */
+export type CreditAction = 
+  | 'analise_projeto'      // 5 credits
+  | 'avaliar_projeto'      // 5 credits (same as analise)
+  | 'gerar_texto'          // 1 credit
+  | 'gerar_cronograma'     // 3 credits
+  | 'gerar_orcamento';     // 3 credits
 
+/**
+ * Client-side reference costs (informational only)
+ * Server is authoritative - these should match cultura-fluxo-finance plans.ts
+ */
 const CREDIT_COSTS: Record<CreditAction, number> = {
   analise_projeto: 5,
-  gerar_texto: 3,
-  alterar_texto: 2,
-  avaliar_edital: 5,
+  avaliar_projeto: 5,
+  gerar_texto: 1,
+  gerar_cronograma: 3,
+  gerar_orcamento: 3,
 };
 
 /**
@@ -86,33 +100,13 @@ export async function consumirCreditos(
       console.log('[creditOperations] consumirCreditos não disponível, usando fallback:', err);
     }
 
-    // Fallback to direct Firestore update
-    console.log('[creditOperations] Usando fallback Firestore direto');
-    const userRef = doc(db, 'usuarios', userId);
-    const cost = CREDIT_COSTS[acao] || 5;
-    
-    // Check current balance
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const currentCredits = typeof userSnap.data().creditos === 'number' 
-        ? userSnap.data().creditos 
-        : Number(userSnap.data().creditos ?? 0);
-      
-      if (currentCredits < cost) {
-        return { success: false, error: 'Créditos insuficientes' };
-      }
-
-      await updateDoc(userRef, { creditos: increment(-cost) });
-      const newBalance = Math.max(0, currentCredits - cost);
-      
-      if (onCreditsUpdated) {
-        onCreditsUpdated(newBalance);
-      }
-      
-      return { success: true, balance: newBalance };
-    }
-
-    return { success: false, error: 'Usuário não encontrado' };
+    // No fallback: new Firestore rules forbid clients writing creditos
+    // If consumirCreditos is unavailable, return error
+    console.error('[creditOperations] consumirCreditos não disponível e fallback desabilitado');
+    return { 
+      success: false, 
+      error: 'Serviço de créditos indisponível. Por favor, tente novamente em alguns instantes.' 
+    };
   } catch (error) {
     console.error('[creditOperations] Erro ao consumir créditos:', error);
     return { 
