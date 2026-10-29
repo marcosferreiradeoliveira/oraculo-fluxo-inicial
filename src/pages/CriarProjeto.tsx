@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
 import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc, increment } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -644,10 +645,12 @@ const CriarProjeto = () => {
                   
                   // Deduzir 5 créditos para usuário não premium (avaliação = 5 créditos)
                   try {
-                    const userRef = doc(db, 'usuarios', user.uid);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists() && userSnap.data()?.isPremium !== true) {
-                      await updateDoc(userRef, { creditos: increment(-5) });
+                    const result = await consumirCreditos(user.uid, 'analise_projeto', {
+                      skipIfPremium: true,
+                    });
+                    
+                    if (!result.success) {
+                      console.warn('Aviso ao descontar créditos:', result.error);
                     }
                   } catch (err) {
                     console.error('Erro ao descontar créditos:', err);
@@ -1600,15 +1603,15 @@ const CriarProjeto = () => {
                           >
                             {previewCorpoBlur || analisePreviewVisitante}
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 top-[38%] flex flex-col items-center justify-end bg-gradient-to-b from-transparent via-white/75 to-white/95 px-5 pb-8 pt-16 text-center gap-3">
-                            <Lock className="h-9 w-9 text-oraculo-purple" aria-hidden />
-                            <p className="text-sm font-semibold text-gray-900 max-w-sm">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/55 backdrop-blur-[2px] px-6 py-8 text-center gap-4">
+                            <Lock className="h-11 w-11 text-oraculo-purple shrink-0" aria-hidden />
+                            <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 leading-snug max-w-md mx-auto">
                               Critérios, pontos fracos, sugestões e nota detalhada — desbloqueie criando sua conta
                               gratuita.
                             </p>
                             <Link
                               to={cadastroAposPreviewUrl}
-                              className="inline-flex items-center justify-center bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 px-5 rounded-lg font-semibold shadow hover:opacity-90 transition text-sm"
+                              className="inline-flex items-center justify-center bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-3 px-6 rounded-lg font-semibold shadow hover:opacity-90 transition text-sm md:text-base"
                             >
                               Criar conta e ver parecer completo →
                             </Link>

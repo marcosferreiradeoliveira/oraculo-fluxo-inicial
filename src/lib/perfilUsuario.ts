@@ -46,7 +46,7 @@ export function buildNovoUsuarioFirestore(params: {
   const { uid, email, nomeCompletoInicial, timestamp } = params;
   return {
     createdAt: timestamp,
-    creditos: 15,
+    // creditos is set by server via auth onCreate trigger (30 for free users)
     dadosCadastrais: '',
     data_cadastro: timestamp,
     email,

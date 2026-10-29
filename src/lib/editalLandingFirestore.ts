@@ -114,6 +114,7 @@ export function buildEditalLandingFromFirestore(
     slug,
     kicker: 'EDITAL PÚBLICO MAPEADO POR IA',
     titulo: nome.toUpperCase(),
+    nomeEdital: nome,
     proponente,
     dataEncerramentoIso: encerramento ? encerramento.toISOString().slice(0, 10) : defaultEncerramentoIso(),
     valorGlobal:

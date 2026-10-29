@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -469,6 +470,11 @@ const CriarOrcamento = () => {
       return;
     }
 
+    if (user) {
+      const db = getFirestore();
+      const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_ORCAMENTO, navigate);
+      if (!ok) return;
+    }
 
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
@@ -691,6 +697,19 @@ const CriarOrcamento = () => {
           textType: 'orcamento',
           durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
         });
+        if (user) {
+          try {
+            const result = await consumirCreditos(user.uid, 'gerar_orcamento', {
+              skipIfPremium: true,
+            });
+            
+            if (!result.success) {
+              console.warn('[CriarOrcamento] Aviso ao descontar créditos:', result.error);
+            }
+          } catch (e) {
+            console.error('[CriarOrcamento] Erro ao descontar créditos:', e);
+          }
+        }
         if (rubricasFinaisGeracao.length > 0) {
           if (etapasCronograma.length > 0) {
             vincularOrcamentoGeradoAoCronograma(rubricasFinaisGeracao);

@@ -16,7 +16,10 @@ export type EditalLandingDemoIA = {
 export type EditalLandingConfig = {
   slug: string;
   kicker: string;
+  /** Nome do edital (hero, em caixa alta). */
   titulo: string;
+  /** Nome legível para `<title>` e compartilhamento (caso do Firestore). */
+  nomeEdital?: string;
   proponente: string;
   /** ISO date YYYY-MM-DD for countdown */
   dataEncerramentoIso: string;
@@ -42,6 +45,7 @@ const AMBEV: EditalLandingConfig = {
   slug: 'ambev-brasilidades-2026',
   kicker: 'EDITAL PÚBLICO MAPEADO POR IA',
   titulo: 'AMBEV BRASILIDADES 2026',
+  nomeEdital: 'Ambev Brasilidades 2026',
   proponente: 'AMBEV S.A. | Fomento à Cultura e Economia Criativa',
   dataEncerramentoIso: '2026-09-29',
   valorGlobal: 'R$ 67.000.000,00',
@@ -83,6 +87,7 @@ const PNAB: EditalLandingConfig = {
   slug: 'pnab-2026',
   kicker: 'EDITAL PÚBLICO MAPEADO POR IA',
   titulo: 'PNAB 2026',
+  nomeEdital: 'PNAB 2026',
   proponente: 'Ministério da Cultura | Política Nacional Aldir Blanc',
   dataEncerramentoIso: '2026-10-15',
   valorGlobal: 'R$ 3.800.000.000,00',
@@ -122,6 +127,7 @@ const LEI_ROUANET: EditalLandingConfig = {
   slug: 'lei-rouanet',
   kicker: 'EDITAL PÚBLICO MAPEADO POR IA',
   titulo: 'LEI FEDERAL DE INCENTIVO À CULTURA',
+  nomeEdital: 'Lei Rouanet (PRONAC)',
   proponente: 'Ministério da Cultura | Lei Rouanet (Lei 8.313/91)',
   dataEncerramentoIso: '2026-12-31',
   valorGlobal: 'Incentivo via renúncia fiscal (sem teto único)',
@@ -169,6 +175,31 @@ export function getEditalLandingConfig(slug: string): EditalLandingConfig | null
   return EDITAL_LANDING_PAGES[slug] ?? null;
 }
 
+/** Título provisório a partir do slug da URL (enquanto carrega o Firestore). */
+export function editalLandingTitleFromSlug(slug: string): string {
+  const words = slug
+    .split('-')
+    .filter(Boolean)
+    .map((w) => {
+      const lower = w.toLowerCase();
+      if (lower === 'pronac') return 'PRONAC';
+      if (lower === 'pnab') return 'PNAB';
+      if (lower === 'lei' || lower === 'de' || lower === 'da' || lower === 'do' || lower === 'e') {
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      }
+      if (/^\d+$/.test(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    });
+  return words.join(' ').trim() || 'Edital cultural';
+}
+
+export function editalLandingDocumentTitle(
+  config: Pick<EditalLandingConfig, 'nomeEdital' | 'titulo'>,
+): string {
+  const name = (config.nomeEdital || config.titulo).trim();
+  return name ? `${name} | Oráculo Cultural` : 'Oráculo Cultural';
+}
+
 /** Slugs com template estático no código (legado). Landings dinâmicas usam `landing_slug` no Firestore. */
 export function hasStaticEditalLandingTemplate(slug: string): boolean {
   return slug in EDITAL_LANDING_PAGES;
@@ -195,7 +226,10 @@ export function mergeEditalLandingWithFirestore(
   const merged = { ...base, ...(editalId ? { firestoreEditalId: editalId } : {}) };
 
   const nome = data.nome;
-  if (typeof nome === 'string' && nome.trim()) merged.titulo = nome.trim().toUpperCase();
+  if (typeof nome === 'string' && nome.trim()) {
+    merged.nomeEdital = nome.trim();
+    merged.titulo = nome.trim().toUpperCase();
+  }
 
   const proponente = data.proponente ?? data.orgao;
   if (typeof proponente === 'string' && proponente.trim()) merged.proponente = proponente.trim();

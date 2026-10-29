@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { consumirCreditos } from '@/lib/creditOperations';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -489,6 +490,22 @@ const GerarTextos = () => {
               durationSeconds: (Date.now() - startTime) / 1000,
               textLength: fullTextData.length,
                   });
+            
+            // Debit credits for text generation (1 credit)
+            if (user) {
+              try {
+                const result = await consumirCreditos(user.uid, 'gerar_texto', {
+                  skipIfPremium: true,
+                });
+                
+                if (!result.success) {
+                  console.warn('[GerarTextos] Aviso ao descontar créditos:', result.error);
+                }
+              } catch (e) {
+                console.error('[GerarTextos] Erro ao descontar créditos:', e);
+              }
+            }
+            
             setTimeout(() => {
               const el = document.getElementById('pedidos-alteracao-texto');
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -598,6 +615,22 @@ const GerarTextos = () => {
             durationSeconds: (Date.now() - startTime) / 1000,
             textLength: fullText.length,
               });
+          
+          // Debit credits for text generation (1 credit)
+          if (user) {
+            try {
+              const result = await consumirCreditos(user.uid, 'gerar_texto', {
+                skipIfPremium: true,
+              });
+              
+              if (!result.success) {
+                console.warn('[GerarTextos] Aviso ao descontar créditos (streaming):', result.error);
+              }
+            } catch (e) {
+              console.error('[GerarTextos] Erro ao descontar créditos (streaming):', e);
+            }
+          }
+          
           setTimeout(() => {
             const el = document.getElementById('pedidos-alteracao-texto');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
