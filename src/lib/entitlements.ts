@@ -38,7 +38,7 @@ const PLAN_ENTITLEMENTS: Record<PlanId, Entitlements> = {
     gestor: false,
     maxUsuarios: 1,
     maxProjetosAno: 1,
-    creditosMensais: 15,
+    creditosMensais: 30,
   },
   proponente: {
     criacao: true,

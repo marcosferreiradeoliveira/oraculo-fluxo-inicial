@@ -6,7 +6,7 @@
 
 import { hasPaidPlan as hasPaidPlanEntitlements, isStarterPlan as isStarterPlanEntitlements, type UserEntitlementsData } from './entitlements';
 
-export const STARTER_CREDITS_ON_SIGNUP = 15;
+export const STARTER_CREDITS_ON_SIGNUP = 30;
 
 /** Índices das etapas do fluxo (0=Criar … 8=Anexos). Starter navega até Criar Orçamento (5). */
 export const STARTER_MAX_STEP_INDEX = 5;

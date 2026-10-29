@@ -4,6 +4,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
@@ -190,39 +191,31 @@ const CadastroPremium = () => {
       const planId = planIdMap[planType] || planType;
       const ciclo = isAnnual ? 'anual' : 'mensal';
 
-      // Try new server-priced createCheckout callable first
-      // createCheckout now takes user from auth; send only {planId, ciclo, successUrl?, cancelUrl?}
+      // Call createCheckout Firebase callable (onCall, requires auth)
+      // Backend extracts user from auth context
       try {
-        console.log('[CadastroPremium] Tentando novo createCheckout callable:', { planId, ciclo });
-        const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/createCheckout', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            data: {
-              planId,
-              ciclo,
-              // Optional: can add successUrl and cancelUrl here if needed
-            },
-          }),
+        console.log('[CadastroPremium] Chamando createCheckout callable:', { planId, ciclo });
+        const functions = getFunctions(undefined, 'us-central1');
+        const createCheckout = httpsCallable(functions, 'createCheckout');
+        
+        const result = await createCheckout({
+          planId,
+          ciclo,
+          // Optional: can add successUrl and cancelUrl here if needed
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[CadastroPremium] Success data from createCheckout:', data);
-          
-          const checkoutUrl = data.result?.checkout_url || data.checkout_url;
-          if (checkoutUrl) {
-            // Redirecionar para o checkout do Stripe
-            window.location.href = checkoutUrl;
-            return;
-          }
+        
+        console.log('[CadastroPremium] Success from createCheckout:', result.data);
+        
+        const checkoutUrl = (result.data as any)?.url;
+        if (checkoutUrl) {
+          // Redirecionar para o checkout do Stripe
+          window.location.href = checkoutUrl;
+          return;
         } else {
-          console.log('[CadastroPremium] createCheckout não disponível, usando fallback');
+          console.log('[CadastroPremium] createCheckout não retornou URL, usando fallback');
         }
       } catch (err) {
-        console.log('[CadastroPremium] createCheckout não disponível, usando fallback:', err);
+        console.log('[CadastroPremium] createCheckout falhou, usando fallback:', err);
       }
 
       // Fallback to legacy criarAssinaturaPremiumStripe
@@ -277,11 +270,13 @@ const CadastroPremium = () => {
       features: [
         'Importação automática e detalhamento de Editais',
         'Acesso ao Polo de Conhecimento (e-books, podcasts)',
-        'Avaliação Inteligente do Projeto com notas e sugestões iniciais'
+        'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
+        '💳 Créditos ilimitados (não expiram)'
       ],
       buttonText: 'Escolher Plano',
       icon: Users,
-      popular: false
+      popular: false,
+      trial: '🎁 7 dias grátis (apenas plano mensal)'
     },
     {
       name: 'Essencial',
@@ -296,7 +291,8 @@ const CadastroPremium = () => {
       features: [
         'Todas as funcionalidades do Básico com infinitos projetos',
         '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
-        'Gestão completa de captação, execução e conformidade'
+        'Gestão completa de captação, execução e conformidade',
+        '💳 Créditos ilimitados (não expiram)'
       ],
       buttonText: 'Escolher Plano',
       icon: Building2,
@@ -317,7 +313,8 @@ const CadastroPremium = () => {
         '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
-        'Desenvolvimento de módulos customizados'
+        'Desenvolvimento de módulos customizados',
+        '💳 Créditos ilimitados (não expiram)'
       ],
       buttonText: 'Solicitar Contato',
       icon: Crown,
@@ -338,15 +335,15 @@ const CadastroPremium = () => {
             {motivoCreditosInsuficientes && (
               <div className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-900">
                 <p className="text-sm md:text-base font-medium">
-                  Você não tem créditos suficientes para esta ação. Assine um plano para uso ilimitado.
+                  Você não tem créditos suficientes para esta ação. Assine um plano para créditos ilimitados.
                 </p>
               </div>
             )}
             {motivoStarterModulo2 && (
               <div className="mb-6 p-4 rounded-xl bg-oraculo-blue/5 border-2 border-oraculo-blue/30 text-gray-900">
                 <p className="text-sm md:text-base font-medium">
-                  O plano <strong>Starter (gratuito)</strong> inclui avaliação, textos, cronograma e orçamento enquanto você tiver créditos.
-                  Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos.
+                  O plano <strong>Starter (gratuito)</strong> começa com 30 créditos e inclui avaliação, textos, cronograma e orçamento.
+                  Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos com créditos ilimitados.
                 </p>
               </div>
             )}
@@ -357,6 +354,9 @@ const CadastroPremium = () => {
               </h1>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
                 Escolha o plano ideal para o seu perfil e acelere seus projetos culturais
+              </p>
+              <p className="text-sm text-gray-500 max-w-2xl mx-auto mb-8">
+                💡 <strong>Plano Starter:</strong> 30 créditos para testar. <strong>Planos pagos:</strong> créditos ilimitados que não expiram.
               </p>
               
               {/* Toggle Anual/Mensal */}
