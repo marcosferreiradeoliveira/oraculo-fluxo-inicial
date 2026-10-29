@@ -191,6 +191,7 @@ const CadastroPremium = () => {
       const ciclo = isAnnual ? 'anual' : 'mensal';
 
       // Try new server-priced createCheckout callable first
+      // createCheckout now takes user from auth; send only {planId, ciclo, successUrl?, cancelUrl?}
       try {
         console.log('[CadastroPremium] Tentando novo createCheckout callable:', { planId, ciclo });
         const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/createCheckout', {
@@ -202,6 +203,7 @@ const CadastroPremium = () => {
             data: {
               planId,
               ciclo,
+              // Optional: can add successUrl and cancelUrl here if needed
             },
           }),
         });
@@ -285,14 +287,16 @@ const CadastroPremium = () => {
       name: 'Essencial',
       subtitle: 'Produtora Pequena/Média',
       description: 'Até 5 usuários, infinitos projetos',
-      focus: 'Criação e Execução (Foco em Captação e Conformidade)',
+      focus: 'Criação + Finance + Gestor (Captação, Execução e Conformidade)',
       price: 'R$ 349',
       period: '/mês',
       annualPrice: 'R$ 3.476,04',
       annualPeriod: '/ano',
       discount: '17% de desconto',
       features: [
-        'Todas as funcionalidades do Básico com infinitos projetos'
+        'Todas as funcionalidades do Básico com infinitos projetos',
+        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
+        'Gestão completa de captação, execução e conformidade'
       ],
       buttonText: 'Escolher Plano',
       icon: Building2,
@@ -302,7 +306,7 @@ const CadastroPremium = () => {
       name: 'Premium',
       subtitle: 'Agências e Produtoras Grandes',
       description: 'Usuários Ilimitados, Projetos Ilimitados',
-      focus: 'Criação e Execução (Foco em Performance e Auditoria Rigorosa)',
+      focus: 'Criação + Finance + Gestor (Performance e Auditoria Rigorosa)',
       price: 'Preço sob consulta',
       period: '',
       annualPrice: '',
@@ -310,6 +314,7 @@ const CadastroPremium = () => {
       discount: 'Modelo Enterprise com Venda Consultiva',
       features: [
         'Todas as funcionalidades do Essencial',
+        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
         'Desenvolvimento de módulos customizados'

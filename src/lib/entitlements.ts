@@ -5,7 +5,7 @@
  * This is a local copy of the entitlements helper with identical logic across all apps.
  */
 
-export type PlanId = 'free' | 'proponente' | 'produtora' | 'institucional' | 'gestor_pro';
+export type PlanId = 'free' | 'proponente' | 'produtora' | 'institucional';
 
 export type PlanStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 
@@ -64,14 +64,6 @@ const PLAN_ENTITLEMENTS: Record<PlanId, Entitlements> = {
     maxProjetosAno: null,
     creditosMensais: 0,
   },
-  gestor_pro: {
-    criacao: false,
-    finance: false,
-    gestor: true,
-    maxUsuarios: 5,
-    maxProjetosAno: null,
-    creditosMensais: 0,
-  },
 };
 
 /**
@@ -83,7 +75,6 @@ const LEGACY_PLAN_MAP: Record<string, PlanId> = {
   intermediario: 'produtora',
   premium: 'institucional',
   avancado: 'institucional',
-  gestor_pro: 'gestor_pro',
 };
 
 /**
@@ -124,15 +115,12 @@ export function deriveEntitlements(data: UserEntitlementsData | null | undefined
 
   // IMPORTANT: Override gestor access based on explicit rules
   // Gestor access only if:
-  // 1. planType === 'gestor_pro', OR
-  // 2. plan is produtora, institucional, or gestor_pro, OR
-  // 3. isAdmin
+  // 1. plan is produtora or institucional, OR
+  // 2. isAdmin
   const hasGestorAccess =
     isAdmin ||
-    planType === 'gestor_pro' ||
     planId === 'produtora' ||
-    planId === 'institucional' ||
-    planId === 'gestor_pro';
+    planId === 'institucional';
 
   baseEntitlements.gestor = hasGestorAccess;
 
