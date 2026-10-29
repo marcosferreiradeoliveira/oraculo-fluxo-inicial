@@ -1447,7 +1447,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
       console.log('[criarAssinaturaPremiumStripe] Request body:', req.body);
       
       try {
-        const { email, userId, planType, isAnnual } = req.body;
+        const { email, userId, planType, isAnnual, ciclo } = req.body;
         
         if (!email || !userId) {
           return res.status(400).json({ error: 'Email e userId são obrigatórios' });
@@ -1455,7 +1455,9 @@ exports.criarAssinaturaPremiumStripe = onRequest(
 
         // Normalizar planType (remover acentos e converter para lowercase)
         const normalizedPlanType = planType ? planType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : 'basico';
-        const isAnnualPlan = isAnnual === true || isAnnual === 'true';
+        const cicloNorm = typeof ciclo === 'string' ? ciclo.toLowerCase().trim() : '';
+        const isAnnualPlan =
+          cicloNorm === 'anual' || isAnnual === true || isAnnual === 'true';
         
         console.log('[criarAssinaturaPremiumStripe] PlanType recebido:', planType);
         console.log('[criarAssinaturaPremiumStripe] PlanType normalizado:', normalizedPlanType);
@@ -1470,10 +1472,10 @@ exports.criarAssinaturaPremiumStripe = onRequest(
         
         if (normalizedPlanType === 'essencial') {
           if (isAnnualPlan) {
-            // Plano anual: R$ 3.476,04 / 12 = R$ 289,67 por mês (12 parcelas)
-            unitAmount = 28967; // R$ 289,67 em centavos
-            planName = 'Plano Essencial Anual - Oráculo Cultural (12x)';
-            planDescription = 'Assinatura anual do Plano Essencial parcelada em 12x de R$ 289,67 - Oráculo Cultural';
+            // Plano anual Produtora: R$ 3.769,20 / 12 = R$ 314,10 por mês (12 parcelas, 10% off)
+            unitAmount = 31410; // R$ 314,10 em centavos
+            planName = 'Plano Produtora Anual - Oráculo Cultural (12x)';
+            planDescription = 'Assinatura anual do Plano Produtora parcelada em 12x de R$ 314,10 - Oráculo Cultural';
             // Price ID do Essencial Anual
             stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL_ANUAL || 'price_1SwRNW0mRGa1jLimGbkMTvn8';
           } else {
@@ -1496,10 +1498,10 @@ exports.criarAssinaturaPremiumStripe = onRequest(
         } else if (normalizedPlanType === 'basico' || !planType) {
           // Default para básico se não especificado
           if (isAnnualPlan) {
-            // Plano anual: R$ 990,00 / 12 = R$ 82,50 por mês (12 parcelas)
-            unitAmount = 8250; // R$ 82,50 em centavos
-            planName = 'Plano Básico Anual - Oráculo Cultural (12x)';
-            planDescription = 'Assinatura anual do Plano Básico parcelada em 12x de R$ 82,50 - Oráculo Cultural';
+            // Plano anual Proponente: R$ 1.069,20 / 12 = R$ 89,10 por mês (12 parcelas, 10% off)
+            unitAmount = 8910; // R$ 89,10 em centavos
+            planName = 'Plano Proponente Anual - Oráculo Cultural (12x)';
+            planDescription = 'Assinatura anual do Plano Proponente parcelada em 12x de R$ 89,10 - Oráculo Cultural';
             // Price ID do Básico Anual
             stripePriceId = process.env.STRIPE_PRICE_ID_BASICO_ANUAL || 'price_1SwRMW0mRGa1jLim0TtxsCXE';
           } else {

@@ -7,6 +7,7 @@ import { getAuth } from 'firebase/auth';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
+import { createCheckout, type CheckoutCiclo, type CheckoutPlanType } from '@/lib/createCheckout';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Declarar tipo do Facebook Pixel
@@ -152,61 +153,35 @@ const CadastroPremium = () => {
     }
   }, [searchParams, paymentProcessed]);
 
-  const handlePlanSelection = async (planType: string) => {
-    // Se for Premium, redirecionar para formulário de contato
+  const checkoutCiclo: CheckoutCiclo = isAnnual ? 'anual' : 'mensal';
+
+  const handlePlanSelection = async (planType: CheckoutPlanType | 'premium') => {
     if (planType === 'premium') {
       navigate('/contato-premium');
       return;
     }
 
-    // Verificar autenticação diretamente do Firebase Auth
     const auth = getAuth();
     const user = auth.currentUser;
-    
-    if (!user || !user.email || !user.uid) {
+
+    if (!user?.email || !user.uid) {
       alert('Por favor, faça login para assinar um plano.');
       return;
     }
 
-    // Usar dados do auth.currentUser como fallback se userData ainda não carregou
     const userId = userData.userId || user.uid;
-    const userEmail = userData.email || user.email || '';
-
-    if (!userId || !userEmail) {
-      alert('Por favor, faça login para assinar um plano.');
-      return;
-    }
+    const userEmail = userData.email || user.email;
 
     setLoading(true);
     try {
-      console.log('[CadastroPremium] Iniciando criação de checkout Stripe:', { planType, userEmail, userId });
-      
-      // Criar assinatura recorrente mensal no Stripe com o tipo de plano selecionado
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarAssinaturaPremiumStripe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userId,
-          email: userEmail,
-          planType: planType, // Passar o tipo de plano selecionado
-          isAnnual: isAnnual, // Passar se é anual ou mensal
-        }),
+      const data = await createCheckout({
+        userId,
+        email: userEmail,
+        planType,
+        ciclo: checkoutCiclo,
       });
 
-      console.log('[CadastroPremium] Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Erro ao criar assinatura: ${response.status} - ${JSON.stringify(errorData)}`);
-      }
-
-      const data = await response.json();
-      console.log('[CadastroPremium] Success data:', data);
-      
       if (data.checkout_url) {
-        // Redirecionar para o checkout do Stripe
         window.location.href = data.checkout_url;
       } else {
         throw new Error('Link de pagamento não retornado');
@@ -220,61 +195,57 @@ const CadastroPremium = () => {
 
   const plans = [
     {
-      name: 'Básico',
-      subtitle: 'Produtor Iniciante ou Individual',
+      name: 'Proponente',
+      planType: 'basico' as const,
+      subtitle: 'Produtor iniciante ou individual',
       description: '1 usuário, até 3 projetos ativos/ano',
-      focus: 'Criação (Foco na Captação)',
-      price: 'R$ 99,00',
-      period: '/mês',
-      annualPrice: 'R$ 990,00',
-      annualPeriod: '/ano',
-      discount: '17% de desconto',
+      focus: 'Criação (foco na captação)',
+      monthlyPrice: 'R$ 99,00',
+      monthlyPeriod: '/mês',
+      annualInstallment: 'R$ 89,10',
+      annualStrikethrough: 'R$ 1.188,00',
+      annualCashLine: 'ou R$ 1.069,20 à vista',
       features: [
         'Importação automática e detalhamento de Editais',
         'Acesso ao Polo de Conhecimento (e-books, podcasts)',
-        'Avaliação Inteligente do Projeto com notas e sugestões iniciais'
+        'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
       ],
       buttonText: 'Escolher Plano',
       icon: Users,
-      popular: false
+      popular: false,
     },
     {
-      name: 'Essencial',
-      subtitle: 'Produtora Pequena/Média',
+      name: 'Produtora',
+      planType: 'essencial' as const,
+      subtitle: 'Produtora pequena/média',
       description: 'Até 5 usuários, infinitos projetos',
-      focus: 'Criação e Execução (Foco em Captação e Conformidade)',
-      price: 'R$ 349',
-      period: '/mês',
-      annualPrice: 'R$ 3.476,04',
-      annualPeriod: '/ano',
-      discount: '17% de desconto',
-      features: [
-        'Todas as funcionalidades do Básico com infinitos projetos'
-      ],
+      focus: 'Criação e execução (captação e conformidade)',
+      monthlyPrice: 'R$ 349,00',
+      monthlyPeriod: '/mês',
+      annualInstallment: 'R$ 314,10',
+      annualStrikethrough: 'R$ 4.188,00',
+      annualCashLine: 'ou R$ 3.769,20 à vista',
+      features: ['Todas as funcionalidades do Proponente com infinitos projetos'],
       buttonText: 'Escolher Plano',
       icon: Building2,
-      popular: true
+      popular: true,
     },
     {
-      name: 'Premium',
-      subtitle: 'Agências e Produtoras Grandes',
-      description: 'Usuários Ilimitados, Projetos Ilimitados',
-      focus: 'Criação e Execução (Foco em Performance e Auditoria Rigorosa)',
-      price: 'Preço sob consulta',
-      period: '',
-      annualPrice: '',
-      annualPeriod: '',
-      discount: 'Modelo Enterprise com Venda Consultiva',
+      name: 'Institucional',
+      planType: 'premium' as const,
+      subtitle: 'Agências e produtoras grandes',
+      description: 'Usuários ilimitados, projetos ilimitados',
+      focus: 'Performance e auditoria rigorosa',
       features: [
-        'Todas as funcionalidades do Essencial',
+        'Todas as funcionalidades da Produtora',
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
-        'Desenvolvimento de módulos customizados'
+        'Desenvolvimento de módulos customizados',
       ],
       buttonText: 'Solicitar Contato',
       icon: Crown,
-      popular: false
-    }
+      popular: false,
+    },
   ];
 
   return (
@@ -333,7 +304,7 @@ const CadastroPremium = () => {
                 </span>
                 {isAnnual && (
                   <span className="ml-2 inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                    17% de desconto
+                    Mais vantajoso · 10% off
                   </span>
                 )}
               </div>
@@ -380,93 +351,31 @@ const CadastroPremium = () => {
 
                       {/* Pricing */}
                       <div className="text-center mb-8">
-                        {plan.name === 'Premium' ? (
+                        {plan.planType === 'premium' ? (
                           <div className="mb-2">
-                            <span className="text-2xl font-bold text-gray-900">{plan.price}</span>
+                            <span className="text-2xl font-bold text-gray-900">Preço sob consulta</span>
                           </div>
+                        ) : isAnnual ? (
+                          <>
+                            <div className="flex items-baseline justify-center mb-2 flex-wrap gap-x-2">
+                              <span className="text-2xl font-medium text-gray-600">12x de</span>
+                              <span className="text-4xl font-bold text-gray-900">{plan.annualInstallment}</span>
+                            </div>
+                            <div className="text-sm text-gray-400 line-through mb-1">{plan.annualStrikethrough}</div>
+                            <div className="text-sm text-gray-600 font-medium">{plan.annualCashLine}</div>
+                          </>
                         ) : (
                           <>
-                            {isAnnual ? (
-                              <>
-                                {(() => {
-                                  // Calcular valor mensal do plano anual
-                                  let monthlyEquivalent = '';
-                                  let annualTotal = '';
-                                  if (plan.annualPrice && plan.annualPrice.includes('R$')) {
-                                    try {
-                                      const cleanPrice = plan.annualPrice
-                                        .replace('R$', '')
-                                        .replace(/\./g, '') // Remove pontos (milhares)
-                                        .replace(',', '.') // Substitui vírgula por ponto
-                                        .trim();
-                                      const annualNum = parseFloat(cleanPrice);
-                                      if (!isNaN(annualNum) && annualNum > 0) {
-                                        const monthlyNum = annualNum / 12;
-                                        monthlyEquivalent = monthlyNum.toLocaleString('pt-BR', {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2
-                                        });
-                                        annualTotal = annualNum.toLocaleString('pt-BR', {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2
-                                        });
-                                      }
-                                    } catch (e) {
-                                      console.error('Erro ao calcular equivalente mensal:', e);
-                                    }
-                                  }
-                                  return monthlyEquivalent ? (
-                                    <>
-                                      <div className="flex items-baseline justify-center mb-2">
-                                        <span className="text-2xl font-medium text-gray-600 mr-2">12x de</span>
-                                        <span className="text-4xl font-bold text-gray-900">R$ {monthlyEquivalent}</span>
-                                      </div>
-                                      <div className="flex flex-col items-center mb-2">
-                                        <div className="text-sm text-gray-600">
-                                          Total: <span className="font-semibold text-gray-900">R$ {annualTotal}</span> {plan.annualPeriod}
-                                        </div>
-                                        <div className="text-sm text-gray-400 line-through mt-1">
-                                          {plan.price}{plan.period}
-                                        </div>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="flex items-baseline justify-center mb-2">
-                                      <span className="text-4xl font-bold text-gray-900">{plan.annualPrice}</span>
-                                      <span className="text-gray-600 ml-1">{plan.annualPeriod}</span>
-                                    </div>
-                                  );
-                                })()}
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex items-baseline justify-center mb-2">
-                                  <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                                  <span className="text-gray-600 ml-1">{plan.period}</span>
-                                </div>
-                                {plan.name === 'Básico' && !isAnnual && (
-                                  <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 mb-2">
-                                    7 dias grátis para testar
-                                  </div>
-                                )}
-                              </>
+                            <div className="flex items-baseline justify-center mb-2">
+                              <span className="text-4xl font-bold text-gray-900">{plan.monthlyPrice}</span>
+                              <span className="text-gray-600 ml-1">{plan.monthlyPeriod}</span>
+                            </div>
+                            {plan.planType === 'basico' && (
+                              <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 mb-2">
+                                7 dias grátis
+                              </div>
                             )}
                           </>
-                        )}
-                        {plan.discount && plan.name !== 'Premium' && !isAnnual && plan.name !== 'Básico' && (
-                          <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                            Economize 17% com plano anual
-                          </div>
-                        )}
-                        {plan.discount && plan.name === 'Básico' && !isAnnual && (
-                          <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                            Economize 17% com plano anual
-                          </div>
-                        )}
-                        {plan.name === 'Premium' && plan.discount && (
-                          <div className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-oraculo-purple/10 text-oraculo-purple">
-                            {plan.discount}
-                          </div>
                         )}
                       </div>
 
@@ -483,7 +392,7 @@ const CadastroPremium = () => {
                       </div>
 
                       {/* Módulo Prestação de Contas - Apenas para Essencial */}
-                      {plan.name === 'Essencial' && (
+                      {plan.name === 'Produtora' && (
                         <div className="mb-8 p-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
                           <h4 className="text-lg font-bold text-gray-900 mb-4">Módulo Prestação de Contas</h4>
                           <ul className="space-y-3 mb-6">
@@ -517,26 +426,15 @@ const CadastroPremium = () => {
                         const currentPlanType = userData.planType;
                         let isCurrentPlan = false;
                         
-                        if (currentPlanType === 'basico' && plan.name === 'Básico') {
-                          isCurrentPlan = true;
-                        } else if (currentPlanType === 'essencial' && plan.name === 'Essencial') {
-                          isCurrentPlan = true;
-                        } else if (currentPlanType === 'premium' && plan.name === 'Premium') {
+                        if (currentPlanType === plan.planType) {
                           isCurrentPlan = true;
                         }
-                        
+
                         return (
                           <Button
                             onClick={() => {
-                              if (isCurrentPlan) return; // Não fazer nada se for o plano atual
-                              // Mapear nome do plano para o tipo correto
-                              let planType = 'basico';
-                              if (plan.name === 'Essencial') {
-                                planType = 'essencial';
-                              } else if (plan.name === 'Premium') {
-                                planType = 'premium';
-                              }
-                              handlePlanSelection(planType);
+                              if (isCurrentPlan) return;
+                              handlePlanSelection(plan.planType);
                             }}
                             disabled={loading || isCurrentPlan}
                             className={`w-full py-4 text-lg font-semibold ${
@@ -544,7 +442,7 @@ const CadastroPremium = () => {
                                 ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                                 : plan.popular
                                 ? 'bg-gradient-to-r from-oraculo-blue to-oraculo-purple hover:opacity-90 text-white'
-                                : plan.name === 'Premium'
+                                : plan.planType === 'premium'
                                 ? 'bg-oraculo-purple hover:bg-oraculo-purple/90 text-white'
                                 : 'bg-gray-900 hover:bg-gray-800 text-white'
                             }`}
