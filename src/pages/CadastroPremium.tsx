@@ -271,7 +271,7 @@ const CadastroPremium = () => {
         'Importação automática e detalhamento de Editais',
         'Acesso ao Polo de Conhecimento (e-books, podcasts)',
         'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
-        '💳 Créditos ilimitados (não expiram)'
+        '💳 50 créditos/mês (renovam no dia 1º)'
       ],
       buttonText: 'Escolher Plano',
       icon: Users,
@@ -292,7 +292,7 @@ const CadastroPremium = () => {
         'Todas as funcionalidades do Básico com infinitos projetos',
         '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
         'Gestão completa de captação, execução e conformidade',
-        '💳 Créditos ilimitados (não expiram)'
+        '💳 200 créditos/mês (renovam no dia 1º)'
       ],
       buttonText: 'Escolher Plano',
       icon: Building2,
@@ -314,7 +314,7 @@ const CadastroPremium = () => {
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
         'Desenvolvimento de módulos customizados',
-        '💳 Créditos ilimitados (não expiram)'
+        '💳 500 créditos/mês (renovam no dia 1º)'
       ],
       buttonText: 'Solicitar Contato',
       icon: Crown,
@@ -335,7 +335,7 @@ const CadastroPremium = () => {
             {motivoCreditosInsuficientes && (
               <div className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-900">
                 <p className="text-sm md:text-base font-medium">
-                  Você não tem créditos suficientes para esta ação. Assine um plano para créditos ilimitados.
+                  Você não tem créditos suficientes para esta ação. Assine um plano para receber créditos mensais.
                 </p>
               </div>
             )}
@@ -343,7 +343,7 @@ const CadastroPremium = () => {
               <div className="mb-6 p-4 rounded-xl bg-oraculo-blue/5 border-2 border-oraculo-blue/30 text-gray-900">
                 <p className="text-sm md:text-base font-medium">
                   O plano <strong>Starter (gratuito)</strong> começa com 30 créditos e inclui avaliação, textos, cronograma e orçamento.
-                  Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos com créditos ilimitados.
+                  Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos.
                 </p>
               </div>
             )}
@@ -356,7 +356,7 @@ const CadastroPremium = () => {
                 Escolha o plano ideal para o seu perfil e acelere seus projetos culturais
               </p>
               <p className="text-sm text-gray-500 max-w-2xl mx-auto mb-8">
-                💡 <strong>Plano Starter:</strong> 30 créditos para testar. <strong>Planos pagos:</strong> créditos ilimitados que não expiram.
+                💡 <strong>Plano Starter:</strong> 30 créditos iniciais. <strong>Planos pagos:</strong> créditos mensais que renovam no dia 1º e não acumulam.
               </p>
               
               {/* Toggle Anual/Mensal */}

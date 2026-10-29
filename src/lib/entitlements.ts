@@ -46,7 +46,7 @@ const PLAN_ENTITLEMENTS: Record<PlanId, Entitlements> = {
     gestor: false,
     maxUsuarios: 1,
     maxProjetosAno: 3,
-    creditosMensais: 0, // unlimited for paid plans
+    creditosMensais: 50,
   },
   produtora: {
     criacao: true,
@@ -54,7 +54,7 @@ const PLAN_ENTITLEMENTS: Record<PlanId, Entitlements> = {
     gestor: true,
     maxUsuarios: 5,
     maxProjetosAno: null, // unlimited
-    creditosMensais: 0,
+    creditosMensais: 200,
   },
   institucional: {
     criacao: true,
@@ -62,7 +62,7 @@ const PLAN_ENTITLEMENTS: Record<PlanId, Entitlements> = {
     gestor: true,
     maxUsuarios: 999, // configurable, but high default
     maxProjetosAno: null,
-    creditosMensais: 0,
+    creditosMensais: 500,
   },
 };
 
@@ -192,5 +192,7 @@ export function canCreateProject(
  * Check if user has unlimited credits (paid plan)
  */
 export function hasUnlimitedCredits(data: UserEntitlementsData | null | undefined): boolean {
-  return hasPaidPlan(data);
+  // Note: Paid plans have monthly credit allowances, not unlimited credits
+  // This function is kept for backward compatibility but always returns false
+  return false;
 }
