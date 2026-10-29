@@ -1560,7 +1560,7 @@ const Projeto = () => {
                   const podeNavegar =
                     stepAllowed &&
                     (index <= etapaAtual || (index === 3 && projeto?.analise_ia));
-                  const creditosStep: Record<number, number> = { 1: 5, 3: 1, 4: 3, 5: 3 };
+                  const creditosStep: Record<number, number> = { 1: 5, 3: 1, 4: 3, 5: 3 }; // alinhado a starterPlan
                   const cred = creditosStep[index];
                   return (
                     <div key={index} className="flex flex-col items-center flex-shrink-0 min-w-[3.5rem] md:min-w-0">

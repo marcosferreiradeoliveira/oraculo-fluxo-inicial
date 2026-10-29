@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
@@ -9,10 +9,18 @@ type Props = {
   children: React.ReactNode;
 };
 
-/** Bloqueia Módulo 2+ (textos, orçamento, cronograma…) para plano Starter. */
+/** Bloqueia equipe/documentos/anexos para Starter; textos/orçamento/cronograma usam créditos na própria página. */
+const STARTER_PREMIUM_ROUTE_MARKERS = [
+  '/equipe',
+  '/documentos-inscricao',
+  '/preencher-anexos',
+  '/resumo',
+];
+
 export function StarterPlanGuard({ children }: Props) {
   const [user, loadingAuth] = useAuthState(auth);
   const navigate = useNavigate();
+  const location = useLocation();
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
@@ -33,16 +41,23 @@ export function StarterPlanGuard({ children }: Props) {
           if (!cancelled) setAllowed(true);
           return;
         }
-        navigate(starterPaywallUrl('starter_modulo2'));
+        const needsPaidPlan = STARTER_PREMIUM_ROUTE_MARKERS.some((m) =>
+          location.pathname.includes(m),
+        );
+        if (needsPaidPlan) {
+          navigate(starterPaywallUrl('starter_modulo2'));
+          return;
+        }
+        if (!cancelled) setAllowed(true);
       } catch {
-        navigate(starterPaywallUrl('starter_modulo2'));
+        if (!cancelled) setAllowed(true);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [user, loadingAuth, navigate]);
+  }, [user, loadingAuth, navigate, location.pathname]);
 
   if (loadingAuth || !allowed) {
     return (

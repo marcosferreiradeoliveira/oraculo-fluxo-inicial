@@ -297,8 +297,8 @@ const CadastroPremium = () => {
             {motivoStarterModulo2 && (
               <div className="mb-6 p-4 rounded-xl bg-oraculo-blue/5 border-2 border-oraculo-blue/30 text-gray-900">
                 <p className="text-sm md:text-base font-medium">
-                  O plano <strong>Starter (gratuito)</strong> inclui o <strong>Módulo 1 — simulador de avaliação</strong> (criar projeto, avaliar e ajustar com IA usando seus 15 créditos).
-                  Textos, orçamento, cronograma e documentos fazem parte do Módulo 2 — disponível nos planos pagos.
+                  O plano <strong>Starter (gratuito)</strong> inclui avaliação, textos, cronograma e orçamento enquanto você tiver créditos.
+                  Equipe, documentos de inscrição e anexos fazem parte do Módulo completo — disponível nos planos pagos.
                 </p>
               </div>
             )}

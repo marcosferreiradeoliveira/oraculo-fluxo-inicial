@@ -11,6 +11,8 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
+import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
+import { CREDITOS_CRONOGRAMA } from '@/lib/starterPlan';
 import * as XLSX from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -183,6 +185,9 @@ const CriarCronograma = () => {
 
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
+    const db = getFirestore();
+    const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_CRONOGRAMA, navigate);
+    if (!ok) return;
     setGerandoCronograma(true);
     const startTime = Date.now();
     trackTextGenerationStarted({
@@ -222,6 +227,11 @@ const CriarCronograma = () => {
         durationSeconds: (Date.now() - startTime) / 1000,
         textLength: etapasGeradas.length,
         });
+      try {
+        await spendCreditsIfStarter(db, user.uid, CREDITOS_CRONOGRAMA);
+      } catch (e) {
+        console.error('Erro ao descontar créditos (cronograma):', e);
+      }
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);

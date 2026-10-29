@@ -10,7 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { countdownDias, formatEncerramentoDisplay, type EditalLandingConfig } from '@/lib/editalLandingPages';
+import {
+  countdownDias,
+  editalLandingDocumentTitle,
+  editalLandingTitleFromSlug,
+  formatEncerramentoDisplay,
+  type EditalLandingConfig,
+} from '@/lib/editalLandingPages';
 import { resolveEditalLandingConfig, getEditalLandingPublicUrl } from '@/lib/editalLandingFirestore';
 import { applySocialPreviewMeta, resetSocialPreviewMeta } from '@/lib/socialMeta';
 import {
@@ -82,12 +88,17 @@ export default function EditalLandingPage() {
   }, [config]);
 
   useEffect(() => {
+    if (!editalSlug) return;
+    document.title = `${editalLandingTitleFromSlug(editalSlug)} | Oráculo Cultural`;
+  }, [editalSlug]);
+
+  useEffect(() => {
     if (!config || !editalSlug) return;
-    document.title = `${config.titulo} | Oráculo Cultural`;
+    const pageTitle = editalLandingDocumentTitle(config);
     const previewImage = config.thumbnailUrl?.trim() || undefined;
     const desc = config.resumoEscopo.slice(0, 200);
     applySocialPreviewMeta({
-      title: `${config.titulo} | Oráculo Cultural`,
+      title: pageTitle,
       description: desc,
       url: getEditalLandingPublicUrl(editalSlug),
       image: previewImage,

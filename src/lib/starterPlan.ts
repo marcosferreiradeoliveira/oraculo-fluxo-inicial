@@ -1,9 +1,25 @@
-/** Plano gratuito Starter (Freemium): Módulo 1 — simulador de avaliação */
+/** Plano gratuito Starter (Freemium): avaliação + uso de créditos no Módulo 2 */
 
 export const STARTER_CREDITS_ON_SIGNUP = 15;
 
-/** Índices das etapas do fluxo (0=Criar … 7=Anexos). Starter inclui até Alterar com IA. */
-export const STARTER_MAX_STEP_INDEX = 2;
+/** Índices das etapas do fluxo (0=Criar … 8=Anexos). Starter navega até Criar Orçamento (5). */
+export const STARTER_MAX_STEP_INDEX = 5;
+
+/** Equipe, documentos e anexos exigem plano pago. */
+export const STARTER_PREMIUM_ONLY_STEP_INDEX = 6;
+
+export const CREDITOS_ANALISE = 5;
+export const CREDITOS_GERAR_TEXTO = 1;
+export const CREDITOS_CRONOGRAMA = 3;
+export const CREDITOS_ORCAMENTO = 3;
+
+/** Custo em créditos por índice de etapa (quando aplicável). */
+export const PROJECT_STEP_CREDIT_COST: Partial<Record<number, number>> = {
+  1: CREDITOS_ANALISE,
+  3: CREDITOS_GERAR_TEXTO,
+  4: CREDITOS_CRONOGRAMA,
+  5: CREDITOS_ORCAMENTO,
+};
 
 export type UserPlanFields = {
   isPremium?: boolean;
@@ -27,10 +43,14 @@ export function starterPaywallUrl(motivo: 'starter_modulo2' | 'creditos_insufici
 
 export function canAccessProjectStepIndex(
   stepIndex: number,
-  data: UserPlanFields | null | undefined
+  data: UserPlanFields | null | undefined,
 ): boolean {
-  if (!isStarterPlan(data)) return true;
-  return stepIndex <= STARTER_MAX_STEP_INDEX;
+  if (hasPaidPlan(data)) return true;
+  return stepIndex < STARTER_PREMIUM_ONLY_STEP_INDEX;
+}
+
+export function starterHasCreditsFor(cost: number, creditos: number | null | undefined): boolean {
+  return (creditos ?? 0) >= cost;
 }
 
 export function starterProjectLimit(): number {

@@ -12,6 +12,8 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
+import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
+import { CREDITOS_GERAR_TEXTO } from '@/lib/starterPlan';
 
 type TextoTipo = 'justificativa' | 'objetivos' | 'metodologia' | 'resultados_esperados' | 'cronograma' | 'orcamento' | string;
 
@@ -301,6 +303,12 @@ const GerarTextos = () => {
         const errorMsg = `Já existe uma geração em andamento para: ${gerando}`;
         log(errorMsg);
         return false; // Indica que não foi possível iniciar a geração
+      }
+
+      if (user) {
+        const db = getFirestore();
+        const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_GERAR_TEXTO, navigate);
+        if (!ok) return false;
       }
       
       // 2. Inicialização do estado
@@ -598,6 +606,13 @@ const GerarTextos = () => {
             durationSeconds: (Date.now() - startTime) / 1000,
             textLength: fullText.length,
               });
+          if (user) {
+            try {
+              await spendCreditsIfStarter(getFirestore(), user.uid, CREDITOS_GERAR_TEXTO);
+            } catch (e) {
+              console.error('Erro ao descontar créditos (gerar texto):', e);
+            }
+          }
           setTimeout(() => {
             const el = document.getElementById('pedidos-alteracao-texto');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });

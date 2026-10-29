@@ -59,6 +59,10 @@ export function applySocialPreviewMeta(meta: SocialPreviewMeta) {
   const description = meta.description?.trim() || DEFAULT_DESCRIPTION;
   const image = toAbsoluteSocialImageUrl(meta.image) || defaultPublicOgImage();
 
+  if (meta.title?.trim()) {
+    document.title = meta.title.trim();
+  }
+
   upsertMeta('property', 'og:title', meta.title);
   upsertMeta('property', 'og:description', description);
   upsertMeta('property', 'og:type', 'website');

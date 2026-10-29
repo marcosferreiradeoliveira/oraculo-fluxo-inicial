@@ -32,6 +32,8 @@ import {
   resumoCronogramaParaOrcamento,
 } from '@/lib/cronogramaDuracao';
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { assertCanSpendCredits, spendCreditsIfStarter } from '@/lib/chargeCredits';
+import { CREDITOS_ORCAMENTO } from '@/lib/starterPlan';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VinculoCronogramaOrcamentoPainel } from '@/components/cronograma/VinculoCronogramaOrcamentoPainel';
 import {
@@ -469,6 +471,11 @@ const CriarOrcamento = () => {
       return;
     }
 
+    if (user) {
+      const db = getFirestore();
+      const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_ORCAMENTO, navigate);
+      if (!ok) return;
+    }
 
     setGerandoOrcamento(true);
     // Limpar rubricas existentes para começar do zero
@@ -691,6 +698,13 @@ const CriarOrcamento = () => {
           textType: 'orcamento',
           durationSeconds: (Date.now() - startTimeOrcamento) / 1000,
         });
+        if (user) {
+          try {
+            await spendCreditsIfStarter(getFirestore(), user.uid, CREDITOS_ORCAMENTO);
+          } catch (e) {
+            console.error('Erro ao descontar créditos (orçamento):', e);
+          }
+        }
         if (rubricasFinaisGeracao.length > 0) {
           if (etapasCronograma.length > 0) {
             vincularOrcamentoGeradoAoCronograma(rubricasFinaisGeracao);
