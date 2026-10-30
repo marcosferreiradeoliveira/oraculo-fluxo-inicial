@@ -31,6 +31,10 @@ import {
   consumeLandingResumeMessage,
 } from '@/lib/landingAttribution';
 import { hasUsedLandingPreview, markLandingPreviewUsed } from '@/lib/landingPreviewLimit';
+import {
+  clearLandingAutoAvaliarPending,
+  isLandingAutoAvaliarPending,
+} from '@/lib/landingAutoAvaliar';
 import { fetchEditalParaAvaliacao } from '@/lib/fetchEditalParaAvaliacao';
 import {
   clearPendingAnalisePreview,
@@ -308,7 +312,88 @@ const CriarProjeto = () => {
     return () => window.clearTimeout(t);
   }, [previewVisitanteAtiva, analisePreviewVisitante]);
 
-  /** Volta do cadastro: aplica prévia visitante ao projeto (cria ou atualiza) e abre a avaliação. */
+  /** Volta do cadastro (funil landing): cria projeto e dispara avaliação completa com IA. */
+  useEffect(() => {
+    if (!user || checkingLimit || continuarFinalizeRef.current) return;
+    if (!isCriarProjetoContinuarReturn(searchParams)) return;
+
+    const pendingRestore = readPendingAnalisePreview();
+    if (pendingRestore?.analiseConteudo?.trim()) return;
+    if (!isLandingAutoAvaliarPending()) return;
+
+    const draft = readCriarProjetoDraft();
+    if (!draft?.descricao?.trim()) return;
+
+    const nomeUse = nome.trim() || draft.nome.trim();
+    const descUse = descricao.trim() || draft.descricao.trim();
+    const editalUse = editalAssociado || draft.editalAssociado || '';
+    if (!nomeUse || !descUse) return;
+
+    continuarFinalizeRef.current = true;
+
+    void (async () => {
+      setLoading(true);
+      setErro('');
+      try {
+        const verificacaoLimite = await verificarLimiteProjetos(user.uid);
+        if (!verificacaoLimite.podeCriar) {
+          continuarFinalizeRef.current = false;
+          setErro(verificacaoLimite.mensagem);
+          setLoading(false);
+          return;
+        }
+
+        let editalId = draft.editalId || '';
+        if (!editalId && editalUse) {
+          const editalSel = editais.find((e) => e.nome === editalUse);
+          editalId = editalSel?.id || editalIdParam || '';
+        }
+
+        const db = getFirestore();
+        const projetoData: Record<string, unknown> = {
+          nome: nomeUse,
+          descricao: descUse,
+          data_criacao: serverTimestamp(),
+          data_atualizacao: serverTimestamp(),
+          user_id: user.uid,
+          etapa_atual: 1,
+        };
+        if (editalId) {
+          projetoData.edital_id = editalId;
+          projetoData.edital_associado = editalUse;
+        }
+
+        const docRef = await addDoc(collection(db, 'projetos'), projetoData);
+        await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        trackProjectCreated({ projectId: docRef.id, hasEdital: !!editalId });
+
+        clearLandingAutoAvaliarPending();
+        clearCriarProjetoDraft();
+        clearPendingAnalisePreview();
+        setProjetoId(docRef.id);
+        toast.info('Recuperamos seu projeto, avaliando agora…');
+        await analisarComIA(nomeUse, descUse, editalUse || null, docRef.id);
+      } catch (err) {
+        console.error('[criar-projeto landing auto-avaliar]', err);
+        continuarFinalizeRef.current = false;
+        setErro('Não foi possível iniciar a avaliação automática. Tente novamente.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [
+    user,
+    checkingLimit,
+    searchParams,
+    nome,
+    descricao,
+    editalAssociado,
+    editais,
+    editalIdParam,
+    navigate,
+  ]);
+
+  /** Volta do cadastro: aplica prévia visitante in-app (parecer já gerado) ao projeto. */
   useEffect(() => {
     if (!user || checkingLimit || continuarFinalizeRef.current) return;
     if (!isCriarProjetoContinuarReturn(searchParams)) return;

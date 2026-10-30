@@ -451,6 +451,67 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
   }
 });
 
+function landingPreviewLimparInline(texto) {
+  return String(texto || '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .trim();
+}
+
+function landingPreviewNotaGlobal(analiseConteudo) {
+  if (!analiseConteudo?.trim()) return null;
+  const notaPattern = /Nota:\s*(\d+)\/(\d+)\.?/gi;
+  const notas = [];
+  let match;
+  while ((match = notaPattern.exec(analiseConteudo)) !== null) {
+    const obtida = parseInt(match[1], 10);
+    const maxima = parseInt(match[2], 10);
+    if (!isNaN(obtida) && !isNaN(maxima) && maxima > 0) notas.push({ obtida, maxima });
+  }
+  if (notas.length > 0) {
+    const somaObtidas = notas.reduce((acc, n) => acc + n.obtida, 0);
+    const somaMaximas = notas.reduce((acc, n) => acc + n.maxima, 0);
+    return { notaGlobal: Math.round((somaObtidas / somaMaximas) * 100), notaMaximaTotal: somaMaximas };
+  }
+  const m = analiseConteudo.match(/Nota estimada[^\d]{0,40}(\d{1,3})\s*\/\s*100/i);
+  if (m?.[1]) {
+    const notaGlobal = parseInt(m[1], 10);
+    if (notaGlobal >= 0 && notaGlobal <= 100) return { notaGlobal, notaMaximaTotal: 100 };
+  }
+  return null;
+}
+
+function landingPreviewPontosAtencao(analiseConteudo, maxItems = 2) {
+  if (!analiseConteudo?.trim()) return [];
+  const texto = analiseConteudo.replace(/\r/g, '');
+  const secao = texto.match(
+    /(?:^|\n)\s*3\.?\s*PONTOS\s+FRACOS[^\n]*\n([\s\S]*?)(?=\n\s*4\.?\s|$)/i,
+  );
+  let body = secao?.[1]?.trim() ?? null;
+  if (!body) {
+    const alt = texto.match(/PONTOS\s+FRACOS[^\n]*\n([\s\S]*?)(?=\n\s*4\.?\s|SUGESTÕES|$)/i);
+    body = alt?.[1]?.trim() ?? null;
+  }
+  if (!body) return [];
+  const items = [];
+  for (const line of body.split('\n')) {
+    const m = line.match(/^\s*(?:\d+[.)]\s*|[-•*]\s+)(.+)/);
+    if (m?.[1]) {
+      const t = landingPreviewLimparInline(m[1]);
+      if (t.length > 12) items.push(t);
+    }
+    if (items.length >= maxItems) break;
+  }
+  if (items.length === 0 && body) {
+    const par = body
+      .split(/\n\n+/)
+      .map((p) => landingPreviewLimparInline(p))
+      .find((p) => p.length > 40);
+    if (par) items.push(par.slice(0, 520));
+  }
+  return items.slice(0, maxItems);
+}
+
 /** Prévia anônima na landing /avalieseuprojeto/ — 1 uso por fingerprint (localStorage + Firestore). */
 exports.avaliarProjetoPreviewLanding = onRequest(
   {
@@ -565,13 +626,24 @@ Inclua também linhas "Nota: X/Y" por critério quando possível.`;
         return res.status(500).json({ error: 'A análise não retornou conteúdo.' });
       }
 
+      const notaResumo = landingPreviewNotaGlobal(analiseIA);
+      const pontosAtencao = landingPreviewPontosAtencao(analiseIA, 2);
+      if (!notaResumo || pontosAtencao.length === 0) {
+        return res.status(500).json({ error: 'Não foi possível extrair a prévia pública da análise.' });
+      }
+
       await usageRef.set({
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         nomeEdital: nomeEdital || null,
         textoLen: texto.length,
+        notaGlobal: notaResumo.notaGlobal,
       });
 
-      return res.status(200).json({ analise: analiseIA });
+      return res.status(200).json({
+        notaGlobal: notaResumo.notaGlobal,
+        notaMaximaTotal: notaResumo.notaMaximaTotal,
+        pontosAtencao,
+      });
     } catch (error) {
       console.error('[avaliarProjetoPreviewLanding]', error);
       return res.status(500).json({

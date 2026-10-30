@@ -37,6 +37,12 @@ function resolvePublicOrigin() {
   return "https://culturalapp-fb9b0.web.app";
 }
 
+function resolveOraculoAppUrl(origin) {
+  const explicit = process.env.VITE_ORACULO_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  return "https://oraculocultural.com.br";
+}
+
 function main() {
   if (!fs.existsSync(BOOST_ROOT)) {
     console.warn(
@@ -52,13 +58,14 @@ function main() {
 
   const culturalEnv = readEnvFile(path.join(ROOT, ".env.culturalapp"));
   const origin = resolvePublicOrigin();
+  const appUrl = resolveOraculoAppUrl(origin);
   const siteUrl = `${origin}/${LANDING_SUBPATH}`;
 
   const env = {
     ...process.env,
     VITE_APP_BASE: LANDING_BASE,
     VITE_SITE_URL: siteUrl,
-    VITE_ORACULO_APP_URL: origin,
+    VITE_ORACULO_APP_URL: appUrl,
     VITE_FIREBASE_API_KEY: culturalEnv.VITE_API_KEY || process.env.VITE_API_KEY || "",
     VITE_FIREBASE_AUTH_DOMAIN: culturalEnv.VITE_AUTH_DOMAIN || process.env.VITE_AUTH_DOMAIN || "",
     VITE_FIREBASE_PROJECT_ID: culturalEnv.VITE_PROJECT_ID || process.env.VITE_PROJECT_ID || "",
