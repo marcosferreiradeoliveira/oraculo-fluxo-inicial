@@ -111,7 +111,7 @@ const ContatoPremium = () => {
                 </h1>
                 
                 <p className="text-lg text-gray-600 mb-8">
-                  Recebemos sua solicitação de contato para o plano Premium Enterprise.
+                  Recebemos sua solicitação de contato para o plano Institucional.
                   <br />
                   <strong className="text-gray-900">Entraremos em contato em breve!</strong>
                 </p>
@@ -154,7 +154,7 @@ const ContatoPremium = () => {
                 <Crown className="h-8 w-8" />
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                Plano Premium Enterprise
+                Plano Institucional
               </h1>
               <p className="text-xl text-gray-600">
                 Preencha o formulário abaixo e entraremos em contato para apresentar o plano ideal para sua empresa
