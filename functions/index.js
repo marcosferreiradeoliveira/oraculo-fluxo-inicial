@@ -1477,7 +1477,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
             planName = 'Plano Produtora Anual - Oráculo Cultural';
             planDescription = 'Assinatura anual do Plano Produtora - Oráculo Cultural';
             // Price ID do Essencial Anual
-            stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL_ANUAL || 'price_1SwRNW0mRGa1jLimGbkMTvn8';
+            stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL_ANUAL || 'price_1UWJJC0mRGa1jLimDEbKRGfo';
           } else {
             unitAmount = 34900; // R$ 349,00 em centavos
             planName = 'Plano Essencial Mensal - Oráculo Cultural';
@@ -1502,7 +1502,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
             planName = 'Plano Proponente Anual - Oráculo Cultural';
             planDescription = 'Assinatura anual do Plano Proponente - Oráculo Cultural';
             // Price ID do Básico Anual
-            stripePriceId = process.env.STRIPE_PRICE_ID_BASICO_ANUAL || 'price_1SwRMW0mRGa1jLim0TtxsCXE';
+            stripePriceId = process.env.STRIPE_PRICE_ID_BASICO_ANUAL || 'price_1UWJHG0mRGa1jLimPFBsvdy7';
           } else {
             unitAmount = 9900; // R$ 99,00 em centavos
             planName = 'Plano Básico Mensal - Oráculo Cultural';
