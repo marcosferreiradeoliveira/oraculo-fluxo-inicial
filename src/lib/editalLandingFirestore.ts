@@ -8,6 +8,7 @@ import {
   type EditalLandingDemoIA,
 } from '@/lib/editalLandingPages';
 import { parseEditalEncerramento } from '@/lib/editalDates';
+import { DEFAULT_PUBLIC_APP_ORIGIN } from '@/lib/appOrigin';
 
 const DEFAULT_CRITERIOS: EditalLandingCriterio[] = [
   { nome: 'Relevância artístico-cultural', peso: '30%' },
@@ -227,8 +228,6 @@ export async function resolveEditalLandingConfig(slug: string): Promise<EditalLa
 
   return null;
 }
-
-const DEFAULT_PUBLIC_APP_ORIGIN = 'https://oraculo-is.web.app';
 
 /** URL pública da landing de campanha (`/{landing_slug}`). */
 export function getEditalLandingPublicUrl(slug: string): string {

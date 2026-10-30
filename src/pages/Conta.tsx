@@ -126,47 +126,22 @@ const Conta = () => {
           let userDoc;
           try {
             userDoc = await getDocFromServer(userDocRef);
-            console.log('[Conta] Dados lidos do servidor (sem cache)');
           } catch (error) {
-            console.log('[Conta] Erro ao ler do servidor, usando cache:', error);
             userDoc = await getDoc(userDocRef);
           }
           
           if (userDoc.exists()) {
             const data = userDoc.data();
-            console.log('UID do usuário:', firebaseUser.uid);
-            console.log('Documento ID sendo lido:', userDoc.id);
-            console.log('Dados do usuário na página Conta:', data);
-            console.log('Todas as chaves do documento:', Object.keys(data));
-            console.log('isPremium na página Conta:', data.isPremium);
-            console.log('Tipo do isPremium na página Conta:', typeof data.isPremium);
-            console.log('planType na página Conta:', data.planType);
-            console.log('planType raw (verificação direta):', data['planType']);
-            console.log('Todas as propriedades:', JSON.stringify(data, null, 2));
-            console.log('Tipo do planType na página Conta:', typeof data.planType);
-            console.log('premiumStatus na página Conta:', data.premiumStatus);
-            console.log('Empresa na página Conta:', data.empresa);
-            console.log('Tipo da empresa na página Conta:', typeof data.empresa);
-            console.log('Nome completo na página Conta:', data.nome_completo);
             
             // Corrigir campo origem se não existir
             if (!data.origem) {
               try {
                 const { updateDoc } = await import('firebase/firestore');
                 await updateDoc(userDocRef, { origem: 'captacao' });
-                console.log('✅ Campo origem adicionado ao documento do usuário');
               } catch (error) {
                 console.error('Erro ao adicionar campo origem:', error);
               }
             }
-            
-            // Debug detalhado do planType
-            console.log('🔍 Debug planType:');
-            console.log('  - data.planType:', data.planType);
-            console.log('  - data["planType"]:', data['planType']);
-            console.log('  - Object.keys(data):', Object.keys(data));
-            console.log('  - "planType" in data:', 'planType' in data);
-            console.log('  - data.hasOwnProperty("planType"):', data.hasOwnProperty?.('planType'));
             
             // Garantir que planType existe - tentar múltiplas formas
             let planTypeValue = data.planType || data['planType'];
@@ -174,12 +149,9 @@ const Conta = () => {
             // Se ainda não encontrou, verificar todas as chaves
             if (!planTypeValue) {
               const allKeys = Object.keys(data);
-              console.log('  - Todas as chaves do documento:', allKeys);
-              // Verificar se há alguma variação do nome
               const planTypeKey = allKeys.find(k => k.toLowerCase().includes('plan') || k.toLowerCase().includes('type'));
               if (planTypeKey) {
                 planTypeValue = data[planTypeKey];
-                console.log('  - Encontrado em chave alternativa:', planTypeKey, '=', planTypeValue);
               }
             }
             
@@ -188,11 +160,8 @@ const Conta = () => {
               planType: planTypeValue || null,
             };
             
-            console.log('✅ userDataWithPlanType.planType final:', userDataWithPlanType.planType);
-            
             // Se planType não existe mas temos subscriptionId, tentar buscar do Stripe
             if (!userDataWithPlanType.planType && data.stripeSubscriptionId) {
-              console.log('⚠️ planType não encontrado, tentando buscar do Stripe...');
               corrigirPlanType(firebaseUser.uid, data.stripeSubscriptionId);
             }
             
@@ -205,7 +174,6 @@ const Conta = () => {
             setDadosCadastrais(data.dadosCadastrais || '');
             setPhotoURL(data.photoURL || firebaseUser.photoURL || '');
           } else {
-            console.log('Usuário não encontrado no Firestore, criando documento...');
             const created = await createUserDocument(firebaseUser);
             if (created) {
               // Recarregar os dados após criar o documento

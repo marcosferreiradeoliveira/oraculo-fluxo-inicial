@@ -1,3 +1,5 @@
+import { DEFAULT_PUBLIC_APP_ORIGIN, resolvePublicAppOrigin } from '@/lib/appOrigin';
+
 const DEFAULT_DESCRIPTION =
   'Simule a avaliação da banca neste edital antes de enviar sua proposta — Oráculo Cultural.';
 
@@ -24,12 +26,7 @@ function upsertCanonical(href: string) {
 }
 
 function publicAppOrigin(): string {
-  const envOrigin = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim();
-  if (envOrigin) return envOrigin.replace(/\/$/, '');
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
-  }
-  return 'https://oraculo-is.web.app';
+  return resolvePublicAppOrigin();
 }
 
 export function defaultPublicOgImage(): string {
@@ -86,7 +83,7 @@ export function resetSocialPreviewMeta() {
     title: 'Oráculo Cultural',
     description:
       'Aqui você encontra todas as ferramentas e conteúdos para transformar seus projetos culturais em realidade.',
-    url: typeof window !== 'undefined' ? window.location.origin : 'https://oraculo-is.web.app',
+    url: typeof window !== 'undefined' ? window.location.origin : DEFAULT_PUBLIC_APP_ORIGIN,
     image: defaultPublicOgImage(),
   });
 }

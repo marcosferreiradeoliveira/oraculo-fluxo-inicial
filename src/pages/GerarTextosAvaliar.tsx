@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { buildDemoTextosCompletos } from '@/lib/demoTextosPrePreenchidos';
 import { simularGeracaoTextoDemo } from '@/lib/projetoDemonstracao';
 import type { AvaliarProjetoDemoSession } from '@/lib/avaliarProjetoDemoSession';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost, IaHttpError } from '@/lib/iaAuthenticatedFetch';
 
 const GERAR_TEXTO_PROMPT = `Você é um especialista em elaboração de projetos culturais para leis de incentivo. Gere um texto claro, objetivo e bem estruturado para o seguinte item do projeto: `;
 
@@ -104,17 +106,16 @@ export default function GerarTextosAvaliar() {
     };
 
     try {
-      const response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projetoId: 'avaliar-projeto', // Backend exige projetoId; valor sentinela para fluxo sem login
+      const response = await authenticatedPost(
+        `${getFunctionsBaseUrl()}/gerarTextosProjeto`,
+        {
+          projetoId: 'avaliar-projeto',
           tipo: tipoMapeado,
           dadosProjeto,
           prompt: GERAR_TEXTO_PROMPT + tipoMapeado,
-          userId: null,
-        }),
-      });
+        },
+        { navigate },
+      );
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -173,6 +174,18 @@ export default function GerarTextosAvaliar() {
 
       toast.error('Resposta do servidor não reconhecida.');
     } catch (e) {
+      if (e instanceof IaHttpError) {
+        if (e.status === 401) {
+          toast.error('Faça login para gerar textos com IA.');
+          setGerando(null);
+          return false;
+        }
+        if (e.status === 402) {
+          toast.error('Créditos insuficientes para gerar texto.');
+          setGerando(null);
+          return false;
+        }
+      }
       toast.error(e instanceof Error ? e.message : 'Erro ao gerar texto.');
     }
     setGerando(null);

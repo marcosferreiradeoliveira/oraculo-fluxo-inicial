@@ -1,7 +1,9 @@
+import { DEFAULT_PUBLIC_APP_ORIGIN } from '@/lib/appOrigin';
+
 /** Módulo 2 — Operações / EAP (app separado). Configure via VITE_MODULO_EAP_URL. */
 export const MODULO_EAP_URL =
   (import.meta.env.VITE_MODULO_EAP_URL as string | undefined)?.trim() ||
-  'https://oraculo-is.web.app/';
+  `${DEFAULT_PUBLIC_APP_ORIGIN}/`;
 
 /** Módulo 3 — Compliance fiscal / NFs. */
 export const MODULO_PRESTACAO_URL =

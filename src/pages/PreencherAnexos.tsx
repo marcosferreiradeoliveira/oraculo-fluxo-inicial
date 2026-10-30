@@ -10,6 +10,8 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackProjectStepViewed } from '@/lib/analytics';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost, IaHttpError } from '@/lib/iaAuthenticatedFetch';
 
 interface ProjetoDocument {
   id: string;
@@ -223,28 +225,16 @@ const PreencherAnexos = () => {
     setProgress('Processando PDF com IA...');
 
     try {
-      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/preencherAnexoPDF';
-      
-      console.log('Enviando para processar:', {
-        pdfUrl: fileUrl,
-        nomeProjeto: projeto.nome,
-        userId: user.uid,
-        projetoId: id
-      });
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await authenticatedPost(
+        `${getFunctionsBaseUrl()}/preencherAnexoPDF`,
+        {
           pdfUrl: urlParaProcessar,
           dadosCadastrais: userData.dadosCadastrais,
           nomeProjeto: projeto.nome || 'Projeto',
-          userId: user.uid,
           projetoId: id,
-        }),
-      });
+        },
+        { navigate },
+      );
 
       if (!response.ok) {
         let errorData;
@@ -268,9 +258,24 @@ const PreencherAnexos = () => {
       } else {
         throw new Error('URL do PDF preenchido não retornada');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (error instanceof IaHttpError) {
+        if (error.status === 401) {
+          toast.error('Faça login para preencher anexos com IA.');
+          setProgress('');
+          return;
+        }
+        if (error.status === 402) {
+          toast.error('Créditos insuficientes para processar o PDF.');
+          setProgress('');
+          return;
+        }
+      }
       console.error('Erro ao processar PDF:', error);
-      const errorMessage = error.message || 'Erro ao processar PDF. Verifique se o PDF possui campos de formulário preenchíveis.';
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Erro ao processar PDF. Verifique se o PDF possui campos de formulário preenchíveis.';
       toast.error(errorMessage);
       setProgress('');
     } finally {

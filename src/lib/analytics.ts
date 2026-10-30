@@ -763,7 +763,6 @@ export const identifyMixpanelUser = (userId: string, userProperties?: {
         });
       }
       
-      console.log('[Mixpanel] Usuário identificado:', userId);
     } catch (error) {
       console.error('[Mixpanel] Erro ao identificar usuário:', error);
     }
