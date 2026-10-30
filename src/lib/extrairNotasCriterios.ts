@@ -192,17 +192,6 @@ function montarResumo(
   };
 }
 
-/** Campos derivados para gravar junto com analise_ia (nota estável após reload). */
-export function camposNotaParaFirestore(texto: string): NotaPersistidaFirestore | null {
-  const resumo = resumoNotaEstimada(texto);
-  if (!resumo) return null;
-  return {
-    nota_estimada: resumo.notaExibida,
-    nota_estimada_max: resumo.maximaExibida,
-    notas_criterios: resumo.criterios,
-  };
-}
-
 /** Preferência: parse do texto; se falhar, usa campos salvos no Firestore. */
 export function resumoNotaParaExibicao(
   analiseTexto: string,
@@ -271,4 +260,15 @@ export function resumoNotaEstimada(texto: string): ResumoNotaEstimada | null {
   }
 
   return null;
+}
+
+/** Campos derivados para gravar junto com analise_ia (nota estável após reload). */
+export function camposNotaParaFirestore(texto: string): NotaPersistidaFirestore | null {
+  const resumo = resumoNotaEstimada(texto);
+  if (!resumo) return null;
+  return {
+    nota_estimada: resumo.notaExibida,
+    nota_estimada_max: resumo.maximaExibida,
+    notas_criterios: resumo.criterios,
+  };
 }

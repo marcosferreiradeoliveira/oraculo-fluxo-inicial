@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, updateDoc, query, where, increment } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import { getEditaisDb, getEditaisWriteDb, fetchEditaisMergedDocs } from '@/lib/editaisDb';
 import { ensureUsuarioFirestore } from '@/lib/ensureUsuarioFirestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -126,6 +126,7 @@ const CriarProjeto = () => {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [editalAssociado, setEditalAssociado] = useState('');
+  const [editalSelecionadoId, setEditalSelecionadoId] = useState('');
   const [editais, setEditais] = useState<any[]>([]);
   const [showUploadEdital, setShowUploadEdital] = useState(false);
   const [novoEdital, setNovoEdital] = useState({
@@ -592,6 +593,7 @@ const CriarProjeto = () => {
     if (!editalIdParam || editais.length === 0) return;
     const naLista = editais.find(e => e.id === editalIdParam);
     if (naLista?.nome) {
+      setEditalSelecionadoId(naLista.id);
       setEditalAssociado(naLista.nome);
       setTipoProjeto('edital');
       setPageView('form');
@@ -650,6 +652,7 @@ const CriarProjeto = () => {
     setTipoProjeto(tipo);
     if (tipo === 'mae') {
       setEditalAssociado('');
+      setEditalSelecionadoId('');
       setShowUploadEdital(false);
       setProjetoMaeOrigemId('');
     }
@@ -847,6 +850,7 @@ const CriarProjeto = () => {
       };
       
       setEditais(prev => [...prev, novoEditalCompleto]);
+      setEditalSelecionadoId(docRef.id);
       setEditalAssociado(novoEdital.nome);
       setShowUploadEdital(false);
       setNovoEdital({
@@ -901,19 +905,18 @@ const CriarProjeto = () => {
       return;
     }
     
-    let editalId = '';
+    let editalId = editalSelecionadoId.trim();
     
     // Se estiver no modo de upload de novo edital, salva o edital primeiro
     if (showUploadEdital) {
       const sucesso = await salvarNovoEdital();
       if (!sucesso) return;
-      
-      // Pega o ID do último edital adicionado (que acabou de ser salvo)
-      if (editais.length > 0) {
+      editalId = editalSelecionadoId.trim();
+      if (!editalId && editais.length > 0) {
         editalId = editais[editais.length - 1].id;
       }
-    } else if (tipoProjeto === 'edital' && editalAssociado) {
-      const editalSelecionado = editais.find(e => e.nome === editalAssociado);
+    } else if (tipoProjeto === 'edital' && !editalId && editalAssociado) {
+      const editalSelecionado = editais.find((e) => e.nome === editalAssociado);
       if (editalSelecionado) {
         editalId = editalSelecionado.id;
       }
@@ -959,33 +962,39 @@ const CriarProjeto = () => {
         projetoData.empresaId = empresaAtiva;
       }
       
-      if (tipoProjeto === 'edital' && editalId) {
-        projetoData.edital_id = editalId;
-        projetoData.edital_associado = editalAssociado;
-        if (projetoMaeOrigemId) {
-          projetoData.projeto_mae_id = projetoMaeOrigemId;
-        }
+      if (tipoProjeto === 'edital') {
+        if (editalId) projetoData.edital_id = editalId;
+        if (editalAssociado.trim()) projetoData.edital_associado = editalAssociado.trim();
+        if (projetoMaeOrigemId) projetoData.projeto_mae_id = projetoMaeOrigemId;
       }
       
       const docRef = await addDoc(collection(db, 'projetos'), projetoData);
       
+      const prevCount =
+        typeof userSnap.data()?.projetos_criados_count === 'number'
+          ? userSnap.data()!.projetos_criados_count
+          : 0;
       const userRef = doc(db, 'usuarios', user.uid);
-      await setDoc(userRef, { projetos_criados_count: increment(1) }, { merge: true });
-      
-      // Track project created
-      trackProjectCreated({
-        projectId: docRef.id,
-        hasEdital: tipoProjeto === 'edital' && !!editalId,
-      });
-      // Evento para Tag Manager / Analytics: project_created (configurar conversão no GTM com esse evento)
-      if (typeof (window as unknown as { gtag?: (a: string, b: string, c: object) => void }).gtag === 'function') {
-        (window as unknown as { gtag: (a: string, b: string, c: object) => void }).gtag('event', 'project_created', {
-          creator_id: user?.uid ?? '',
-        });
-      }
+      await setDoc(userRef, { projetos_criados_count: prevCount + 1 }, { merge: true });
       
       setLoading(false);
       navigate(`/projeto/${docRef.id}?analisar=1`);
+
+      try {
+        trackProjectCreated({
+          projectId: docRef.id,
+          projectName: nomeFinal,
+          hasEdital: tipoProjeto === 'edital' && !!editalId,
+          editalId: editalId || undefined,
+        });
+        if (typeof (window as unknown as { gtag?: (a: string, b: string, c: object) => void }).gtag === 'function') {
+          (window as unknown as { gtag: (a: string, b: string, c: object) => void }).gtag('event', 'project_created', {
+            creator_id: user?.uid ?? '',
+          });
+        }
+      } catch (trackErr) {
+        console.warn('[CriarProjeto] analytics após criar projeto:', trackErr);
+      }
       return;
     } catch (err: unknown) {
       console.error('Erro ao criar projeto:', err);
@@ -1399,13 +1408,18 @@ const CriarProjeto = () => {
                         </div>
                         <select
                           className="w-full min-w-0 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-oraculo-blue focus:border-oraculo-blue transition box-border"
-                          value={editalAssociado}
-                          onChange={(e) => setEditalAssociado(e.target.value)}
+                          value={editalSelecionadoId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setEditalSelecionadoId(id);
+                            const ed = editais.find((x) => x.id === id);
+                            setEditalAssociado(ed?.nome ?? '');
+                          }}
                           required={tipoProjeto === 'edital'}
                         >
                           <option value="">Selecione um edital</option>
                           {editais.map((edital) => (
-                            <option key={edital.id} value={edital.nome}>
+                            <option key={edital.id} value={edital.id}>
                               {formatarNomeEdital(edital.nome)} - {edital.orgao}
                             </option>
                           ))}

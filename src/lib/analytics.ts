@@ -14,7 +14,8 @@ declare global {
 /**
  * Função utilitária para enviar eventos tanto para Firebase Analytics quanto para GTM e Mixpanel
  */
-const trackEvent = (eventName: string, eventParams: Record<string, any> = {}) => {
+/** Declaração function (hoisted) — evita TDZ no bundle minificado ao chamar trackers exportados. */
+function trackEvent(eventName: string, eventParams: Record<string, any> = {}) {
   // Firebase Analytics
   if (analytics) {
     try {
@@ -52,7 +53,7 @@ const trackEvent = (eventName: string, eventParams: Record<string, any> = {}) =>
       console.error(`[Mixpanel] Erro ao enviar evento ${eventName}:`, error);
     }
   }
-};
+}
 
 // ==========================================
 // EVENTOS DE PROJETOS
