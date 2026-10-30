@@ -6,6 +6,13 @@ export type UsuarioFirestoreBasico = {
   empresa?: string;
 };
 
+const SUPER_ADMIN_EMAIL = 'marcosferreira@mobcontent.com.br';
+
+/** Role inicial no Firestore — só o e-mail da plataforma recebe super_admin. */
+export function roleForNewUsuario(email: string): string {
+  return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL ? 'super_admin' : 'user';
+}
+
 /** Primeira visita = 1; cada nova sessão no navegador incrementa. */
 export function bumpAccessCountIfNewSession(uid: string): number {
   const sessKey = `oraculo_access_sess_${uid}`;
@@ -52,14 +59,12 @@ export function buildNovoUsuarioFirestore(params: {
     email,
     empresa: '',
     equipeBio: '',
-    isPremium: false,
-    planType: 'free',
     lastLoginAt: timestamp,
     nome_completo: nomeCompletoInicial?.trim() || '',
     perfil_dados_coletados: false,
     origem: 'captacao',
     portfolio: '',
-    role: 'super_admin',
+    role: roleForNewUsuario(email),
     ultimo_login: timestamp,
     uid,
   };

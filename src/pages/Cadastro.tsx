@@ -172,6 +172,7 @@ const Cadastro = () => {
             nomeCompletoInicial: user.displayName || '',
             timestamp,
           }),
+          { merge: true },
         );
         await trackMetaCompleteRegistrationAndWait(user.email || undefined, user.uid);
         finishNewUserSignup(redirect, 'google', user.uid);
@@ -282,6 +283,7 @@ const Cadastro = () => {
             email: cred.user.email || email,
             timestamp,
           }),
+          { merge: true },
         );
         await trackMetaCompleteRegistrationAndWait(cred.user.email || email, cred.user.uid);
         setLoading(false);
@@ -357,16 +359,20 @@ const Cadastro = () => {
       
       if (!userDoc.exists()) {
         // Criar novo documento (cadastro com email)
-        await setDoc(userDocRef, {
-          ...buildNovoUsuarioFirestore({
-            uid: userUid,
-            email: userEmail,
-            timestamp,
-          }),
-          nome_completo: nomeCompletoTrimmed,
-          empresa: empresaTrimmed || '',
-          perfil_dados_coletados: true,
-        });
+        await setDoc(
+          userDocRef,
+          {
+            ...buildNovoUsuarioFirestore({
+              uid: userUid,
+              email: userEmail,
+              timestamp,
+            }),
+            nome_completo: nomeCompletoTrimmed,
+            empresa: empresaTrimmed || '',
+            perfil_dados_coletados: true,
+          },
+          { merge: true },
+        );
         trackMetaCompleteRegistration(userEmail, userUid);
         finishNewUserSignup(redirect, 'email', userUid);
       } else {
