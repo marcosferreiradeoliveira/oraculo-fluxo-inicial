@@ -1,7 +1,16 @@
 import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { getIaAuthHeaders, handleIaHttpStatus } from '@/lib/iaAuthenticatedFetch';
+import { getPreviewFingerprint } from '@/lib/landingPreviewLimit';
 
 const FUNCTIONS_BASE = getFunctionsBaseUrl();
 export const AVALIAR_PROJETO_IA_URL = `${FUNCTIONS_BASE}/avaliarProjetoIA`;
+export const AVALIAR_PROJETO_PREVIEW_LANDING_URL = `${FUNCTIONS_BASE}/avaliarProjetoPreviewLanding`;
+
+export type LandingPreviewAvaliacao = {
+  notaGlobal: number;
+  notaMaximaTotal: number;
+  pontosAtencao: string[];
+};
 
 export type NotaResumo = { notaGlobal: number; notaMaximaTotal: number };
 
@@ -214,18 +223,56 @@ export type AvaliarProjetoPayload = {
   stream: true;
 };
 
+export async function fetchAvaliarProjetoPreviewLanding(body: {
+  textoProjeto: string;
+  nomeProjeto: string;
+  nomeEdital: string;
+  criteriosEdital: string;
+}): Promise<LandingPreviewAvaliacao> {
+  const fingerprint = getPreviewFingerprint();
+  const response = await fetch(AVALIAR_PROJETO_PREVIEW_LANDING_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Preview-Fingerprint': fingerprint,
+    },
+    body: JSON.stringify({ ...body, previewFingerprint: fingerprint }),
+  });
+  const errText = await response.text();
+  if (!response.ok) {
+    let message = errText.slice(0, 300);
+    try {
+      const data = JSON.parse(errText);
+      message = data.message || data.error || message;
+    } catch {
+      /* keep */
+    }
+    throw new Error(message);
+  }
+  return JSON.parse(errText) as LandingPreviewAvaliacao;
+}
+
 export async function streamAvaliarProjetoIA(
-  payload: AvaliarProjetoPayload,
+  payload: AvaliarProjetoPayload & { projetoId?: string | null; userId?: string },
   onPartial: (fullContent: string) => void,
+  options?: { navigate?: (path: string) => void },
 ): Promise<string> {
+  const { userId: _omit, ...body } = payload;
+  const headers = await getIaAuthHeaders({
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  });
   const response = await fetch(AVALIAR_PROJETO_IA_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    body: JSON.stringify(payload),
+    headers,
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errText = await response.text();
+    if (response.status === 401 || response.status === 402) {
+      handleIaHttpStatus(response.status, options?.navigate);
+    }
     if (response.status === 429) {
       let msg = 'Aguarde alguns segundos antes de solicitar uma nova análise.';
       try {

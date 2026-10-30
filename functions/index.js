@@ -23,6 +23,8 @@ const {
   instrucoesOrcamentoAlinhadoCronograma,
 } = require("./cronogramaDuracao");
 const registerGerarCronogramaIA = require("./gerarCronogramaIA");
+const iaSecurity = require("./iaSecurity");
+const subscriptionSecurity = require("./subscriptionSecurity");
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -237,23 +239,17 @@ exports.avaliarProjetoIA = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-  // Set CORS headers BEFORE any checks
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.set('Access-Control-Max-Age', '3600');
-  
-  // Handle preflight requests FIRST
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-  
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
+  let debitedCost = 0;
+  let authUid = null;
   try {
+    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, {
+      acao: 'analise_projeto',
+      requireProject: false,
+    });
+    if (!secured) return;
+    authUid = secured.uid;
+    debitedCost = secured.debitedCost;
+
     // Receber dados do projeto, edital, critérios e portfolio
     const {
       projetoId,
@@ -265,13 +261,20 @@ exports.avaliarProjetoIA = onRequest(
       portfolio: portfolioBody,
       equipeBio: equipeBioBody,
       projetosSelecionados,
-      userId,
       stream: useStream = false
     } = req.body;
 
     if (!textoProjeto || !criteriosEdital) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'Texto do projeto e critérios do edital são obrigatórios' });
     }
+
+    if (projetoId && !(await iaSecurity.assertProjectOwner(db, authUid, projetoId))) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
+      return res.status(403).json({ error: 'Sem permissão para este projeto.' });
+    }
+
+    const userId = authUid;
 
     // Trava: evitar loop / uso excessivo — 1 análise por projeto a cada 60s
     const ANALISE_COOLDOWN_MS = 60 * 1000;
@@ -282,6 +285,7 @@ exports.avaliarProjetoIA = onRequest(
     if (lockSnap.exists) {
       const lockedUntil = lockSnap.data().lockedUntil;
       if (lockedUntil && lockedUntil > now) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
         const secLeft = Math.ceil((lockedUntil - now) / 1000);
         return res.status(429).json({
           error: 'Aguarde antes de nova análise',
@@ -444,6 +448,13 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
     
     return res.status(200).json({ analise: analiseIA });
   } catch (error) {
+    if (authUid && debitedCost) {
+      try {
+        await iaSecurity.refundCredits(db, authUid, debitedCost);
+      } catch (refundErr) {
+        console.error('[avaliarProjetoIA] refund failed', refundErr);
+      }
+    }
     console.error('Error calling OpenAI API:', error);
     return res.status(500).json({ 
       error: error && error.message ? error.message : 'Failed to get analysis from AI.' 
@@ -518,21 +529,23 @@ exports.avaliarProjetoPreviewLanding = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, X-Preview-Fingerprint');
-    res.set('Access-Control-Max-Age', '3600');
-
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
+    iaSecurity.applyCorsLandingPreview(req, res);
+    if (iaSecurity.handleOptions(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method Not Allowed' });
       return;
     }
 
     try {
+      const clientIp = iaSecurity.getClientIp(req);
+      const ipAllowed = await iaSecurity.checkPreviewIpLimit(db, admin, clientIp);
+      if (!ipAllowed) {
+        return res.status(429).json({
+          error: 'Limite de prévias por IP',
+          message: 'Limite diário de prévias atingido nesta rede. Crie sua conta para continuar.',
+        });
+      }
+
       const fingerprint = String(req.headers['x-preview-fingerprint'] || req.body?.previewFingerprint || '')
         .trim()
         .slice(0, 128);
@@ -658,31 +671,27 @@ exports.gerarTexto = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-  // Set CORS headers BEFORE any checks
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.set('Access-Control-Max-Age', '3600');
-  
-  // Handle preflight requests FIRST
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-  
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-  
+  let debitedCost = 0;
+  let authUid = null;
   try {
-    const { projetoId, tipo, dadosProjeto, prompt, userId } = req.body;
+    const creditAcao = req.body?.tipo === 'orcamento' ? 'gerar_orcamento' : 'gerar_texto';
+    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, {
+      acao: creditAcao,
+      requireProject: true,
+    });
+    if (!secured) return;
+    authUid = secured.uid;
+    debitedCost = secured.debitedCost;
+
+    const { projetoId, tipo, dadosProjeto, prompt } = req.body;
+    const userId = authUid;
     
     if (!projetoId || !tipo || !dadosProjeto) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais) se userId fornecido
+    // Buscar dados do usuário (equipeBio, portfolio e dadosCadastrais)
     let equipeBio = dadosProjeto.equipeBio || '';
     let userPortfolio = dadosProjeto.portfolio || '';
     let dadosCadastrais = dadosProjeto.dadosCadastrais || '';
@@ -770,6 +779,13 @@ exports.gerarTexto = onRequest(
     });
     
   } catch (error) {
+    if (authUid && debitedCost) {
+      try {
+        await iaSecurity.refundCredits(db, authUid, debitedCost);
+      } catch (refundErr) {
+        console.error('[gerarTexto] refund failed', refundErr);
+      }
+    }
     console.error('Error generating text:', error);
     return res.status(500).json({ 
       error: error.message || 'Failed to generate text' 
@@ -782,25 +798,12 @@ exports.alterarTextoComIA = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-  // Set CORS headers BEFORE any checks
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.set('Access-Control-Max-Age', '3600');
-  
-  // Handle preflight requests FIRST
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-  
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-  
   try {
-    const { textoAtual, sugestao, portfolio, userId } = req.body;
+    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: null });
+    if (!secured) return;
+    const userId = secured.uid;
+
+    const { textoAtual, sugestao, portfolio } = req.body;
     
     if (!textoAtual || !sugestao) {
       return res.status(400).json({ error: 'textoAtual e sugestao são obrigatórios' });
@@ -900,27 +903,23 @@ exports.gerarTextosProjeto = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-  // Set CORS headers BEFORE any checks
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.set('Access-Control-Max-Age', '3600');
-  
-  // Handle preflight requests FIRST
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-  
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-  
+  let debitedCost = 0;
+  let authUid = null;
   try {
-    const { projetoId, tipo, dadosProjeto, prompt, userId } = req.body;
+    const creditAcao = iaSecurity.resolveGerarTextosCreditAction(req.body);
+    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, {
+      acao: creditAcao,
+      requireProject: true,
+    });
+    if (!secured) return;
+    authUid = secured.uid;
+    debitedCost = secured.debitedCost;
+
+    const { projetoId, tipo, dadosProjeto, prompt } = req.body;
+    const userId = authUid;
     
     if (!projetoId || !tipo || !dadosProjeto) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -933,6 +932,7 @@ exports.gerarTextosProjeto = onRequest(
       if (textoLockSnap.exists) {
         const lockedUntil = textoLockSnap.data().lockedUntil;
         if (lockedUntil && lockedUntil > textoNow) {
+          if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
           const secLeft = Math.ceil((lockedUntil - textoNow) / 1000);
           return res.status(429).json({
             error: 'Aguarde antes de gerar novamente',
@@ -1238,6 +1238,13 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
       res.end();
     } catch (streamError) {
       console.error('Erro durante streaming:', streamError);
+      if (authUid && debitedCost) {
+        try {
+          await iaSecurity.refundCredits(db, authUid, debitedCost);
+        } catch (refundErr) {
+          console.error('[gerarTextosProjeto] refund failed', refundErr);
+        }
+      }
       if (!res.headersSent) {
         throw streamError;
       }
@@ -1247,6 +1254,13 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
     }
     
   } catch (error) {
+    if (authUid && debitedCost && !res.headersSent) {
+      try {
+        await iaSecurity.refundCredits(db, authUid, debitedCost);
+      } catch (refundErr) {
+        console.error('[gerarTextosProjeto] refund failed', refundErr);
+      }
+    }
     console.error('Error generating text:', error);
     
     // Se ainda não enviamos headers de streaming, retornar JSON
@@ -1263,7 +1277,7 @@ CRÍTICO: O texto deve refletir o projeto descrito acima. NÃO invente novos pro
 });
 
 // Gera cronograma (etapas com início e fim) com base no orçamento, textos do projeto e edital
-exports.gerarCronogramaIA = registerGerarCronogramaIA(onRequest, openaiApiKey, db, getOpenAI);
+exports.gerarCronogramaIA = registerGerarCronogramaIA(onRequest, openaiApiKey, db, getOpenAI, admin, iaSecurity);
 
 exports.criarCheckoutPremium = onRequest(
   {
@@ -1272,22 +1286,15 @@ exports.criarCheckoutPremium = onRequest(
     invoker: 'public'
   },
   async (req, res) => {
-    // Set CORS headers explicitly
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.set('Access-Control-Max-Age', '3600');
-    
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-
     console.log('[criarCheckoutPremium] Request received:', req.method);
     console.log('[criarCheckoutPremium] Request body:', req.body);
     
     try {
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const userId = secured.uid;
+      const userData = secured.userData;
+
       console.log('[criarCheckoutPremium] Getting MercadoPago instance...');
       let preference;
       try {
@@ -1303,20 +1310,12 @@ exports.criarCheckoutPremium = onRequest(
         });
       }
       
-      // Validar userId obrigatório
-      const userId = req.body.userId;
-      if (!userId) {
-        return res.status(400).json({ error: 'userId é obrigatório' });
-      }
-      
       // Buscar dados do usuário no Firestore para obter nome completo
       let firstName = '';
       let lastName = '';
       
       try {
-        const userDoc = await db.collection('usuarios').doc(userId).get();
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+        if (userData) {
           const nomeCompleto = userData.nome_completo || '';
           
           // Dividir nome completo em primeiro e último nome
@@ -1339,7 +1338,7 @@ exports.criarCheckoutPremium = onRequest(
       
       // Construir objeto payer com nome completo
       const payerData = {
-        email: req.body.userEmail || "email@example.com"
+        email: secured.email || userData?.email || 'email@example.com',
       };
       
       // Adicionar first_name e last_name se disponíveis
@@ -1438,26 +1437,16 @@ exports.criarAssinaturaPremium = onRequest(
     secrets: [mercadoPagoAccessToken]
   }, 
   async (req, res) => {
-    // Set CORS headers explicitly
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.set('Access-Control-Max-Age', '3600');
-    
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
     console.log('[criarAssinaturaPremium] Request received:', req.method);
     console.log('[criarAssinaturaPremium] Request body:', req.body);
     
     try {
-      const { email, userId } = req.body;
-      
-      if (!email || !userId) {
-        return res.status(400).json({ error: 'Email e userId são obrigatórios' });
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const userId = secured.uid;
+      const email = secured.email || secured.userData?.email;
+      if (!email) {
+        return res.status(400).json({ error: 'E-mail do usuário não encontrado.' });
       }
 
       // Buscar dados do usuário no Firestore para obter nome completo
@@ -1466,7 +1455,7 @@ exports.criarAssinaturaPremium = onRequest(
       
       try {
         const userDoc = await db.collection('usuarios').doc(userId).get();
-        if (userDoc.exists()) {
+        if (userDoc.exists) {
           const userData = userDoc.data();
           const nomeCompleto = userData.nome_completo || '';
           
@@ -1632,27 +1621,19 @@ exports.criarAssinaturaPremiumStripe = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    // Set CORS headers BEFORE any checks
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    res.set('Access-Control-Max-Age', '3600');
-    
-    // Handle preflight requests FIRST
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
       console.log('[criarAssinaturaPremiumStripe] Request received:', req.method);
       console.log('[criarAssinaturaPremiumStripe] Request body:', req.body);
       
       try {
-        const { email, userId, planType, isAnnual, ciclo } = req.body;
-        
-        if (!email || !userId) {
-          return res.status(400).json({ error: 'Email e userId são obrigatórios' });
+        const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+        if (!secured) return;
+        const userId = secured.uid;
+        const email = secured.email || secured.userData?.email;
+        if (!email) {
+          return res.status(400).json({ error: 'E-mail do usuário não encontrado.' });
         }
+
+        const { planType, isAnnual, ciclo } = req.body;
 
         // Normalizar planType (remover acentos e converter para lowercase)
         const normalizedPlanType = planType ? planType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : 'basico';
@@ -1876,31 +1857,23 @@ exports.criarCheckoutGuiaStripe = onRequest(
     cpu: 0.0833,
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    res.set('Access-Control-Max-Age', '3600');
-
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-
     try {
-      const { guiaId, userId, email } = req.body || {};
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const userId = secured.uid;
+      const email = secured.email || secured.userData?.email;
+      if (!email) {
+        return res.status(400).json({ error: 'E-mail do usuário não encontrado.' });
+      }
+
+      const { guiaId } = req.body || {};
 
       if (!guiaId) {
         return res.status(400).json({ error: 'guiaId é obrigatório' });
       }
 
-      const isGuest = !userId || !email;
-      const effectiveUserId = userId || 'guest';
-      const effectiveEmail = email || null;
+      const effectiveUserId = userId;
+      const effectiveEmail = email;
 
       const guiaRef = db.collection('guias').doc(guiaId);
       const guiaSnap = await guiaRef.get();
@@ -1931,15 +1904,7 @@ exports.criarCheckoutGuiaStripe = onRequest(
       stripeKey = stripeKey.toString().trim();
       const stripeInstance = stripe(stripeKey);
 
-      let customerName = '';
-      if (!isGuest) {
-        try {
-          const userDoc = await db.collection('usuarios').doc(userId).get();
-          if (userDoc.exists() && userDoc.data().nome_completo) {
-            customerName = userDoc.data().nome_completo;
-          }
-        } catch (e) { /* ignore */ }
-      }
+      const customerName = secured.userData?.nome_completo || '';
 
       // Se tiver Product ID, buscar o Price ID associado ou criar um novo
       let lineItems;
@@ -2046,24 +2011,15 @@ exports.preencherAnexoPDF = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-    // Set CORS headers
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { pdfUrl, dadosCadastrais, nomeProjeto, userId, projetoId } = req.body;
+      const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: null });
+      if (!secured) return;
+      const userId = secured.uid;
+
+      const { pdfUrl, dadosCadastrais, nomeProjeto, projetoId } = req.body;
+      if (projetoId && !(await iaSecurity.assertProjectOwner(db, userId, projetoId))) {
+        return res.status(403).json({ error: 'Sem permissão para este projeto.' });
+      }
       
       if (!pdfUrl || !dadosCadastrais || !nomeProjeto) {
         return res.status(400).json({ 
@@ -3314,7 +3270,7 @@ exports.webhookMercadoPago = onRequest(
             const userRef = db.collection('usuarios').doc(userId);
             const userDoc = await userRef.get();
             
-            if (userDoc.exists()) {
+            if (userDoc.exists) {
               const userData = userDoc.data() || {};
               const userUpdate = {
                 premiumStatus: subscription.status,
@@ -3406,7 +3362,7 @@ exports.webhookMercadoPago = onRequest(
             const userRef = db.collection('usuarios').doc(userId);
             const userDoc = await userRef.get();
             
-            if (userDoc.exists()) {
+            if (userDoc.exists) {
               const updateData = {
                 isPremium: true,
                 premiumStatus: 'authorized',
@@ -3462,7 +3418,7 @@ exports.webhookMercadoPago = onRequest(
               const userRef = db.collection('usuarios').doc(userId);
               const userDoc = await userRef.get();
               
-              if (userDoc.exists()) {
+              if (userDoc.exists) {
                 await userRef.update({
                   isPremium: true,
                   premiumStatus: 'authorized',
@@ -3498,25 +3454,14 @@ exports.buscarPlanTypeStripe = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { subscriptionId } = req.body;
-      
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const subResolved = subscriptionSecurity.resolveStripeSubscriptionId(req, secured);
+      if (subResolved.forbidden) return subscriptionSecurity.forbidden(res);
+      const subscriptionId = subResolved.subscriptionId;
       if (!subscriptionId) {
-        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+        return res.status(404).json({ error: 'Nenhuma assinatura vinculada a este usuário.' });
       }
       
       // Obter secret key do Stripe
@@ -3565,25 +3510,14 @@ exports.buscarDetalhesAssinatura = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { subscriptionId } = req.body;
-      
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const subResolved = subscriptionSecurity.resolveStripeSubscriptionId(req, secured);
+      if (subResolved.forbidden) return subscriptionSecurity.forbidden(res);
+      const subscriptionId = subResolved.subscriptionId;
       if (!subscriptionId) {
-        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+        return res.status(404).json({ error: 'Nenhuma assinatura vinculada a este usuário.' });
       }
       
       // Obter secret key do Stripe
@@ -3640,25 +3574,14 @@ exports.listarPagamentosAssinatura = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { subscriptionId } = req.body;
-      
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const subResolved = subscriptionSecurity.resolveStripeSubscriptionId(req, secured);
+      if (subResolved.forbidden) return subscriptionSecurity.forbidden(res);
+      const subscriptionId = subResolved.subscriptionId;
       if (!subscriptionId) {
-        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+        return res.status(404).json({ error: 'Nenhuma assinatura vinculada a este usuário.' });
       }
       
       // Obter secret key do Stripe
@@ -3714,26 +3637,12 @@ exports.sincronizarAssinaturaUsuario = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { userId } = req.body;
-      
-      if (!userId) {
-        return res.status(400).json({ error: 'userId é obrigatório' });
-      }
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const userId = secured.uid;
+      const userRef = secured.userRef;
+      const userData = secured.userData;
       
       // Obter secret key do Stripe
       let stripeKey;
@@ -3750,15 +3659,6 @@ exports.sincronizarAssinaturaUsuario = onRequest(
       stripeKey = stripeKey.toString().trim();
       const stripeInstance = stripe(stripeKey);
       
-      // Buscar dados do usuário no Firestore
-      const userRef = db.collection('usuarios').doc(userId);
-      const userDoc = await userRef.get();
-      
-      if (!userDoc.exists()) {
-        return res.status(404).json({ error: 'Usuário não encontrado' });
-      }
-      
-      const userData = userDoc.data();
       let customerId = userData.stripeCustomerId;
       
       if (!customerId) {
@@ -3850,25 +3750,14 @@ exports.cancelarAssinatura = onRequest(
     secrets: [stripeSecretKey]
   },
   async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
     try {
-      const { subscriptionId } = req.body;
-      
+      const secured = await subscriptionSecurity.secureSubscriptionRequest(req, res, admin, db);
+      if (!secured) return;
+      const subResolved = subscriptionSecurity.resolveStripeSubscriptionId(req, secured);
+      if (subResolved.forbidden) return subscriptionSecurity.forbidden(res);
+      const subscriptionId = subResolved.subscriptionId;
       if (!subscriptionId) {
-        return res.status(400).json({ error: 'subscriptionId é obrigatório' });
+        return res.status(404).json({ error: 'Nenhuma assinatura vinculada a este usuário.' });
       }
       
       // Obter secret key do Stripe
@@ -3893,21 +3782,15 @@ exports.cancelarAssinatura = onRequest(
       
       console.log('[cancelarAssinatura] Assinatura', subscriptionId, 'marcada para cancelamento no final do período');
       
-      // Buscar userId da assinatura para atualizar o Firestore
-      const userId = subscription.metadata?.userId;
-      if (userId) {
-        try {
-          const userRef = db.collection('usuarios').doc(userId);
-          await userRef.update({
-            cancelAtPeriodEnd: true,
-            premiumStatus: 'active', // Ainda está ativa até o final do período
-            lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          console.log('[cancelarAssinatura] ✅ Firestore atualizado para usuário', userId);
-        } catch (error) {
-          console.error('[cancelarAssinatura] Erro ao atualizar Firestore:', error);
-          // Continuar mesmo se falhar a atualização do Firestore
-        }
+      try {
+        await secured.userRef.update({
+          cancelAtPeriodEnd: true,
+          premiumStatus: 'active', // Ainda está ativa até o final do período
+          lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log('[cancelarAssinatura] ✅ Firestore atualizado para usuário', secured.uid);
+      } catch (error) {
+        console.error('[cancelarAssinatura] Erro ao atualizar Firestore:', error);
       }
       
       res.status(200).json({ 

@@ -16,6 +16,8 @@ import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFr
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
 import { buildNovoUsuarioFirestore } from '@/lib/perfilUsuario';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost, IaHttpError } from '@/lib/iaAuthenticatedFetch';
 
 const Conta = () => {
   const navigate = useNavigate();
@@ -49,15 +51,11 @@ const Conta = () => {
       const userRef = doc(db, 'usuarios', userId);
       
       // Buscar planType da assinatura do Stripe via backend
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/buscarPlanTypeStripe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriptionId: subscriptionId,
-        }),
-      });
+      const response = await authenticatedPost(
+        `${getFunctionsBaseUrl()}/buscarPlanTypeStripe`,
+        {},
+        { navigate },
+      );
       
       if (response.ok) {
         const data = await response.json();
@@ -76,6 +74,9 @@ const Conta = () => {
       }
     } catch (error) {
       console.error('Erro ao corrigir planType:', error);
+      if (error instanceof IaHttpError && error.status === 403) {
+        toast.error(error.message);
+      }
     }
   };
 

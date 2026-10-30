@@ -18,6 +18,8 @@ declare global {
   }
 }
 import { parseLines } from '@/types/guia-especial';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost, IaHttpError } from '@/lib/iaAuthenticatedFetch';
 import autorFoto from '@/assets/autor-marcos.png';
 import imgAnalisar from '@/assets/Analisar.jpeg';
 
@@ -51,9 +53,8 @@ const DetalhesGuiaEspecial = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
+  const guiaCheckoutUrl = `${getFunctionsBaseUrl()}/criarCheckoutGuiaStripe`;
 
-  const GUIA_CHECKOUT_URL = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarCheckoutGuiaStripe';
-  
   // Verificar se o pagamento foi concluído com sucesso
   const paymentSuccess = searchParams.get('payment') === 'success';
   const sessionId = searchParams.get('session_id') || undefined;
@@ -195,20 +196,18 @@ const DetalhesGuiaEspecial = () => {
 
     if (!guia?.id) return;
 
-    const payload = {
-      guiaId: guia.id,
-      ...(user
-        ? { userId: user.uid, email: user.email || userEmail || '' }
-        : { userId: 'guest', email: '' }),
-    };
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
 
     setLoadingStripe(true);
     try {
-      const res = await fetch(GUIA_CHECKOUT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const res = await authenticatedPost(
+        guiaCheckoutUrl,
+        { guiaId: guia.id },
+        { navigate },
+      );
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -223,7 +222,13 @@ const DetalhesGuiaEspecial = () => {
       throw new Error('Link de pagamento não retornado');
     } catch (e) {
       setLoadingStripe(false);
-      alert(`Erro ao redirecionar para o pagamento: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
+      const msg =
+        e instanceof IaHttpError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Tente novamente.';
+      alert(`Erro ao redirecionar para o pagamento: ${msg}`);
     }
   };
 

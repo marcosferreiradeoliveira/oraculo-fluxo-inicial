@@ -1,4 +1,4 @@
-module.exports = (onRequest, openaiApiKey, db, getOpenAI) =>
+module.exports = (onRequest, openaiApiKey, db, getOpenAI, admin, iaSecurity) =>
   onRequest(
   {
     cors: true,
@@ -8,32 +8,28 @@ module.exports = (onRequest, openaiApiKey, db, getOpenAI) =>
     cpu: 1,
   },
   async (req, res) => {
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    };
-    Object.entries(corsHeaders).forEach(([k, v]) => res.setHeader(k, v));
-
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
-    }
-
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-
+    let debitedCost = 0;
+    let authUid = null;
     try {
+      const secured = await iaSecurity.secureIaRequest(req, res, admin, db, {
+        acao: 'gerar_cronograma',
+        requireProject: true,
+      });
+      if (!secured) return;
+      authUid = secured.uid;
+      debitedCost = secured.debitedCost;
+
       let body = req.body;
       if (typeof body === 'string') {
-        try { body = JSON.parse(body); } catch (e) { return res.status(400).json({ error: 'Body JSON inválido' }); }
+        try { body = JSON.parse(body); } catch (e) {
+          if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
+          return res.status(400).json({ error: 'Body JSON inválido' });
+        }
       }
       if (!body || typeof body !== 'object') body = {};
       const { projetoId, sugestoes, etapasAtuais, duracaoMeses: duracaoMesesBody } = body;
       if (!projetoId) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
         return res.status(400).json({ error: 'projetoId é obrigatório' });
       }
       const duracaoMesesUsuario = typeof duracaoMesesBody === 'number' && duracaoMesesBody >= 1
@@ -43,10 +39,15 @@ module.exports = (onRequest, openaiApiKey, db, getOpenAI) =>
       const projetoRef = db.collection('projetos').doc(projetoId);
       const projetoSnap = await projetoRef.get();
       if (!projetoSnap.exists) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
         return res.status(404).json({ error: 'Projeto não encontrado' });
       }
 
       const projeto = projetoSnap.data();
+      if (projeto.user_id !== authUid) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
+        return res.status(403).json({ error: 'Sem permissão para este projeto.' });
+      }
       const nomeProjeto = projeto.nome || 'Projeto';
       const descricaoProjeto = projeto.descricao || projeto.resumo || '';
       const orcamento = projeto.orcamento || {};
@@ -276,6 +277,13 @@ Retorne somente o array JSON. Exemplo (cada objeto com etapa, inicio, fim, macro
 
       return res.status(200).json({ etapas });
     } catch (error) {
+      if (authUid && debitedCost) {
+        try {
+          await iaSecurity.refundCredits(db, authUid, debitedCost);
+        } catch (refundErr) {
+          console.error('[gerarCronogramaIA] refund failed', refundErr);
+        }
+      }
       console.error('[gerarCronogramaIA]', error);
       return res.status(500).json({
         error: error.message || 'Erro ao gerar cronograma com IA',

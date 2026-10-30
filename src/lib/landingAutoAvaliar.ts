@@ -10,6 +10,15 @@ export function isLandingAutoAvaliarPending(): boolean {
   return false;
 }
 
+export function setLandingAutoAvaliarPending(): void {
+  try {
+    localStorage.setItem(AUTO_AVALIAR_KEY, '1');
+    sessionStorage.setItem(AUTO_AVALIAR_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearLandingAutoAvaliarPending(): void {
   try {
     localStorage.removeItem(AUTO_AVALIAR_KEY);

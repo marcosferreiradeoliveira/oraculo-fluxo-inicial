@@ -10,6 +10,8 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost, IaHttpError } from '@/lib/iaAuthenticatedFetch';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +39,8 @@ interface Payment {
   status: string;
   description: string;
 }
+
+const FUNCTIONS_BASE = getFunctionsBaseUrl();
 
 const GerenciarAssinatura = () => {
   const navigate = useNavigate();
@@ -127,15 +131,11 @@ const GerenciarAssinatura = () => {
     setSyncing(true);
     try {
       // Buscar assinaturas do Stripe para este usuário
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/sincronizarAssinaturaUsuario', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.uid,
-        }),
-      });
+      const response = await authenticatedPost(
+        `${FUNCTIONS_BASE}/sincronizarAssinaturaUsuario`,
+        {},
+        { navigate },
+      );
 
       if (response.ok) {
         toast.success('Assinatura sincronizada com sucesso!');
@@ -159,7 +159,11 @@ const GerenciarAssinatura = () => {
       }
     } catch (error) {
       console.error('Erro ao sincronizar assinatura:', error);
-      toast.error('Erro ao sincronizar assinatura');
+      if (error instanceof IaHttpError && error.status === 403) {
+        toast.error(error.message);
+      } else if (!(error instanceof IaHttpError)) {
+        toast.error('Erro ao sincronizar assinatura');
+      }
     } finally {
       setSyncing(false);
     }
@@ -167,15 +171,11 @@ const GerenciarAssinatura = () => {
 
   const carregarDadosAssinatura = async (subscriptionId: string) => {
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/buscarDetalhesAssinatura', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriptionId: subscriptionId,
-        }),
-      });
+      const response = await authenticatedPost(
+        `${FUNCTIONS_BASE}/buscarDetalhesAssinatura`,
+        {},
+        { navigate },
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -191,15 +191,11 @@ const GerenciarAssinatura = () => {
   const carregarPagamentos = async (subscriptionId: string) => {
     setLoadingPayments(true);
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/listarPagamentosAssinatura', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriptionId: subscriptionId,
-        }),
-      });
+      const response = await authenticatedPost(
+        `${FUNCTIONS_BASE}/listarPagamentosAssinatura`,
+        {},
+        { navigate },
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -222,15 +218,11 @@ const GerenciarAssinatura = () => {
 
     setCanceling(true);
     try {
-      const response = await fetch('https://us-central1-culturalapp-fb9b0.cloudfunctions.net/cancelarAssinatura', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriptionId: userData.stripeSubscriptionId,
-        }),
-      });
+      const response = await authenticatedPost(
+        `${FUNCTIONS_BASE}/cancelarAssinatura`,
+        {},
+        { navigate },
+      );
 
       if (response.ok) {
         toast.success('Assinatura cancelada com sucesso. Você terá acesso até o final do período pago.');
@@ -243,7 +235,11 @@ const GerenciarAssinatura = () => {
       }
     } catch (error) {
       console.error('Erro ao cancelar assinatura:', error);
-      toast.error('Erro ao cancelar assinatura');
+      if (error instanceof IaHttpError) {
+        toast.error(error.message);
+      } else {
+        toast.error('Erro ao cancelar assinatura');
+      }
     } finally {
       setCanceling(false);
     }

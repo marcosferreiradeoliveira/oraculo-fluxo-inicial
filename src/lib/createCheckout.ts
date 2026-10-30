@@ -1,5 +1,7 @@
-const CHECKOUT_URL =
-  'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/criarAssinaturaPremiumStripe';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost } from '@/lib/iaAuthenticatedFetch';
+
+const CHECKOUT_URL = `${getFunctionsBaseUrl()}/criarAssinaturaPremiumStripe`;
 
 export type CheckoutPlanType = 'basico' | 'essencial';
 export type CheckoutCiclo = 'anual' | 'mensal';
@@ -9,18 +11,17 @@ export async function createCheckout(params: {
   email: string;
   planType: CheckoutPlanType;
   ciclo: CheckoutCiclo;
+  navigate?: (path: string) => void;
 }): Promise<{ checkout_url: string; session_id?: string }> {
-  const response = await fetch(CHECKOUT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userId: params.userId,
-      email: params.email,
+  const response = await authenticatedPost(
+    CHECKOUT_URL,
+    {
       planType: params.planType,
       ciclo: params.ciclo,
       isAnnual: params.ciclo === 'anual',
-    }),
-  });
+    },
+    { navigate: params.navigate },
+  );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

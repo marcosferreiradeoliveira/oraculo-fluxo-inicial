@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
 import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, query, where, updateDoc, increment } from 'firebase/firestore';
-import { consumirCreditos } from '@/lib/creditOperations';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { getIaAuthHeaders, handleIaHttpStatus } from '@/lib/iaAuthenticatedFetch';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
@@ -24,6 +25,8 @@ import {
   calcularNotaGlobalAnalise,
   extrairPontosFracosPreview,
   formatarCorpoParecerParaUi,
+  fetchAvaliarProjetoPreviewLanding,
+  type LandingPreviewAvaliacao,
   streamAvaliarProjetoIA,
 } from '@/lib/avaliarProjetoPreview';
 import {
@@ -34,6 +37,7 @@ import { hasUsedLandingPreview, markLandingPreviewUsed } from '@/lib/landingPrev
 import {
   clearLandingAutoAvaliarPending,
   isLandingAutoAvaliarPending,
+  setLandingAutoAvaliarPending,
 } from '@/lib/landingAutoAvaliar';
 import { fetchEditalParaAvaliacao } from '@/lib/fetchEditalParaAvaliacao';
 import {
@@ -46,8 +50,7 @@ import {
 const MAX_RECORDING_SECONDS = 120; // 2 minutos
 
 // Em dev: use emulador se VITE_FUNCTIONS_BASE_URL estiver definido (ex.: http://127.0.0.1:5001/culturalapp-fb9b0/us-central1)
-const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL || 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net';
-const AVALIAR_PROJETO_IA_URL = `${FUNCTIONS_BASE}/avaliarProjetoIA`;
+const AVALIAR_PROJETO_IA_URL = `${getFunctionsBaseUrl()}/avaliarProjetoIA`;
 
 // Web Speech API (Chrome, Edge) - tipos não estão no DOM padrão
 type SpeechRecognitionInstance = {
@@ -300,6 +303,7 @@ const CriarProjeto = () => {
   const [projetoId, setProjetoId] = useState<string | null>(null);
   const [previewVisitanteAtiva, setPreviewVisitanteAtiva] = useState(false);
   const [analisePreviewVisitante, setAnalisePreviewVisitante] = useState('');
+  const [previewLanding, setPreviewLanding] = useState<LandingPreviewAvaliacao | null>(null);
 
   useEffect(() => {
     if (!previewVisitanteAtiva || !analisePreviewVisitante.trim()) return;
@@ -639,20 +643,20 @@ const CriarProjeto = () => {
         textoEdital: dadosConsolidados.texto_edital,
         portfolio: portfolioTexto,
         projetosSelecionados: dadosConsolidados.texto_selecionados ? dadosConsolidados.texto_selecionados.slice(0, 2000) : '',
-        userId: user.uid,
         stream: true // Habilitar streaming
       };
       
       // Fazer requisição com streaming (só navega após resposta aceita, para tratar 429 na mesma página)
       let response: Response;
       try {
+        const headers = await getIaAuthHeaders({
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        });
         response = await fetch(AVALIAR_PROJETO_IA_URL, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'text/event-stream'
-          },
-          body: JSON.stringify(payload)
+          headers,
+          body: JSON.stringify(payload),
         });
       } catch (networkErr: unknown) {
         setAnalisando(false);
@@ -668,6 +672,11 @@ const CriarProjeto = () => {
       
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 401 || response.status === 402) {
+          handleIaHttpStatus(response.status, navigate);
+          setAnalisando(false);
+          return;
+        }
         if (response.status === 429) {
           let msg = 'Aguarde alguns segundos antes de solicitar uma nova análise.';
           try {
@@ -742,17 +751,6 @@ const CriarProjeto = () => {
                     analise_ia: data.fullContent || fullContent,
                     data_atualizacao: serverTimestamp()
                   });
-                  
-                  // Deduzir 5 créditos para usuário não premium (avaliação = 5 créditos)
-                  try {
-                    const result = await consumirCreditos(user.uid, 'analise_projeto');
-                    
-                    if (!result.success) {
-                      console.warn('Aviso ao descontar créditos:', result.error);
-                    }
-                  } catch (err) {
-                    console.error('Erro ao descontar créditos:', err);
-                  }
                   
                   // Track analysis completed
                   try {
@@ -1200,34 +1198,17 @@ const CriarProjeto = () => {
             );
           }
 
-          const fullContent = await streamAvaliarProjetoIA(
-            {
-              projetoId: null,
-              textoProjeto: descricao.trim().slice(0, 2000),
-              nomeProjeto: nome.trim(),
-              nomeEdital: editalData.nomeEdital,
-              criteriosEdital: editalData.criterios,
-              textoEdital: editalData.texto_edital,
-              portfolio: '',
-              projetosSelecionados: editalData.texto_selecionados.slice(0, 2000),
-              stream: true,
-            },
-            (partial) => setAnalisePreviewVisitante(partial),
-          );
-
-          if (!fullContent.trim()) {
-            throw new Error('A análise não retornou conteúdo. Tente novamente.');
-          }
-
-          setAnalisePreviewVisitante(fullContent);
-          markLandingPreviewUsed();
-          savePendingAnalisePreview({
-            analiseConteudo: fullContent,
-            nome: nome.trim(),
-            descricao: descricao.trim(),
-            editalAssociado,
-            editalId: editalSel?.id || editalId || editalIdParam || undefined,
+          const preview = await fetchAvaliarProjetoPreviewLanding({
+            textoProjeto: descricao.trim().slice(0, 1800),
+            nomeProjeto: nome.trim(),
+            nomeEdital: editalData.nomeEdital,
+            criteriosEdital: editalData.criterios,
           });
+
+          setPreviewLanding(preview);
+          setAnalisePreviewVisitante('');
+          markLandingPreviewUsed();
+          setLandingAutoAvaliarPending();
           setPreviewVisitanteAtiva(true);
           toast.success('Prévia da avaliação pronta — crie sua conta para ver o parecer completo.');
         } catch (err) {
@@ -1312,9 +1293,16 @@ const CriarProjeto = () => {
     }
   };
 
-  const previewNotaVisitante = calcularNotaGlobalAnalise(analisePreviewVisitante);
-  const previewPontosFracosLista = extrairPontosFracosPreview(analisePreviewVisitante, 2);
-  const previewCorpoBlur = formatarCorpoParecerParaUi(analisePreviewVisitante, 3200);
+  const previewNotaVisitante = previewLanding
+    ? { notaGlobal: previewLanding.notaGlobal, notaMaximaTotal: previewLanding.notaMaximaTotal }
+    : calcularNotaGlobalAnalise(analisePreviewVisitante);
+  const previewPontosFracosLista =
+    previewLanding?.pontosAtencao?.length
+      ? previewLanding.pontosAtencao
+      : extrairPontosFracosPreview(analisePreviewVisitante, 2);
+  const previewCorpoBlur =
+    formatarCorpoParecerParaUi(analisePreviewVisitante, 3200) ||
+    'O parecer completo inclui adequação aos critérios do edital, pontos fortes, sugestões de melhoria e nota detalhada por critério. Crie sua conta gratuita para desbloquear a análise integral do Oráculo sobre o seu projeto cultural.';
 
   const cadastroAposPreviewUrl = (() => {
     const params = new URLSearchParams();
@@ -1660,7 +1648,7 @@ const CriarProjeto = () => {
                     </button>
                   </div>
 
-                  {previewVisitanteAtiva && analisePreviewVisitante && !user && (
+                  {previewVisitanteAtiva && (previewLanding || analisePreviewVisitante) && !user && (
                     <div
                       id="previa-avaliacao-visitante"
                       className="mt-8 overflow-hidden rounded-xl shadow-lg border-t-4 border-oraculo-blue"

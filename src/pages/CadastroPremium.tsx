@@ -205,6 +205,7 @@ const CadastroPremium = () => {
         email: userEmail,
         planType,
         ciclo: checkoutCiclo,
+        navigate,
       });
 
       if (data.checkout_url) {

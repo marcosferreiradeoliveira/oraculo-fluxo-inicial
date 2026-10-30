@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { consumirCreditos } from '@/lib/creditOperations';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { getIaAuthHeaders, handleIaHttpStatus } from '@/lib/iaAuthenticatedFetch';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -517,23 +518,25 @@ const Projeto = () => {
         }
       }
       
-      const endpoint = 'https://us-central1-culturalapp-fb9b0.cloudfunctions.net/alterarTextoComIA';
+      const endpoint = `${getFunctionsBaseUrl()}/alterarTextoComIA`;
       
       console.log('Enviando texto e sugestão para o backend...');
+      const headers = await getIaAuthHeaders({ 'Content-Type': 'application/json' });
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           textoAtual: textoBase,
           sugestao: sugestoes[idx],
           portfolio: portfolioTexto,
-          userId: user?.uid, // Adicionar userId para buscar portfolio do Firestore
         }),
       });
       
       if (!response.ok) {
+        if (response.status === 401 || response.status === 402) {
+          handleIaHttpStatus(response.status, navigate);
+          return;
+        }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(`Erro ao alterar texto: ${response.status} - ${JSON.stringify(errorData)}`);
       }
