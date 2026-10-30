@@ -1,20 +1,66 @@
 rules_version = '2';
 
+// culturalapp-fb9b0 — regras unificadas: Gestor + Finance + Criação
+// Mantenha cópias idênticas em dreams-orchestrator, cultura-fluxo-finance e oraculo-fluxo-inicial.
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── Helpers ───────────────────────────────────────────────────────────
-
-    function isAuth() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuth() && request.auth.token.email in [
+    function isAuth() {
+      return isSignedIn();
+    }
+
+    function isPlatformAdmin() {
+      return isSignedIn() && request.auth.token.email.lower() in [
         'marcosferreira@mobcontent.com.br',
         'mobcontent.mda@gmail.com'
       ];
     }
+
+    function authEmailLower() {
+      return request.auth.token.email.lower();
+    }
+
+    function docEmailLower() {
+      return resource.data.get('email', '').lower();
+    }
+
+    function emailsMatch() {
+      return request.auth.token.email != null && docEmailLower() == authEmailLower();
+    }
+
+    function canReadUsuario(userId) {
+      return isSignedIn() && (
+        userId == request.auth.uid
+        || (resource != null && resource.data.get('uid', '') == request.auth.uid)
+        || (resource != null && emailsMatch())
+        || (resource != null && resource.data.get('fornecedorOwnerUid', '') == request.auth.uid)
+        || isPlatformAdmin()
+        || isOwnerUpdatingTeamMember(userId)
+        || isManagerUpdatingTeamMember(userId)
+        || canInviteToEmpresa()
+      );
+    }
+
+    function isBillingFieldChanged() {
+      let billingFields = ['plan', 'planStatus', 'entitlements', 'creditos', 'credits', 'isPremium', 'planType'];
+      return billingFields.hasAny(request.resource.data.diff(resource.data).affectedKeys());
+    }
+
+    function fornecedorSelfLinkKeysOnly() {
+      return userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'role', 'fornecedorId', 'fornecedorOwnerUid', 'fornecedorNivelAcesso',
+            'mustChangePassword', 'createdAt', 'updatedAt'
+          ]);
+    }
+
+    // ─── Finance / Criação: empresas, membros, convites ───────────────────
 
     function empresaIdFromPath(path) {
       return path.size() >= 2 && path[0] == 'empresas' ? path[1] : '';
@@ -25,13 +71,13 @@ service cloud.firestore {
     }
 
     function isMembroAtivo(empresaId) {
-      return isAuth()
+      return isSignedIn()
         && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(request.auth.uid))
         && membroDoc(empresaId).data.status == 'active';
     }
 
     function isOwnerEmpresa(empresaId) {
-      return isAuth()
+      return isSignedIn()
         && exists(/databases/$(database)/documents/empresas/$(empresaId))
         && get(/databases/$(database)/documents/empresas/$(empresaId)).data.ownerUid == request.auth.uid;
     }
@@ -41,7 +87,8 @@ service cloud.firestore {
     }
 
     function canAccessProject(empresaId, projectId) {
-      return isAdmin()
+      return isPlatformAdmin()
+        || isSuperAdmin()
         || isOwnerEmpresa(empresaId)
         || (isMembroAtivo(empresaId) && (
              membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro']
@@ -59,45 +106,55 @@ service cloud.firestore {
         && canAccessProject(projectEmpresaId(projectId), projectId);
     }
 
-    /** Super admin / gestor da empresa — convites e gestão de equipe (não só o ownerUid). */
     function canManageEmpresaTeam(empresaId) {
-      return isAdmin()
+      return isPlatformAdmin()
+        || isSuperAdmin()
         || isOwnerEmpresa(empresaId)
         || (isMembroAtivo(empresaId)
             && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro']);
     }
 
-    function isOwnerUpdatingTeamMember(targetUserId) {
-      let me = get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
-      let empresaId = me.get('defaultEmpresaId', '');
-      return empresaId != ''
-        && isOwnerEmpresa(empresaId)
-        && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(targetUserId));
+    function authUsuarioDefaultEmpresaId() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('defaultEmpresaId', '');
     }
 
-    /** Gestor da empresa atualizando doc de um membro da mesma empresa. */
+    function isOwnerUpdatingTeamMember(targetUserId) {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && authUsuarioDefaultEmpresaId() != ''
+        && isOwnerEmpresa(authUsuarioDefaultEmpresaId())
+        && exists(/databases/$(database)/documents/empresas/$(authUsuarioDefaultEmpresaId())/membros/$(targetUserId));
+    }
+
     function isManagerUpdatingTeamMember(targetUserId) {
-      let me = get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
-      let empresaId = me.get('defaultEmpresaId', '');
-      return empresaId != ''
-        && canManageEmpresaTeam(empresaId)
-        && exists(/databases/$(database)/documents/empresas/$(empresaId)/membros/$(targetUserId));
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && authUsuarioDefaultEmpresaId() != ''
+        && canManageEmpresaTeam(authUsuarioDefaultEmpresaId())
+        && exists(/databases/$(database)/documents/empresas/$(authUsuarioDefaultEmpresaId())/membros/$(targetUserId));
     }
 
     function isOwnMembershipDoc() {
-      return isAuth()
+      return isSignedIn()
         && resource != null
         && resource.data.uid == request.auth.uid
         && resource.data.status == 'active';
+    }
+
+    function canInviteToEmpresa() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && authUsuarioDefaultEmpresaId() != ''
+        && (
+          isOwnerEmpresa(authUsuarioDefaultEmpresaId())
+          || (isMembroAtivo(authUsuarioDefaultEmpresaId())
+              && membroDoc(authUsuarioDefaultEmpresaId()).data.role in ['super_admin', 'gestor_financeiro'])
+        );
     }
 
     function usuarioEmpresaIds() {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('empresaIds', []);
     }
 
-    /** Bootstrap: usuário cria o próprio doc em membros (Ema central ou já listado em empresaIds). */
     function canSelfBootstrapMembro(empresaId) {
-      return isAuth()
+      return isSignedIn()
         && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'active'
@@ -110,152 +167,487 @@ service cloud.firestore {
         );
     }
 
-    // ─── Usuários ──────────────────────────────────────────────────────────
-
-    match /usuarios/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
-      allow create: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
-      allow update: if isAuth() && (request.auth.uid == userId || isAdmin() || isManagerUpdatingTeamMember(userId));
-      allow delete: if isAdmin();
+    function canViewEmpresaAudit(empresaId) {
+      return isMembroAtivo(empresaId)
+        && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro', 'analista_compliance'];
     }
 
-    // ─── Empresas ──────────────────────────────────────────────────────────
+    function loginTouchKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['lastLoginAt', 'ultimo_login', 'uid', 'updatedAt']);
+    }
+
+    function profileEditKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'nome_completo', 'whatsapp', 'empresa', 'equipeBio', 'portfolio', 'dadosCadastrais',
+          'dadosCadastraisPessoa', 'dadosCadastraisEmpresa',
+          'defaultEmpresaId', 'empresaIds', 'updatedAt'
+        ]);
+    }
+
+    function empresaLinkKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['empresaIds', 'defaultEmpresaId', 'empresa', 'updatedAt']);
+    }
+
+    function usuarioAuthDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function empresaIdLinkedToUser(empresaId) {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && empresaId in usuarioAuthDoc().data.get('empresaIds', []);
+    }
+
+    function isSuperAdmin() {
+      return isPlatformAdmin()
+        || (
+          exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+          && usuarioAuthDoc().data.get('role', '') == 'super_admin'
+        );
+    }
+
+    function canReadEmpresa(empresaId) {
+      return isSignedIn() && (
+        resource.data.createdByUid == request.auth.uid
+        || resource.data.get('ownerUid', '') == request.auth.uid
+        || request.auth.uid in resource.data.get('memberUids', [])
+        || empresaIdLinkedToUser(empresaId)
+      );
+    }
+
+    function canManageEmpresa(empresaId) {
+      return canReadEmpresa(empresaId);
+    }
+
+    function empresaDoc(empresaId) {
+      return get(/databases/$(database)/documents/empresas/$(empresaId));
+    }
+
+    function canAccessPortfolioEmpresa(empresaId) {
+      return empresaIdLinkedToUser(empresaId)
+        || (
+          exists(/databases/$(database)/documents/empresas/$(empresaId))
+          && (
+            empresaDoc(empresaId).data.get('createdByUid', '') == request.auth.uid
+            || empresaDoc(empresaId).data.get('ownerUid', '') == request.auth.uid
+            || request.auth.uid in empresaDoc(empresaId).data.get('memberUids', [])
+          )
+        );
+    }
+
+    function isValidUsuarioCreate(userId) {
+      return isSignedIn()
+        && userId == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.nome_completo is string
+        && request.resource.data.role is string;
+    }
+
+    function fornecedorNivelSyncOnly() {
+      return userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['fornecedorNivelAcesso', 'updatedAt']);
+    }
+
+    function gestorFornecedorNivelSyncOnly() {
+      return resource.data.get('fornecedorOwnerUid', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['fornecedorNivelAcesso', 'updatedAt'])
+        && request.resource.data.fornecedorNivelAcesso in ['limitado', 'operador'];
+    }
+
+    function canBillingUsuario(userId) {
+      return canReadUsuario(userId) && (
+        userId == request.auth.uid
+        || resource.data.get('uid', '') == request.auth.uid
+      );
+    }
+
+    function usuarioCreditosAtuais() {
+      return resource.data.get('creditos', 0);
+    }
+
+    function creditDebitOnly() {
+      return canBillingUsuario(userId)
+        && request.resource.data.creditos is number
+        && request.resource.data.creditos >= 0
+        && request.resource.data.creditos <= usuarioCreditosAtuais()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['creditos', 'updatedAt']);
+    }
+
+    /** Conta nova ou legado com `creditos: 0` — pacote inicial de 30 (marketing). */
+    function creditStarterGrantOnly() {
+      return userId == request.auth.uid
+        && usuarioCreditosAtuais() == 0
+        && request.resource.data.creditos == 30
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['creditos', 'updatedAt']);
+    }
+
+    function modulo2IaUsageKeysOnly() {
+      return canBillingUsuario(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['modulo2IaIniciadosAno', 'modulo2IaIniciadosCount', 'updatedAt']);
+    }
+
+    match /usuarios/{userId} {
+      allow read: if canReadUsuario(userId);
+
+      allow create: if isSignedIn() && (
+        isValidUsuarioCreate(userId)
+        || isPlatformAdmin()
+        || isOwnerUpdatingTeamMember(userId)
+        || isManagerUpdatingTeamMember(userId)
+        || (
+          canInviteToEmpresa()
+          && request.resource.data.invitedBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+        )
+        || (
+          userId == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email is string
+        )
+      );
+
+      allow update: if isSignedIn() && (
+        isPlatformAdmin()
+        || isOwnerUpdatingTeamMember(userId)
+        || isManagerUpdatingTeamMember(userId)
+        || (
+          canReadUsuario(userId)
+          && (
+            loginTouchKeysOnly()
+            || profileEditKeysOnly()
+            || empresaLinkKeysOnly()
+            || fornecedorNivelSyncOnly()
+            || gestorFornecedorNivelSyncOnly()
+            || creditDebitOnly()
+            || creditStarterGrantOnly()
+            || modulo2IaUsageKeysOnly()
+            || fornecedorSelfLinkKeysOnly()
+          )
+        )
+        || (request.auth.uid == userId && !isBillingFieldChanged())
+      );
+
+      allow delete: if isPlatformAdmin();
+    }
+
+    function authUsuarioData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function fornecedorIdDoUsuario() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        ? authUsuarioData().get('fornecedorId', '')
+        : '';
+    }
+
+    function fornecedorConvidadoNoProjeto() {
+      let fid = fornecedorIdDoUsuario();
+      return fid != '' && resource.data.get('fornecedorIds', []).hasAny([fid]);
+    }
+
+    /** Vínculo via doc `fornecedores` (authUid + dono do projeto) e índice no projeto. */
+    function fornecedorAutenticadoDoDonoProjeto() {
+      let fid = fornecedorIdDoUsuario();
+      return fid != ''
+        && exists(/databases/$(database)/documents/fornecedores/$(fid))
+        && get(/databases/$(database)/documents/fornecedores/$(fid)).data.get('authUid', '') == request.auth.uid
+        && get(/databases/$(database)/documents/fornecedores/$(fid)).data.userId == resource.data.user_id
+        && resource.data.get('fornecedorIds', []).hasAny([fid]);
+    }
+
+    function fornecedorNivelOperador() {
+      return authUsuarioData().get('fornecedorNivelAcesso', 'limitado') == 'operador';
+    }
+
+    function fornecedorProjetoUpdateOnly() {
+      return fornecedorConvidadoNoProjeto()
+        && !fornecedorNivelOperador()
+        && request.resource.data.user_id == resource.data.user_id
+        && request.resource.data.get('fornecedorIds', []) == resource.data.get('fornecedorIds', [])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['operacional', 'cronograma', 'data_atualizacao', 'updatedAt']);
+    }
+
+    function fornecedorOperadorProjetoUpdate() {
+      return fornecedorConvidadoNoProjeto()
+        && fornecedorNivelOperador()
+        && request.resource.data.user_id == resource.data.user_id
+        && request.resource.data.get('fornecedorIds', []) == resource.data.get('fornecedorIds', [])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'operacional', 'cronograma', 'equipe', 'orcamento',
+            'data_atualizacao', 'updatedAt'
+          ]);
+    }
+
+    match /projetos/{projetoId} {
+      allow read: if isSignedIn()
+        && (
+          isSuperAdmin()
+          || resource.data.user_id == request.auth.uid
+          || fornecedorConvidadoNoProjeto()
+          || fornecedorAutenticadoDoDonoProjeto()
+        );
+      allow create: if isSignedIn()
+        && request.resource.data.user_id == request.auth.uid;
+      allow update: if isSignedIn()
+        && (
+          isSuperAdmin()
+          || resource.data.user_id == request.auth.uid
+          || fornecedorProjetoUpdateOnly()
+          || fornecedorOperadorProjetoUpdate()
+        );
+      allow delete: if isSignedIn()
+        && (isSuperAdmin() || resource.data.user_id == request.auth.uid);
+    }
+
+    function fornecedorOwner() {
+      return resource.data.userId == request.auth.uid;
+    }
+
+    function fornecedorOperadorDoGestor() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && authUsuarioData().get('fornecedorNivelAcesso', 'limitado') == 'operador'
+        && resource.data.userId == authUsuarioData().get('fornecedorOwnerUid', '');
+    }
+
+    function fornecedorLinkedAuth() {
+      return resource.data.get('authUid', '') == request.auth.uid;
+    }
+
+    function fornecedorConviteEmailMatch() {
+      return emailsMatch()
+        && (
+          resource.data.get('authUid', '') == ''
+          || resource.data.get('authUid', '') == request.auth.uid
+          || resource.data.get('convitePendente', false) == true
+        );
+    }
+
+    function fornecedorSupplierLinkKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['authUid', 'convitePendente', 'conviteAt', 'atualizadoEm']);
+    }
+
+    match /fornecedores/{fornecedorId} {
+      allow read: if isSignedIn()
+        && (
+          isSuperAdmin()
+          || fornecedorOwner()
+          || fornecedorLinkedAuth()
+          || fornecedorConviteEmailMatch()
+          || fornecedorOperadorDoGestor()
+        );
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+        && (
+          isSuperAdmin()
+          || fornecedorOwner()
+          || (fornecedorConviteEmailMatch() && fornecedorSupplierLinkKeysOnly())
+        );
+      allow delete: if isSignedIn()
+        && (isSuperAdmin() || fornecedorOwner());
+    }
+
+    function canReadEmpresaUnified(empresaId) {
+      return isPlatformAdmin()
+        || isSuperAdmin()
+        || canReadEmpresa(empresaId)
+        || isMembroAtivo(empresaId)
+        || isOwnerEmpresa(empresaId)
+        || (isSignedIn() && empresaId == request.auth.uid);
+    }
 
     match /empresas/{empresaId} {
-      allow read: if isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId) || isAdmin();
-      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isOwnerEmpresa(empresaId) || isAdmin();
-      allow delete: if isAdmin();
+      allow read: if canReadEmpresaUnified(empresaId);
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && (
+          request.resource.data.createdByUid == request.auth.uid
+          || request.resource.data.ownerUid == request.auth.uid
+          || empresaId == request.auth.uid
+        )
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() > 0;
+
+      allow update: if canManageEmpresa(empresaId)
+        || isOwnerEmpresa(empresaId)
+        || isPlatformAdmin();
+      allow delete: if isPlatformAdmin()
+        || (
+          canManageEmpresa(empresaId)
+          && (
+            resource.data.get('createdByUid', '') == request.auth.uid
+            || resource.data.get('ownerUid', '') == request.auth.uid
+            || isSuperAdmin()
+          )
+        );
 
       match /membros/{membroId} {
-        allow read: if isAdmin()
+        allow read: if isPlatformAdmin()
+          || isSuperAdmin()
           || isOwnerEmpresa(empresaId)
-          || (isAuth() && membroId == request.auth.uid)
-          || isMembroAtivo(empresaId);
+          || (isSignedIn() && membroId == request.auth.uid)
+          || isMembroAtivo(empresaId)
+          || (isSignedIn() && empresaId == request.auth.uid && membroId == request.auth.uid);
 
-        // Owner / admin / self-bootstrap (Ema ou empresaIds no usuário)
-        allow create: if isAdmin()
+        allow create: if isPlatformAdmin()
+          || isSuperAdmin()
           || isOwnerEmpresa(empresaId)
-          || (isAuth()
+          || (isSignedIn()
               && membroId == request.auth.uid
-              && request.auth.uid == get(/databases/$(database)/documents/empresas/$(empresaId)).data.ownerUid)
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.status == 'active'
+              && (
+                empresaId == request.auth.uid
+                || (exists(/databases/$(database)/documents/empresas/$(empresaId))
+                    && get(/databases/$(database)/documents/empresas/$(empresaId)).data.ownerUid
+                      == request.auth.uid)
+              ))
+          || (isMembroAtivo(empresaId)
+              && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro'])
           || (membroId == request.auth.uid && canSelfBootstrapMembro(empresaId));
 
-        allow update: if canManageEmpresaTeam(empresaId);
-        allow delete: if canManageEmpresaTeam(empresaId);
+        allow update: if canManageEmpresaTeam(empresaId)
+          || isOwnerEmpresa(empresaId)
+          || (isSignedIn()
+              && membroId == request.auth.uid
+              && empresaId == request.auth.uid);
+        allow delete: if isPlatformAdmin() || isOwnerEmpresa(empresaId) || canManageEmpresaTeam(empresaId);
       }
 
       match /convites/{conviteId} {
         allow read: if canManageEmpresaTeam(empresaId)
-          || (isAuth() && resource.data.email.lower() == request.auth.token.email.lower());
-        allow create: if canManageEmpresaTeam(empresaId);
+          || isOwnerEmpresa(empresaId)
+          || (isSignedIn() && resource.data.email.lower() == request.auth.token.email.lower())
+          || isPlatformAdmin();
+        allow create: if canManageEmpresaTeam(empresaId) || isOwnerEmpresa(empresaId) || isPlatformAdmin();
         allow update: if canManageEmpresaTeam(empresaId)
-          || (isAuth()
+          || isOwnerEmpresa(empresaId)
+          || isPlatformAdmin()
+          || (isSignedIn()
               && resource.data.email.lower() == request.auth.token.email.lower()
               && request.resource.data.status == 'accepted');
-        allow delete: if canManageEmpresaTeam(empresaId);
+        allow delete: if canManageEmpresaTeam(empresaId) || isOwnerEmpresa(empresaId) || isPlatformAdmin();
       }
 
-      // Integrações (Omie etc.) — somente Cloud Functions (Admin SDK)
       match /integracoes/{integrationId} {
         allow read, write: if false;
       }
 
-      // Fornecedores Omie (CNPJ → codigo_cliente_omie) — leitura para membros; escrita só Admin SDK
       match /omie_fornecedores/{cnpjId} {
-        allow read: if isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId) || isAdmin();
+        allow read: if isMembroAtivo(empresaId) || isOwnerEmpresa(empresaId) || isPlatformAdmin() || isSuperAdmin();
         allow write: if false;
       }
     }
 
-    // Collection group: busca de convites por e-mail (login / aceite)
-    // Query: where email == X && status == 'pending' — regra deve espelhar os filtros
     match /{path=**}/convites/{conviteId} {
-      allow read: if isAdmin()
-        || (isAuth()
+      allow read: if isPlatformAdmin()
+        || (isSignedIn()
             && resource != null
             && request.auth.token.email.lower() == resource.data.email.lower()
             && resource.data.status == 'pending')
-        || (isAuth()
+        || (isSignedIn()
             && resource != null
             && isOwnerEmpresa(empresaIdFromPath(path)));
     }
 
-    // Collection group: busca de membership por uid
-    // Query: where uid == auth.uid && status == 'active' — usar resource.data.uid (não só doc id)
     match /{path=**}/membros/{membroId} {
-      allow read: if isAdmin()
+      allow read: if isPlatformAdmin()
+        || isSuperAdmin()
         || isOwnMembershipDoc()
-        || (isAuth() && membroId == request.auth.uid)
-        || (isAuth()
+        || (isSignedIn() && membroId == request.auth.uid)
+        || (isSignedIn()
             && resource != null
             && isOwnerEmpresa(empresaIdFromPath(path)))
-        || (isAuth()
+        || (isSignedIn()
             && resource != null
             && isMembroAtivo(empresaIdFromPath(path)));
     }
 
-    // ─── Projetos ──────────────────────────────────────────────────────────
+    match /portfolios/{portfolioId} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null && canAccessPortfolioEmpresa(resource.data.empresaId))
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.empresaId != null
+        && canAccessPortfolioEmpresa(request.resource.data.empresaId);
+      allow update, delete: if isSignedIn() && (
+        isSuperAdmin()
+        || resource.data.userId == request.auth.uid
+        || (resource.data.empresaId != null && canAccessPortfolioEmpresa(resource.data.empresaId))
+      );
+    }
+
+    // ─── Finance: production_projects, NF, billing ───────────────────────
 
     match /production_projects/{projectId} {
-      // userId == auth.uid permite query legado de migração (patchProjectsEmpresaId)
-      // Membro ativo da empresa: lista/lê todos os projetos da empresa (query por empresaId)
-      allow read: if isAuth() && (
-        isAdmin()
+      allow read: if isSignedIn() && (
+        isPlatformAdmin()
+        || isSuperAdmin()
         || resource.data.userId == request.auth.uid
-        || (resource.data.empresaId != null
-            && isMembroAtivo(resource.data.empresaId))
-        || (resource.data.empresaId != null
-            && canAccessProject(resource.data.empresaId, projectId))
+        || (resource.data.empresaId != null && isMembroAtivo(resource.data.empresaId))
+        || (resource.data.empresaId != null && canAccessProject(resource.data.empresaId, projectId))
       );
 
-      allow create: if isAuth()
+      allow create: if isSignedIn()
         && request.resource.data.empresaId != null
         && (isMembroAtivo(request.resource.data.empresaId)
             || isOwnerEmpresa(request.resource.data.empresaId));
 
-      allow update: if isAuth() && (
-        isAdmin()
+      allow update: if isSignedIn() && (
+        isPlatformAdmin()
+        || isSuperAdmin()
         || (resource.data.empresaId != null && isOwnerEmpresa(resource.data.empresaId))
         || resource.data.userId == request.auth.uid
-        || (resource.data.empresaId != null
-            && canAccessProject(resource.data.empresaId, projectId))
+        || (resource.data.empresaId != null && canAccessProject(resource.data.empresaId, projectId))
       );
 
-      allow delete: if isAuth()
+      allow delete: if isSignedIn()
         && resource.data.empresaId != null
         && (
-          isAdmin()
+          isPlatformAdmin()
           || isOwnerEmpresa(resource.data.empresaId)
+          || isSuperAdmin()
           || (isMembroAtivo(resource.data.empresaId)
               && membroDoc(resource.data.empresaId).data.role == 'super_admin')
         );
     }
 
-    // ─── Banco híbrido de anexos Omie (NF / comprovante / unknown) ─────────
     match /omie_anexos/{anexoId} {
-      allow read: if isAuth() && (
-        isAdmin()
-        || (resource.data.projectId != null
-            && canAccessProjectById(resource.data.projectId))
+      allow read: if isSignedIn() && (
+        isPlatformAdmin()
+        || isSuperAdmin()
+        || (resource.data.projectId != null && canAccessProjectById(resource.data.projectId))
       );
-      // Escrita só via Cloud Functions (Admin SDK)
       allow write: if false;
     }
 
-    // ─── Notas fiscais ─────────────────────────────────────────────────────
-
     match /nf_analyses/{analysisId} {
-      allow read: if isAuth() && (
-        isAdmin()
+      allow read: if isSignedIn() && (
+        isPlatformAdmin()
+        || isSuperAdmin()
         || (resource.data.projectId != null && canAccessProjectById(resource.data.projectId))
         || resource.data.userId == request.auth.uid
       );
-
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-
-      allow update, delete: if isAuth() && (
-        isAdmin()
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        isPlatformAdmin()
+        || isSuperAdmin()
         || resource.data.userId == request.auth.uid
         || (resource.data.projectId != null
             && exists(/databases/$(database)/documents/production_projects/$(resource.data.projectId))
@@ -270,167 +662,130 @@ service cloud.firestore {
       );
     }
 
-    // ─── Assinaturas e pagamentos ──────────────────────────────────────────
+    match /user_analysis_criteria/{criterionId} {
+      allow read: if isSignedIn() && (
+        criterionId == 'vxmEHDQer4tNk11XEKeg'
+        || resource.data.userId == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && (!('userId' in request.resource.data)
+            || request.resource.data.userId == request.auth.uid);
+    }
 
     match /subscriptions/{subscriptionId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow delete: if isPlatformAdmin();
     }
 
     match /payments/{paymentId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if false; // Cloud Functions / webhooks
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow write: if false;
     }
 
     match /stripe_sessions/{sessionId} {
       allow read, write: if false;
     }
 
-    // ─── LGPD / consentimento ──────────────────────────────────────────────
-
     match /terms_acceptance/{docId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isPlatformAdmin();
     }
 
     match /user_consents/{docId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow delete: if isPlatformAdmin();
     }
 
     match /data_export_logs/{docId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isPlatformAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isPlatformAdmin();
     }
 
     match /deleted_accounts/{docId} {
-      allow read: if isAdmin();
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow read: if isPlatformAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isPlatformAdmin();
     }
-
-    function canViewEmpresaAudit(empresaId) {
-      return isMembroAtivo(empresaId)
-        && membroDoc(empresaId).data.role in ['super_admin', 'gestor_financeiro', 'analista_compliance'];
-    }
-
-    // ─── Auditoria ─────────────────────────────────────────────────────────
 
     match /audit_logs/{logId} {
-      allow read: if isAuth() && (
+      allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid
-        || isAdmin()
+        || isPlatformAdmin()
+        || canInviteToEmpresa()
         || (resource.data.keys().hasAny(['empresaId'])
             && resource.data.empresaId is string
             && canViewEmpresaAudit(resource.data.empresaId))
       );
-      allow create: if isAuth()
+      allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
         && (
           !('empresaId' in request.resource.data)
           || request.resource.data.empresaId == null
           || isMembroAtivo(request.resource.data.empresaId)
           || isOwnerEmpresa(request.resource.data.empresaId)
-          || isAdmin()
+          || isPlatformAdmin()
         );
-      allow update, delete: if isAdmin();
+      allow update, delete: if isPlatformAdmin();
     }
-
-    // ─── Locks (somente backend) ─────────────────────────────────────────────
 
     match /locks/{lockId} {
       allow read, write: if false;
     }
 
-    // ─── Coleções legadas / conteúdo público ───────────────────────────────
-
     match /expenses/{id} {
-      allow read, write: if isAuth();
+      allow read, write: if isSignedIn();
     }
 
     match /rubrics/{id} {
-      allow read, write: if isAuth();
+      allow read, write: if isSignedIn();
     }
 
     match /users/{id} {
-      allow read, write: if isAuth();
+      allow read, write: if isSignedIn();
     }
 
     match /project_users/{id} {
-      allow read, write: if isAuth();
+      allow read, write: if isSignedIn();
     }
 
     match /guias/{id} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn();
     }
 
     match /analyses/{id} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn();
     }
 
     match /podcasts/{id} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn();
     }
 
     match /podcast_episodios/{id} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn();
     }
 
     match /editais/{editalId} {
-      // Oráculo Cultural — editais abertos visíveis para todos (get, list e queries sem login)
       allow get, list, read: if true;
-      allow create, update, delete: if isAuth() || isAdmin();
+      allow create, update, delete: if isSignedIn() || isPlatformAdmin();
     }
 
-    // Newsletter "Receba editais por email" — qualquer visitante pode se cadastrar
     match /newsletter_emails/{docId} {
       allow create: if request.resource.data.email is string
         && request.resource.data.email.size() >= 5
         && request.resource.data.keys().hasAll(['email', 'criadoEm']);
-      allow read, update, delete: if isAdmin();
-    }
-
-    // Oráculo Cultural — apps legados no mesmo projeto Firebase
-    match /projetos/{projetoId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
-      allow create: if isAuth() && request.resource.data.user_id == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.user_id == request.auth.uid);
-    }
-
-    match /portfolios/{portfolioId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-    }
-
-    match /fornecedores/{fornecedorId} {
-      allow read: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth() && (isAdmin() || resource.data.userId == request.auth.uid);
-    }
-
-
-    // Critérios do analisador de NF (iframe) — CRUD do próprio userId
-    // vxmEHDQer4tNk11XEKeg = critério padrão compartilhado (leitura para todos)
-    match /user_analysis_criteria/{id} {
-      allow read: if isAuth()
-        && (id == 'vxmEHDQer4tNk11XEKeg' || resource.data.userId == request.auth.uid);
-      allow create: if isAuth()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth()
-        && resource.data.userId == request.auth.uid
-        && (!('userId' in request.resource.data)
-            || request.resource.data.userId == request.auth.uid);
+      allow read, update, delete: if isPlatformAdmin();
     }
   }
 }
