@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { consumirCreditos } from '@/lib/creditOperations';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost } from '@/lib/iaAuthenticatedFetch';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -412,27 +413,11 @@ const GerarTextos = () => {
       console.log('[DEBUG] Enviando requisição para gerarTextosProjeto');
       console.log('[DEBUG] Request data keys:', Object.keys(requestData));
       
-      // Tenta primeiro a nova função, se falhar usa a antiga
-      let response;
-      try {
-        console.log('[DEBUG] Tentando fetch para Firebase Function...');
-        response = await fetch('https://us-central1-oraculo-is.cloudfunctions.net/gerarTextosProjeto', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
-        });
-        console.log('[DEBUG] Resposta recebida do Firebase Function, status:', response.status);
-      } catch (err) {
-        console.error('[ERROR] Erro ao chamar Firebase Function:', err);
-        // Fallback para a URL do Cloud Run
-        console.log('[DEBUG] Tentando fallback para Cloud Run...');
-        response = await fetch('https://gerartexto-v3odkawqzq-uc.a.run.app', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
-        });
-        console.log('[DEBUG] Resposta recebida do Cloud Run, status:', response.status);
-      }
+      const response = await authenticatedPost(
+        `${getFunctionsBaseUrl()}/gerarTextosProjeto`,
+        requestData,
+        { navigate },
+      );
       
       const requestTime = Date.now() - startTime;
       log(`Resposta recebida em ${requestTime}ms`, {
@@ -490,20 +475,6 @@ const GerarTextos = () => {
               durationSeconds: (Date.now() - startTime) / 1000,
               textLength: fullTextData.length,
                   });
-            
-            // Debit credits for text generation (1 credit)
-            if (user) {
-              try {
-                const result = await consumirCreditos(user.uid, 'gerar_texto');
-                
-                if (!result.success) {
-                  console.warn('[GerarTextos] Aviso ao descontar créditos:', result.error);
-                }
-              } catch (e) {
-                console.error('[GerarTextos] Erro ao descontar créditos:', e);
-              }
-            }
-            
             setTimeout(() => {
               const el = document.getElementById('pedidos-alteracao-texto');
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -613,20 +584,6 @@ const GerarTextos = () => {
             durationSeconds: (Date.now() - startTime) / 1000,
             textLength: fullText.length,
               });
-          
-          // Debit credits for text generation (1 credit)
-          if (user) {
-            try {
-              const result = await consumirCreditos(user.uid, 'gerar_texto');
-              
-              if (!result.success) {
-                console.warn('[GerarTextos] Aviso ao descontar créditos (streaming):', result.error);
-              }
-            } catch (e) {
-              console.error('[GerarTextos] Erro ao descontar créditos (streaming):', e);
-            }
-          }
-          
           setTimeout(() => {
             const el = document.getElementById('pedidos-alteracao-texto');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1046,17 +1003,15 @@ const GerarTextos = () => {
                                 console.error('Erro ao buscar portfolio:', err);
                               }
                             }
-                            const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
-                            const response = await fetch(endpoint, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
+                            const response = await authenticatedPost(
+                              `${getFunctionsBaseUrl()}/alterarTextoComIA`,
+                              {
                                 textoAtual: textoBase,
                                 sugestao: sugestaoTexto,
                                 portfolio: portfolioTexto,
-                                userId: user?.uid,
-                              }),
-                            });
+                              },
+                              { navigate },
+                            );
                             if (!response.ok) {
                               const errorData = await response.json().catch(() => ({}));
                               throw new Error(`Erro: ${response.status} - ${JSON.stringify(errorData)}`);

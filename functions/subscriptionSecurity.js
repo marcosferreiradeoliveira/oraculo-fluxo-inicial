@@ -74,8 +74,39 @@ function forbidden(res) {
   });
 }
 
+/** Apenas super_admin (usuarios/{uid}.role). */
+async function secureSuperAdminRequest(req, res, admin, db) {
+  iaSecurity.applyCors(req, res);
+  if (iaSecurity.handleOptions(req, res)) return null;
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return null;
+  }
+
+  const auth = await iaSecurity.verifyBearerToken(req, admin);
+  if (!auth.ok) {
+    res.status(auth.status).json({ error: auth.error });
+    return null;
+  }
+
+  const uid = auth.uid;
+  const userSnap = await db.collection('usuarios').doc(uid).get();
+  if (!userSnap.exists) {
+    res.status(404).json({ error: 'Usuário não encontrado' });
+    return null;
+  }
+  if (userSnap.data()?.role !== 'super_admin') {
+    forbidden(res);
+    return null;
+  }
+
+  return { uid, userData: userSnap.data() };
+}
+
 module.exports = {
   secureSubscriptionRequest,
+  secureSuperAdminRequest,
   resolveStripeSubscriptionId,
   resolveStripeCustomerId,
   forbidden,

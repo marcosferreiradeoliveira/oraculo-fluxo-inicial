@@ -10,6 +10,8 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
 import { toast } from 'sonner';
 import { trackProjectStepViewed } from '@/lib/analytics';
+import { getFunctionsBaseUrl } from '@/lib/functionsUrl';
+import { authenticatedPost } from '@/lib/iaAuthenticatedFetch';
 
 const steps = [
   'Criar Projeto',
@@ -298,19 +300,15 @@ const AlterarComIA = () => {
         return;
       }
       
-      const endpoint = 'https://us-central1-oraculo-is.cloudfunctions.net/alterarTextoComIA';
-      
       console.log('Enviando texto e sugestão para o backend...');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await authenticatedPost(
+        `${getFunctionsBaseUrl()}/alterarTextoComIA`,
+        {
           textoAtual: textoBase,
           sugestao: sugestoes[idx],
-        }),
-      });
+        },
+        { navigate },
+      );
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

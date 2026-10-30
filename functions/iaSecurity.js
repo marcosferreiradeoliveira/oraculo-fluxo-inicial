@@ -11,6 +11,8 @@ const CREDIT_COSTS = {
   analise_projeto: 5,
   avaliar_projeto: 5,
   gerar_texto: 1,
+  alterar_texto_com_ia: 1,
+  preencher_anexo_pdf: 1,
   gerar_cronograma: 3,
   gerar_orcamento: 3,
 };
@@ -166,8 +168,12 @@ async function secureIaRequest(req, res, admin, db, options = {}) {
 
 function getClientIp(req) {
   const fwd = req.get('x-forwarded-for') || req.get('X-Forwarded-For') || '';
-  const first = fwd.split(',')[0]?.trim();
-  return first || req.ip || 'unknown';
+  const parts = fwd
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length > 0) return parts[parts.length - 1];
+  return req.ip || 'unknown';
 }
 
 async function checkPreviewIpLimit(db, admin, ip) {

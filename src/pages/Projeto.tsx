@@ -301,7 +301,7 @@ const Projeto = () => {
   // Acesso: premium sempre liberado; sem plano usa créditos (avaliação = 5 créditos)
   const CREDITOS_ANALISE = 5;
   const checkPremiumAccess = () => {
-    // Credit check is now handled by consumirCreditos callable
+    // Créditos de analise_projeto são debitados no servidor (avaliarProjeto).
     // Just allow the action to proceed
     return true;
   };
@@ -1160,23 +1160,6 @@ const Projeto = () => {
         }
 
         await updateDoc(ref, updateData);
-
-        // Debit credits for analise_projeto (5 credits)
-        if (user) {
-          try {
-            const result = await consumirCreditos(user.uid, 'analise_projeto', {
-              onCreditsUpdated: (newBalance) => {
-                setCreditos(newBalance);
-              },
-            });
-            
-            if (!result.success) {
-              console.warn('[Projeto] Aviso ao descontar créditos:', result.error);
-            }
-          } catch (e) {
-            console.error('[Projeto] Erro ao descontar créditos:', e);
-          }
-        }
 
         setStreamingAnaliseContent('');
         setProjeto((prev: any) => ({ ...prev, analise_ia: analiseIA, primeira_analise_completa: updateData.primeira_analise_completa ?? prev?.primeira_analise_completa }));

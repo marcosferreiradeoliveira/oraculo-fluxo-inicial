@@ -386,7 +386,7 @@ const Cadastro = () => {
         await setDoc(
           userDocRef,
           {
-            ...            buildNovoUsuarioFirestore({
+            ...buildNovoUsuarioFirestore({
               uid: userUid,
               email: userEmail,
               timestamp,

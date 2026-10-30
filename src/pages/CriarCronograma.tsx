@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
-import { consumirCreditos } from '@/lib/creditOperations';
 import { assertCanSpendCredits } from '@/lib/chargeCredits';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
@@ -226,18 +225,6 @@ const CriarCronograma = () => {
         durationSeconds: (Date.now() - startTime) / 1000,
         textLength: etapasGeradas.length,
         });
-      
-      // Debit credits for cronograma generation (3 credits)
-      try {
-        const result = await consumirCreditos(user.uid, 'gerar_cronograma');
-        
-        if (!result.success) {
-          console.warn('[CriarCronograma] Aviso ao descontar créditos:', result.error);
-        }
-      } catch (e) {
-        console.error('[CriarCronograma] Erro ao descontar créditos:', e);
-      }
-      
       toast.success(`Cronograma com ${etapasGeradas.length} etapas gerado. Revise e salve.`);
     } catch (err) {
       console.error(err);
@@ -298,18 +285,6 @@ const CriarCronograma = () => {
         rubricasAssociadas: e.rubricasAssociadas ?? [],
       })));
       setSugestoesCronograma('');
-      
-      // Debit credits for cronograma alterations (3 credits)
-      try {
-        const result = await consumirCreditos(user.uid, 'gerar_cronograma');
-        
-        if (!result.success) {
-          console.warn('[CriarCronograma] Aviso ao descontar créditos (alterações):', result.error);
-        }
-      } catch (e) {
-        console.error('[CriarCronograma] Erro ao descontar créditos (alterações):', e);
-      }
-      
       toast.success('Alterações aplicadas. Aprove ou volte ao estado anterior.');
     } catch (err) {
       console.error(err);

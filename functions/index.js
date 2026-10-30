@@ -529,7 +529,7 @@ exports.avaliarProjetoPreviewLanding = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
-    iaSecurity.applyCorsLandingPreview(req, res);
+    iaSecurity.applyCors(req, res, 'Content-Type, X-Preview-Fingerprint');
     if (iaSecurity.handleOptions(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method Not Allowed' });
@@ -798,23 +798,30 @@ exports.alterarTextoComIA = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
+  let debitedCost = 0;
+  let authUid = null;
   try {
-    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: null });
+    const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: 'alterar_texto_com_ia' });
     if (!secured) return;
+    authUid = secured.uid;
+    debitedCost = secured.debitedCost;
     const userId = secured.uid;
 
     const { textoAtual, sugestao, portfolio } = req.body;
     
     if (!textoAtual || !sugestao) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'textoAtual e sugestao são obrigatórios' });
     }
     
     // Validar que os campos não estão vazios
     if (typeof textoAtual !== 'string' || textoAtual.trim().length === 0) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'textoAtual não pode estar vazio' });
     }
     
     if (typeof sugestao !== 'string' || sugestao.trim().length === 0) {
+      if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
       return res.status(400).json({ error: 'sugestao não pode estar vazia' });
     }
     
@@ -891,10 +898,19 @@ TEXTO DO PROJETO (completo, com as alterações):`;
     res.end();
     
   } catch (error) {
+    if (authUid && debitedCost && !res.headersSent) {
+      try {
+        await iaSecurity.refundCredits(db, authUid, debitedCost);
+      } catch (refundErr) {
+        console.error('[alterarTextoComIA] refund failed', refundErr);
+      }
+    }
     console.error('Error altering text with AI:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to alter text with AI' 
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({ 
+        error: error.message || 'Failed to alter text with AI' 
+      });
+    }
   }
 });
 
@@ -2011,17 +2027,23 @@ exports.preencherAnexoPDF = onRequest(
     secrets: [openaiApiKey],
   },
   async (req, res) => {
+    let debitedCost = 0;
+    let authUid = null;
     try {
-      const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: null });
+      const secured = await iaSecurity.secureIaRequest(req, res, admin, db, { acao: 'preencher_anexo_pdf' });
       if (!secured) return;
+      authUid = secured.uid;
+      debitedCost = secured.debitedCost;
       const userId = secured.uid;
 
       const { pdfUrl, dadosCadastrais, nomeProjeto, projetoId } = req.body;
       if (projetoId && !(await iaSecurity.assertProjectOwner(db, userId, projetoId))) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
         return res.status(403).json({ error: 'Sem permissão para este projeto.' });
       }
       
       if (!pdfUrl || !dadosCadastrais || !nomeProjeto) {
+        if (debitedCost) await iaSecurity.refundCredits(db, authUid, debitedCost);
         return res.status(400).json({ 
           error: 'pdfUrl, dadosCadastrais e nomeProjeto são obrigatórios' 
         });
@@ -2586,6 +2608,13 @@ Retorne APENAS o texto completo preenchido, mantendo a estrutura original do doc
       });
       
     } catch (error) {
+      if (authUid && debitedCost) {
+        try {
+          await iaSecurity.refundCredits(db, authUid, debitedCost);
+        } catch (refundErr) {
+          console.error('[preencherAnexoPDF] refund failed', refundErr);
+        }
+      }
       console.error('[preencherAnexoPDF] Erro completo:', {
         message: error.message,
         stack: error.stack,
@@ -3980,6 +4009,19 @@ exports.sincronizarUsuarioBrevo = onDocumentCreated(
         empresa: userData.empresa 
       });
 
+      const SUPER_ADMIN_EMAIL = 'marcosferreira@mobcontent.com.br';
+      const serverFields = {};
+      if (!userData.role) {
+        serverFields.role =
+          (userData.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL ? 'super_admin' : 'user';
+      }
+      if (typeof userData.creditos !== 'number') {
+        serverFields.creditos = 30;
+      }
+      if (Object.keys(serverFields).length > 0) {
+        await snapshot.ref.update(serverFields);
+      }
+
       if (!userData.email) {
         console.warn(`[sincronizarUsuarioBrevo] Usuário ${userId} não tem email, ignorando...`);
         return;
@@ -4031,17 +4073,10 @@ exports.sincronizarTodosUsuariosBrevo = onRequest(
     secrets: [brevoApiKey],
   },
   async (req, res) => {
-    // Set CORS headers
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-
     try {
+      const secured = await subscriptionSecurity.secureSuperAdminRequest(req, res, admin, db);
+      if (!secured) return;
+
       console.log('[sincronizarTodosUsuariosBrevo] Iniciando sincronização de todos os usuários...');
 
       // Buscar todos os usuários do Firestore
