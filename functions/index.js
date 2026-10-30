@@ -451,6 +451,136 @@ Seja objetivo, específico e construtivo. Baseie sua análise PRINCIPALMENTE no 
   }
 });
 
+/** Prévia anônima na landing /avalieseuprojeto/ — 1 uso por fingerprint (localStorage + Firestore). */
+exports.avaliarProjetoPreviewLanding = onRequest(
+  {
+    secrets: [openaiApiKey],
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-Preview-Fingerprint');
+    res.set('Access-Control-Max-Age', '3600');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+
+    try {
+      const fingerprint = String(req.headers['x-preview-fingerprint'] || req.body?.previewFingerprint || '')
+        .trim()
+        .slice(0, 128);
+      const {
+        textoProjeto,
+        nomeProjeto,
+        nomeEdital,
+        criteriosEdital,
+      } = req.body || {};
+
+      if (!fingerprint || fingerprint.length < 8) {
+        return res.status(400).json({ error: 'Fingerprint de prévia inválido.' });
+      }
+      const texto = String(textoProjeto || '').trim();
+      if (texto.length < 80) {
+        return res.status(400).json({ error: 'Cole um resumo do projeto com pelo menos 80 caracteres.' });
+      }
+      if (texto.length > 1800) {
+        return res.status(400).json({ error: 'Resumo muito longo. Use até 1.800 caracteres na prévia.' });
+      }
+      const criterios = String(criteriosEdital || '').trim();
+      if (!criterios) {
+        return res.status(400).json({ error: 'Critérios do edital são obrigatórios.' });
+      }
+
+      const crypto = require('crypto');
+      const fpHash = crypto.createHash('sha256').update(fingerprint).digest('hex').slice(0, 40);
+      const usageRef = db.collection('landing_preview_usage').doc(fpHash);
+      const usageSnap = await usageRef.get();
+      if (usageSnap.exists) {
+        return res.status(429).json({
+          error: 'Prévia já utilizada',
+          message: 'Você já usou a prévia gratuita neste navegador. Crie sua conta para a avaliação completa.',
+        });
+      }
+
+      const key = getOpenAIApiKey();
+      if (!key) {
+        return res.status(500).json({
+          error: 'OPENAI_API_KEY não configurado.',
+        });
+      }
+
+      const prompt = `Você é um avaliador experiente de projetos culturais para leis de incentivo fiscal.
+Avalie o projeto abaixo contra os critérios do edital. Seja rigoroso e construtivo.
+
+${nomeProjeto ? `**PROJETO:** ${nomeProjeto}` : ''}
+
+**TEXTO DO PROJETO:**
+${texto.slice(0, 1800)}
+
+**EDITAL:** ${nomeEdital || 'Lei Rouanet'}
+
+**CRITÉRIOS:**
+${criterios.slice(0, 4000)}
+
+Responda EXATAMENTE nesta estrutura (títulos em maiúsculas como abaixo):
+1. ADEQUAÇÃO AOS CRITÉRIOS DO EDITAL
+(parágrafo curto)
+
+2. PONTOS FORTES DO PROJETO
+- (item)
+
+3. PONTOS FRACOS E GAPS
+- (item 1)
+- (item 2)
+
+4. SUGESTÕES DE MELHORIA
+(texto — será oculto na prévia)
+
+5. Nota estimada (0-100): XX/100
+Inclua também linhas "Nota: X/Y" por critério quando possível.`;
+
+      const openai = getOpenAI();
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é um avaliador oficial de projetos culturais. Responda em português do Brasil, seguindo a estrutura pedida.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1600,
+        temperature: 0.3,
+      });
+
+      const analiseIA = completion.choices[0].message?.content || '';
+      if (!analiseIA.trim()) {
+        return res.status(500).json({ error: 'A análise não retornou conteúdo.' });
+      }
+
+      await usageRef.set({
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        nomeEdital: nomeEdital || null,
+        textoLen: texto.length,
+      });
+
+      return res.status(200).json({ analise: analiseIA });
+    } catch (error) {
+      console.error('[avaliarProjetoPreviewLanding]', error);
+      return res.status(500).json({
+        error: error && error.message ? error.message : 'Falha ao gerar prévia.',
+      });
+    }
+  },
+);
+
 exports.gerarTexto = onRequest(
   {
     secrets: [openaiApiKey],

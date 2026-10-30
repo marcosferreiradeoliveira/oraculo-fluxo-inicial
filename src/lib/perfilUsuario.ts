@@ -49,8 +49,10 @@ export function buildNovoUsuarioFirestore(params: {
   email: string;
   nomeCompletoInicial?: string;
   timestamp: FieldValue;
+  attribution?: Record<string, string>;
 }): Record<string, unknown> {
-  const { uid, email, nomeCompletoInicial, timestamp } = params;
+  const { uid, email, nomeCompletoInicial, timestamp, attribution } = params;
+  const origemLead = attribution?.origem?.trim() || attribution?.utm_source?.trim() || 'captacao';
   return {
     createdAt: timestamp,
     // creditos is set by server via auth onCreate trigger (30 for free users)
@@ -62,7 +64,12 @@ export function buildNovoUsuarioFirestore(params: {
     lastLoginAt: timestamp,
     nome_completo: nomeCompletoInicial?.trim() || '',
     perfil_dados_coletados: false,
-    origem: 'captacao',
+    origem: origemLead,
+    ...(attribution?.utm_campaign ? { utm_campaign: attribution.utm_campaign } : {}),
+    ...(attribution?.utm_content ? { utm_content: attribution.utm_content } : {}),
+    ...(attribution?.utm_medium ? { utm_medium: attribution.utm_medium } : {}),
+    ...(attribution?.utm_source ? { utm_source: attribution.utm_source } : {}),
+    ...(attribution?.utm_term ? { utm_term: attribution.utm_term } : {}),
     portfolio: '',
     role: roleForNewUsuario(email),
     ultimo_login: timestamp,

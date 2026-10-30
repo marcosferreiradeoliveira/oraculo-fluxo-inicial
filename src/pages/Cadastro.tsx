@@ -16,7 +16,16 @@ import {
   deveMostrarFormularioPerfil,
 } from '@/lib/perfilUsuario';
 import { Card, CardContent } from '@/components/ui/card';
-import { markCadastroCelebrationPending } from '@/lib/cadastroCelebration';
+import {
+  clearCadastroCelebrationPending,
+  markCadastroCelebrationPending,
+} from '@/lib/cadastroCelebration';
+import {
+  captureLandingAttributionFromSearchParams,
+  isCadastroFunnelContext,
+  landingAttributionForFirestore,
+  markLandingResumeMessage,
+} from '@/lib/landingAttribution';
 import logo from '@/assets/logo.png';
 
 const YOUTUBE_APRESENTACAO_URL = 'https://www.youtube.com/watch?v=3bCt7Hjb5tk';
@@ -116,18 +125,31 @@ const Cadastro = () => {
   ) => {
     trackCompleteRegistration({ registrationMethod, userId });
     const target = redirectPath && redirectPath.startsWith('/') ? redirectPath : '/';
+    const funnelResume =
+      target.includes('criar-projeto') &&
+      (target.includes('continuar') || target.includes('origem=landing'));
+    if (funnelResume) {
+      clearCadastroCelebrationPending();
+      markLandingResumeMessage('Recuperamos seu projeto, avaliando agora…');
+      navigate(target, { replace: true });
+      return;
+    }
     markCadastroCelebrationPending(target === '/' ? undefined : target);
     navigate('/');
   };
 
   useEffect(() => {
+    captureLandingAttributionFromSearchParams(searchParams);
     try {
       const fromLanding = sessionStorage.getItem('oraculo_landing_email')?.trim();
       if (fromLanding) setEmail((prev) => prev || fromLanding);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [searchParams]);
+
+  const cadastroFunnel = !isLogin && isCadastroFunnelContext(searchParams, redirect);
+  const attributionFields = landingAttributionForFirestore();
 
   const completarPerfil = searchParams.get('completar') === 'perfil';
 
@@ -171,6 +193,7 @@ const Cadastro = () => {
             email: user.email || '',
             nomeCompletoInicial: user.displayName || '',
             timestamp,
+            attribution: attributionFields,
           }),
           { merge: true },
         );
@@ -282,6 +305,7 @@ const Cadastro = () => {
             uid: cred.user.uid,
             email: cred.user.email || email,
             timestamp,
+            attribution: attributionFields,
           }),
           { merge: true },
         );
@@ -362,10 +386,11 @@ const Cadastro = () => {
         await setDoc(
           userDocRef,
           {
-            ...buildNovoUsuarioFirestore({
+            ...            buildNovoUsuarioFirestore({
               uid: userUid,
               email: userEmail,
               timestamp,
+              attribution: attributionFields,
             }),
             nome_completo: nomeCompletoTrimmed,
             empresa: empresaTrimmed || '',
@@ -486,11 +511,20 @@ const Cadastro = () => {
             )}
             
             <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1">
-              {isLogin ? 'Entrar na sua conta' : 'Crie sua conta gratuita'}
+              {isLogin
+                ? 'Entrar na sua conta'
+                : cadastroFunnel
+                  ? 'Sua avaliação está pronta, falta só criar a conta'
+                  : 'Crie sua conta gratuita'}
             </h1>
             {isLogin ? (
               <p className="text-gray-500 text-xs md:text-sm mb-6">
                 Acesse sua área exclusiva
+              </p>
+            ) : cadastroFunnel ? (
+              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-oraculo-blue/30 bg-oraculo-blue/5 px-3 py-1.5 text-sm font-semibold text-oraculo-purple">
+                <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+                15 créditos grátis, sem cartão
               </p>
             ) : (
               <p className="text-oraculo-blue font-semibold text-base md:text-lg mb-6">

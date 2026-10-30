@@ -1492,7 +1492,8 @@ const AvaliarProjeto = () => {
                   )}
                 </div>
 
-                {/* Progress Bar with Clickable Steps — etapa atual = Alterar com IA (índice 2) na seção Análise do Oráculo */}
+                {/* Progress Bar — oculto para visitante anônimo (funil simplificado) */}
+                {!modoDemoVisitante ? (
                 <div className="mb-6 md:mb-8 overflow-hidden">
                   <div className="flex items-center gap-2 md:justify-between mb-2 overflow-x-auto pb-2 md:pb-0 min-w-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                     {steps.map((step, index) => {
@@ -1541,6 +1542,7 @@ const AvaliarProjeto = () => {
                     ></div>
                   </div>
                 </div>
+                ) : null}
 
                 {/* Texto do Projeto + Descreva o que quer melhorar — mesmo box */}
                 {analiseConteudo && (

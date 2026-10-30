@@ -24,6 +24,39 @@ export function formatarCorpoParecerParaUi(analiseConteudo: string, maxChars = 2
     .slice(0, maxChars);
 }
 
+/** Itens da seção “Pontos fracos” para a prévia visitante (landing / anônimo). */
+export function extrairPontosFracosPreview(analiseConteudo: string, maxItems = 2): string[] {
+  if (!analiseConteudo?.trim()) return [];
+  const texto = analiseConteudo.replace(/\r/g, '');
+  const secao = texto.match(
+    /(?:^|\n)\s*3\.?\s*PONTOS\s+FRACOS[^\n]*\n([\s\S]*?)(?=\n\s*4\.?\s|$)/i,
+  );
+  let body: string | null = secao?.[1]?.trim() ?? null;
+  if (!body) {
+    const alt = texto.match(/PONTOS\s+FRACOS[^\n]*\n([\s\S]*?)(?=\n\s*4\.?\s|SUGESTÕES|$)/i);
+    body = alt?.[1]?.trim() ?? null;
+  }
+  if (!body) return [];
+
+  const items: string[] = [];
+  for (const line of body.split('\n')) {
+    const m = line.match(/^\s*(?:\d+[.)]\s*|[-•*]\s+)(.+)/);
+    if (m?.[1]) {
+      const t = limparMarkdownInline(m[1]);
+      if (t.length > 12) items.push(t);
+    }
+    if (items.length >= maxItems) break;
+  }
+  if (items.length === 0) {
+    const par = body
+      .split(/\n\n+/)
+      .map((p) => limparMarkdownInline(p))
+      .find((p) => p.length > 40);
+    if (par) items.push(par.slice(0, 520));
+  }
+  return items.slice(0, maxItems);
+}
+
 /** Vários itens da seção “Pontos fortes” para a prévia visitante. */
 export function extrairPontosFortesPreview(analiseConteudo: string, maxItems = 5): string[] {
   if (!analiseConteudo?.trim()) return [];

@@ -22,12 +22,15 @@ import { toast } from 'sonner';
 import { Brain, Loader2, Mic, Square, Lock } from 'lucide-react';
 import {
   calcularNotaGlobalAnalise,
-  extrairPontosFortesPreview,
-  extrairResumoAdequacaoPreview,
-  extrairTrechoAbertoPreview,
+  extrairPontosFracosPreview,
   formatarCorpoParecerParaUi,
   streamAvaliarProjetoIA,
 } from '@/lib/avaliarProjetoPreview';
+import {
+  captureLandingAttributionFromSearchParams,
+  consumeLandingResumeMessage,
+} from '@/lib/landingAttribution';
+import { hasUsedLandingPreview, markLandingPreviewUsed } from '@/lib/landingPreviewLimit';
 import { fetchEditalParaAvaliacao } from '@/lib/fetchEditalParaAvaliacao';
 import {
   clearPendingAnalisePreview,
@@ -226,6 +229,7 @@ const CriarProjeto = () => {
   const editalIdParam = searchParams.get('edital');
 
   useEffect(() => {
+    captureLandingAttributionFromSearchParams(searchParams);
     const emailParam = searchParams.get('email')?.trim().toLowerCase();
     if (emailParam) {
       try {
@@ -234,7 +238,18 @@ const CriarProjeto = () => {
         /* ignore */
       }
     }
+    const resumeMsg = consumeLandingResumeMessage();
+    if (resumeMsg) toast.info(resumeMsg);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!isCriarProjetoContinuarReturn(searchParams)) return;
+    const pending = readPendingAnalisePreview();
+    if (!pending) return;
+    if (!nome.trim() && pending.nome.trim()) setNome(pending.nome.trim());
+    if (!descricao.trim() && pending.descricao.trim()) setDescricao(pending.descricao.trim());
+    if (!editalAssociado && pending.editalAssociado) setEditalAssociado(pending.editalAssociado);
+  }, [searchParams, nome, descricao, editalAssociado]);
 
   // Prévia da avaliação só aparece após clicar em "Avaliar meu projeto (grátis)" nesta sessão.
   // O parecer pendente continua em sessionStorage para vincular ao projeto após o cadastro.
@@ -376,7 +391,7 @@ const CriarProjeto = () => {
         trackProjectCreated({ projectId: docRef.id, hasEdital: !!editalId });
         clearPendingAnalisePreview();
         clearCriarProjetoDraft();
-        toast.success('Projeto criado com sua avaliação da prévia.');
+        toast.success('Recuperamos seu projeto — parecer completo disponível.');
         navigate(`/projeto/${docRef.id}`);
       } catch (err) {
         console.error('[criar-projeto continuar]', err);
@@ -1066,6 +1081,13 @@ const CriarProjeto = () => {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) {
+        if (hasUsedLandingPreview()) {
+          setErro(
+            'Você já usou a prévia gratuita neste navegador. Crie sua conta para a avaliação completa.',
+          );
+          setLoading(false);
+          return;
+        }
         const editalSel = editais.find((e) => e.nome === editalAssociado);
         saveCriarProjetoDraft({
           nome: nome.trim(),
@@ -1113,6 +1135,7 @@ const CriarProjeto = () => {
           }
 
           setAnalisePreviewVisitante(fullContent);
+          markLandingPreviewUsed();
           savePendingAnalisePreview({
             analiseConteudo: fullContent,
             nome: nome.trim(),
@@ -1205,9 +1228,7 @@ const CriarProjeto = () => {
   };
 
   const previewNotaVisitante = calcularNotaGlobalAnalise(analisePreviewVisitante);
-  const previewPontosLista = extrairPontosFortesPreview(analisePreviewVisitante);
-  const previewAdequacao = extrairResumoAdequacaoPreview(analisePreviewVisitante);
-  const previewTrechoFallback = extrairTrechoAbertoPreview(analisePreviewVisitante);
+  const previewPontosFracosLista = extrairPontosFracosPreview(analisePreviewVisitante, 2);
   const previewCorpoBlur = formatarCorpoParecerParaUi(analisePreviewVisitante, 3200);
 
   const cadastroAposPreviewUrl = (() => {
@@ -1368,7 +1389,7 @@ const CriarProjeto = () => {
               </p>
             </div>
 
-            {/* Barra de progresso - no mobile só etapas 1, 2, 3 e "..."; no desktop todas */}
+            {user ? (
             <div className="mb-4 md:mb-8 p-3 md:p-12 bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
               {/* Mobile: etapas 1, 2, 3 com espaço para o texto não encavalar; depois "..." */}
               <div className="flex items-center justify-between gap-2 mb-3 md:mb-6 md:hidden">
@@ -1404,6 +1425,7 @@ const CriarProjeto = () => {
                 ></div>
               </div>
             </div>
+            ) : null}
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden min-w-0">
               <div className="p-4 md:p-8 min-w-0">
@@ -1528,7 +1550,18 @@ const CriarProjeto = () => {
                       </div>
                     </div>
                   )}
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2">
+                    {user ? (
+                      <p className="text-xs text-gray-600 text-center">
+                        A avaliação completa consome{' '}
+                        <span className="font-semibold text-gray-800">5 créditos</span> da sua conta.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
+                        Para ver o parecer completo você precisa de uma conta gratuita (15 créditos). A
+                        prévia abaixo é gerada antes do cadastro.
+                      </p>
+                    )}
                     <button
                       type="submit"
                       className="w-full bg-gradient-to-r from-oraculo-blue to-oraculo-purple text-white py-2.5 rounded-lg font-semibold shadow hover:opacity-90 transition disabled:opacity-70"
@@ -1538,7 +1571,7 @@ const CriarProjeto = () => {
                         ? 'Analisando...'
                         : user
                           ? <>Avaliar com IA <span className="ml-1.5 text-white/80 font-normal text-sm">(5 créditos)</span></>
-                          : 'Avaliar meu projeto (grátis)'}
+                          : 'Gerar prévia gratuita (sem cadastro)'}
                     </button>
                   </div>
 
@@ -1562,36 +1595,19 @@ const CriarProjeto = () => {
                             <p className="text-sm opacity-90">de {previewNotaVisitante.notaMaximaTotal} pontos</p>
                           </div>
                         ) : null}
-                        {previewAdequacao ? (
-                          <div className="rounded-xl border border-oraculo-blue/20 bg-oraculo-blue/5 p-4 md:p-5">
-                            <p className="text-xs font-semibold uppercase text-oraculo-purple mb-2">
-                              Prévia — adequação ao edital
-                            </p>
-                            <p className="text-sm md:text-base text-gray-800 leading-relaxed whitespace-pre-wrap">
-                              {previewAdequacao}
-                            </p>
-                          </div>
-                        ) : null}
-                        {previewPontosLista.length > 0 ? (
-                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 md:p-5">
-                            <p className="text-xs font-semibold uppercase text-emerald-800 mb-3">
-                              Pontos fortes do seu projeto (prévia)
+                        {previewPontosFracosLista.length > 0 ? (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 md:p-5">
+                            <p className="text-xs font-semibold uppercase text-amber-900 mb-3">
+                              Pontos de atenção (prévia)
                             </p>
                             <ul className="space-y-3 text-sm md:text-base text-gray-800 leading-relaxed list-none">
-                              {previewPontosLista.map((item, idx) => (
+                              {previewPontosFracosLista.map((item, idx) => (
                                 <li key={idx} className="flex gap-2">
-                                  <span className="text-emerald-600 font-bold shrink-0">{idx + 1}.</span>
+                                  <span className="text-amber-700 font-bold shrink-0">{idx + 1}.</span>
                                   <span>{item}</span>
                                 </li>
                               ))}
                             </ul>
-                          </div>
-                        ) : previewTrechoFallback ? (
-                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
-                            <p className="text-xs font-semibold uppercase text-emerald-800 mb-2">
-                              Trecho do parecer
-                            </p>
-                            <p className="text-sm text-gray-800 leading-relaxed">{previewTrechoFallback}</p>
                           </div>
                         ) : null}
                         <div className="relative rounded-xl border-2 border-gray-200 overflow-hidden min-h-[280px]">
@@ -1604,8 +1620,7 @@ const CriarProjeto = () => {
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/55 backdrop-blur-[2px] px-6 py-8 text-center gap-4">
                             <Lock className="h-11 w-11 text-oraculo-purple shrink-0" aria-hidden />
                             <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 leading-snug max-w-md mx-auto">
-                              Critérios, pontos fracos, sugestões e nota detalhada — desbloqueie criando sua conta
-                              gratuita.
+                              Ver avaliação completa: crie sua conta grátis (15 créditos)
                             </p>
                             <Link
                               to={cadastroAposPreviewUrl}
