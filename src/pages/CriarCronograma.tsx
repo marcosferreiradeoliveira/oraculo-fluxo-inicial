@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Clock, ArrowRight, Plus, Trash2, Calendar, Sparkles, FileDown, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../lib/firebase';
+import { consumirCreditos } from '@/lib/creditOperations';
+import { assertCanSpendCredits } from '@/lib/chargeCredits';
 import { toast } from 'sonner';
 import { trackTextGenerationStarted, trackTextGenerationCompleted, trackProjectStepViewed } from '@/lib/analytics';
 import * as XLSX from 'xlsx';
@@ -183,8 +185,7 @@ const CriarCronograma = () => {
 
   const gerarCronogramaComIA = async () => {
     if (!id || !user) return;
-    const db = getFirestore();
-    const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_CRONOGRAMA, navigate);
+    const ok = await assertCanSpendCredits(user.uid, 'gerar_cronograma', navigate);
     if (!ok) return;
     setGerandoCronograma(true);
     const startTime = Date.now();
@@ -228,9 +229,7 @@ const CriarCronograma = () => {
       
       // Debit credits for cronograma generation (3 credits)
       try {
-        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
-          skipIfPremium: true,
-        });
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma');
         
         if (!result.success) {
           console.warn('[CriarCronograma] Aviso ao descontar créditos:', result.error);
@@ -302,9 +301,7 @@ const CriarCronograma = () => {
       
       // Debit credits for cronograma alterations (3 credits)
       try {
-        const result = await consumirCreditos(user.uid, 'gerar_cronograma', {
-          skipIfPremium: true,
-        });
+        const result = await consumirCreditos(user.uid, 'gerar_cronograma');
         
         if (!result.success) {
           console.warn('[CriarCronograma] Aviso ao descontar créditos (alterações):', result.error);

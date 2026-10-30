@@ -36,7 +36,6 @@ const mercadoPagoAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
 
 // Definir secrets para Stripe
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
-const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 // Definir secret para Brevo
 const brevoApiKey = defineSecret("BREVO_API_KEY");
@@ -1470,12 +1469,13 @@ exports.criarAssinaturaPremiumStripe = onRequest(
         let stripePriceId = null; // Price ID do Stripe (se configurado)
         let stripeProductId = null; // Product ID do Stripe (para buscar preços)
         
+        const billingInterval = isAnnualPlan ? 'year' : 'month';
+
         if (normalizedPlanType === 'essencial') {
           if (isAnnualPlan) {
-            // Plano anual Produtora: R$ 3.769,20 / 12 = R$ 314,10 por mês (12 parcelas, 10% off)
-            unitAmount = 31410; // R$ 314,10 em centavos
-            planName = 'Plano Produtora Anual - Oráculo Cultural (12x)';
-            planDescription = 'Assinatura anual do Plano Produtora parcelada em 12x de R$ 314,10 - Oráculo Cultural';
+            unitAmount = 376920; // R$ 3.769,20/ano
+            planName = 'Plano Produtora Anual - Oráculo Cultural';
+            planDescription = 'Assinatura anual do Plano Produtora - Oráculo Cultural';
             // Price ID do Essencial Anual
             stripePriceId = process.env.STRIPE_PRICE_ID_ESSENCIAL_ANUAL || 'price_1SwRNW0mRGa1jLimGbkMTvn8';
           } else {
@@ -1498,10 +1498,9 @@ exports.criarAssinaturaPremiumStripe = onRequest(
         } else if (normalizedPlanType === 'basico' || !planType) {
           // Default para básico se não especificado
           if (isAnnualPlan) {
-            // Plano anual Proponente: R$ 1.069,20 / 12 = R$ 89,10 por mês (12 parcelas, 10% off)
-            unitAmount = 8910; // R$ 89,10 em centavos
-            planName = 'Plano Proponente Anual - Oráculo Cultural (12x)';
-            planDescription = 'Assinatura anual do Plano Proponente parcelada em 12x de R$ 89,10 - Oráculo Cultural';
+            unitAmount = 106920; // R$ 1.069,20/ano
+            planName = 'Plano Proponente Anual - Oráculo Cultural';
+            planDescription = 'Assinatura anual do Plano Proponente - Oráculo Cultural';
             // Price ID do Básico Anual
             stripePriceId = process.env.STRIPE_PRICE_ID_BASICO_ANUAL || 'price_1SwRMW0mRGa1jLim0TtxsCXE';
           } else {
@@ -1587,7 +1586,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
                 },
                 unit_amount: unitAmount,
                 recurring: {
-                  interval: 'month',
+                  interval: billingInterval,
                 },
               },
               quantity: 1,
@@ -3284,296 +3283,6 @@ exports.webhookMercadoPago = onRequest(
     } catch (error) {
       console.error('[webhookMercadoPago] Webhook error:', error);
       res.status(200).json({ received: true }); // Still respond 200 to avoid retries
-    }
-  }
-);
-
-// Stripe Webhook endpoint for processing subscription events
-exports.webhookStripe = onRequest(
-  { 
-    cors: true,
-    maxInstances: 10,
-    invoker: 'public',
-    secrets: [stripeSecretKey, stripeWebhookSecret]
-  },
-  async (req, res) => {
-    // Set CORS headers
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Stripe-Signature');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-    
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method Not Allowed' });
-      return;
-    }
-    
-    try {
-      // Obter secret key do Stripe
-      let stripeKey;
-      try {
-        stripeKey = stripeSecretKey.value();
-      } catch (e) {
-        stripeKey = process.env.STRIPE_SECRET_KEY;
-      }
-      // Em produção, sempre usar secrets do Firebase (não usar fallback)
-      if (!stripeKey) {
-        throw new Error('STRIPE_SECRET_KEY não configurado. Configure via secret do Firebase.');
-      }
-      
-      if (stripeKey) {
-        stripeKey = stripeKey.toString().trim();
-      }
-      
-      const stripeInstance = stripe(stripeKey);
-      
-      // Obter webhook secret
-      let webhookSecret;
-      try {
-        webhookSecret = stripeWebhookSecret.value();
-      } catch (e) {
-        webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-      }
-      // Fallback apenas para desenvolvimento local (remover em produção)
-      // Em produção, sempre usar secrets do Firebase
-      webhookSecret = webhookSecret || (process.env.NODE_ENV === 'production' ? null : "whsec_D1K2azX5XruwE26ImWkR0f4CswE7rVVO");
-      
-      if (webhookSecret) {
-        webhookSecret = webhookSecret.toString().trim();
-      }
-      
-      // Obter o signature do header para verificar a autenticidade
-      const sig = req.headers['stripe-signature'];
-      
-      let event;
-      
-      try {
-        // Verificar o webhook signature (importante para produção)
-        if (sig && webhookSecret) {
-          // Tentar obter rawBody de diferentes formas (Firebase Functions v2)
-          let rawBody = req.rawBody;
-          if (!rawBody && typeof req.body === 'string') {
-            rawBody = Buffer.from(req.body);
-          } else if (!rawBody) {
-            rawBody = Buffer.from(JSON.stringify(req.body));
-          }
-          
-          event = stripeInstance.webhooks.constructEvent(
-            rawBody,
-            sig,
-            webhookSecret
-          );
-          console.log('[webhookStripe] ✅ Webhook signature verificada com sucesso');
-        } else {
-          // Em desenvolvimento/teste, parsear diretamente
-          event = req.body;
-          console.log('[webhookStripe] ⚠️ Webhook sem signature - modo desenvolvimento');
-        }
-      } catch (err) {
-        console.error('[webhookStripe] Erro ao verificar signature:', err.message);
-        // Em desenvolvimento, continuar mesmo sem signature válida
-        event = req.body;
-      }
-      
-      console.log('[webhookStripe] Evento recebido:', event.type, event.id);
-      
-      // Processar diferentes tipos de eventos
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        const userId = session.metadata?.userId;
-        
-        if (userId && session.mode === 'subscription') {
-          console.log('[webhookStripe] Checkout completado para usuário:', userId);
-          console.log('[webhookStripe] Payment status:', session.payment_status);
-          console.log('[webhookStripe] Session metadata:', session.metadata);
-          
-          // Obter planType dos metadados da sessão
-          let planType = session.metadata?.planType;
-          
-          // Se não encontrou nos metadados da sessão, tentar buscar da assinatura
-          if (!planType && session.subscription) {
-            try {
-              const subscription = await stripeInstance.subscriptions.retrieve(session.subscription);
-              planType = subscription.metadata?.planType;
-              console.log('[webhookStripe] PlanType da assinatura:', planType);
-            } catch (error) {
-              console.error('[webhookStripe] Erro ao buscar assinatura:', error);
-            }
-          }
-          
-          // Fallback para 'basico' se não encontrou
-          if (!planType) {
-            planType = 'basico';
-            console.log('[webhookStripe] ⚠️ PlanType não encontrado, usando padrão: basico');
-          }
-          
-          // Verificar status da assinatura para detectar trial period
-          let subscriptionStatus = 'pending';
-          let isInTrial = false;
-          if (session.subscription) {
-            try {
-              const subscription = await stripeInstance.subscriptions.retrieve(session.subscription);
-              subscriptionStatus = subscription.status;
-              isInTrial = subscription.status === 'trialing';
-              console.log('[webhookStripe] Status da assinatura:', subscriptionStatus, 'Em trial:', isInTrial);
-            } catch (error) {
-              console.error('[webhookStripe] Erro ao buscar status da assinatura:', error);
-            }
-          }
-          
-          // Só atualizar para active se o pagamento foi bem-sucedido OU se está em trial
-          const updateData = {
-            stripeCustomerId: session.customer,
-            stripeSubscriptionId: session.subscription,
-            planType: planType, // Sempre salvar o tipo de plano
-            lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-          };
-          
-          // Ativar premium se pagamento foi pago OU se está em período de teste
-          if (session.payment_status === 'paid' || isInTrial) {
-            updateData.isPremium = true;
-            updateData.premiumStatus = isInTrial ? 'trialing' : 'active';
-            updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
-            if (isInTrial) {
-              console.log('[webhookStripe] ✅ Usuário ativado em período de teste de 7 dias');
-            }
-          } else {
-            // Pagamento ainda não processado
-            updateData.premiumStatus = session.payment_status || 'pending';
-          }
-          
-          // Atualizar status do usuário no Firestore
-          const userRef = db.collection('usuarios').doc(userId);
-          await userRef.update(updateData);
-          
-          console.log('[webhookStripe] ✅ Usuário', userId, 'atualizado com plano:', planType, 'status:', updateData.premiumStatus);
-        }
-      } else if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
-        const subscription = event.data.object;
-        const userId = subscription.metadata?.userId;
-        
-        if (userId) {
-          const userRef = db.collection('usuarios').doc(userId);
-          // Obter planType dos metadados da assinatura ou buscar do documento existente
-          let planType = subscription.metadata?.planType;
-          
-          // Se não encontrou nos metadados, buscar do documento existente
-          if (!planType) {
-            try {
-              const userDoc = await userRef.get();
-              if (userDoc.exists()) {
-                planType = userDoc.data()?.planType || 'basico';
-              } else {
-                planType = 'basico';
-              }
-            } catch (error) {
-              console.error('[webhookStripe] Erro ao buscar planType:', error);
-              planType = 'basico';
-            }
-          }
-          
-          const updateData = {
-            stripeSubscriptionId: subscription.id,
-            stripeCustomerId: subscription.customer,
-            planType: planType, // Sempre salvar o tipo de plano
-            cancelAtPeriodEnd: subscription.cancel_at_period_end || false, // Salvar se está marcado para cancelar
-            lastSubscriptionUpdate: admin.firestore.FieldValue.serverTimestamp(),
-          };
-          
-          // Se está marcado para cancelar no final do período, ainda está ativa mas será cancelada
-          if (subscription.cancel_at_period_end && subscription.status === 'active') {
-            updateData.premiumStatus = 'active';
-            updateData.isPremium = true; // Ainda tem acesso até o final do período
-            console.log('[webhookStripe] Assinatura marcada para cancelamento no final do período');
-          }
-          // Só atualizar premiumStatus e isPremium se a assinatura estiver ativa
-          else if (subscription.status === 'active' || subscription.status === 'trialing') {
-            updateData.premiumStatus = 'active';
-            updateData.isPremium = true;
-            updateData.premiumActivatedAt = admin.firestore.FieldValue.serverTimestamp();
-            updateData.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
-          } else if (subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') {
-            // Manter o status atual se ainda estiver incompleto (não atualizar para false ainda)
-            updateData.premiumStatus = subscription.status;
-            // Não alterar isPremium ainda
-          } else if (subscription.status === 'canceled' || subscription.status === 'unpaid' || subscription.status === 'past_due') {
-            updateData.premiumStatus = subscription.status;
-            updateData.isPremium = false;
-            updateData.cancelAtPeriodEnd = false; // Já foi cancelada
-          } else {
-            // Outros status (active_period, etc)
-            updateData.premiumStatus = subscription.status;
-          }
-          
-          await userRef.update(updateData);
-          console.log('[webhookStripe] ✅ Assinatura', subscription.id, 'atualizada para usuário', userId, 'com plano:', planType, 'status:', subscription.status);
-        }
-      } else if (event.type === 'customer.subscription.deleted') {
-        const subscription = event.data.object;
-        const userId = subscription.metadata?.userId;
-        
-        if (userId) {
-          const userRef = db.collection('usuarios').doc(userId);
-          await userRef.update({
-            isPremium: false,
-            premiumStatus: 'canceled',
-            stripeSubscriptionId: null,
-          });
-          
-          console.log('[webhookStripe] ✅ Assinatura cancelada para usuário', userId);
-        }
-      } else if (event.type === 'invoice.payment_succeeded') {
-        const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
-        
-        if (subscriptionId) {
-          // Buscar usuário pela subscription ID
-          const usersSnapshot = await db.collection('usuarios')
-            .where('stripeSubscriptionId', '==', subscriptionId)
-            .limit(1)
-            .get();
-          
-          if (!usersSnapshot.empty) {
-            const userDoc = usersSnapshot.docs[0];
-            const userId = userDoc.id;
-            
-            // Buscar planType da assinatura se não estiver salvo
-            let planType = userDoc.data()?.planType;
-            if (!planType) {
-              try {
-                const subscription = await stripeInstance.subscriptions.retrieve(subscriptionId);
-                planType = subscription.metadata?.planType || 'basico';
-                console.log('[webhookStripe] PlanType encontrado na assinatura:', planType);
-              } catch (error) {
-                console.error('[webhookStripe] Erro ao buscar assinatura:', error);
-                planType = 'basico';
-              }
-            }
-            
-            await userDoc.ref.update({
-              lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-              isPremium: true,
-              premiumStatus: 'active',
-              planType: planType, // Garantir que planType está salvo
-            });
-            
-            console.log('[webhookStripe] ✅ Pagamento processado para usuário', userId, 'com plano:', planType);
-          }
-        }
-      }
-      
-      res.status(200).json({ received: true });
-    } catch (error) {
-      console.error('[webhookStripe] Erro ao processar webhook:', {
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(400).json({ error: `Webhook Error: ${error.message}` });
     }
   }
 );

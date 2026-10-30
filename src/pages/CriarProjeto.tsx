@@ -645,9 +645,7 @@ const CriarProjeto = () => {
                   
                   // Deduzir 5 créditos para usuário não premium (avaliação = 5 créditos)
                   try {
-                    const result = await consumirCreditos(user.uid, 'analise_projeto', {
-                      skipIfPremium: true,
-                    });
+                    const result = await consumirCreditos(user.uid, 'analise_projeto');
                     
                     if (!result.success) {
                       console.warn('Aviso ao descontar créditos:', result.error);

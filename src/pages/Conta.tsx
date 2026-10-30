@@ -15,6 +15,7 @@ import { onAuthStateChanged, updatePassword, reauthenticateWithCredential, Email
 import { getFirestore, doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
+import { buildNovoUsuarioFirestore } from '@/lib/perfilUsuario';
 
 const Conta = () => {
   const navigate = useNavigate();
@@ -84,22 +85,19 @@ const Conta = () => {
       const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
       
       const timestamp = serverTimestamp();
-      await setDoc(userDocRef, {
-        createdAt: timestamp,
-        dadosCadastrais: '',
-        data_cadastro: timestamp,
-        email: firebaseUser.email || '',
-        empresa: '',
-        equipeBio: '',
-        isPremium: false,
-        lastLoginAt: timestamp,
-        nome_completo: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
-        origem: 'captacao',
-        portfolio: '',
-        role: 'super_admin',
-        ultimo_login: timestamp,
-        uid: firebaseUser.uid,
-      });
+      await setDoc(
+        userDocRef,
+        {
+          ...buildNovoUsuarioFirestore({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            nomeCompletoInicial:
+              firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+            timestamp,
+          }),
+        },
+        { merge: true },
+      );
       
       console.log('Documento do usuário criado no Firestore');
       return true;

@@ -26,14 +26,16 @@
         "source": "/api/adicionar-contato-brevo",
         "function": {
           "functionId": "adicionarContatoBrevo",
-          "region": "us-central1"
+          "region": "us-central1",
+          "codebase": "criacao"
         }
       },
       {
         "source": "/api/meta-conversion",
         "function": {
           "functionId": "enviarEventoMeta",
-          "region": "us-central1"
+          "region": "us-central1",
+          "codebase": "criacao"
         }
       },
       {
@@ -48,7 +50,7 @@
   "functions": [
     {
       "source": "functions",
-      "codebase": "default",
+      "codebase": "criacao",
       "ignore": [
         "node_modules",
         ".git",

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { consumirCreditos } from '@/lib/creditOperations';
+import { assertCanSpendCredits } from '@/lib/chargeCredits';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
@@ -471,8 +472,7 @@ const CriarOrcamento = () => {
     }
 
     if (user) {
-      const db = getFirestore();
-      const ok = await assertCanSpendCredits(db, user.uid, CREDITOS_ORCAMENTO, navigate);
+      const ok = await assertCanSpendCredits(user.uid, 'gerar_orcamento', navigate);
       if (!ok) return;
     }
 
@@ -699,9 +699,7 @@ const CriarOrcamento = () => {
         });
         if (user) {
           try {
-            const result = await consumirCreditos(user.uid, 'gerar_orcamento', {
-              skipIfPremium: true,
-            });
+            const result = await consumirCreditos(user.uid, 'gerar_orcamento');
             
             if (!result.success) {
               console.warn('[CriarOrcamento] Aviso ao descontar créditos:', result.error);
