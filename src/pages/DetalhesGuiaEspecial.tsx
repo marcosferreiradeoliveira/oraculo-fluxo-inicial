@@ -203,10 +203,11 @@ const DetalhesGuiaEspecial = () => {
 
     setLoadingStripe(true);
     try {
+      const returnTo = `${window.location.pathname}${window.location.search}`;
       const res = await authenticatedPost(
         guiaCheckoutUrl,
         { guiaId: guia.id },
-        { navigate },
+        { navigate, returnTo, waitForAuthMs: 10000 },
       );
 
       if (!res.ok) {

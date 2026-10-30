@@ -3,7 +3,8 @@ import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { IaHttpError, ensureAuthenticatedUser, loginRedirectPath } from '@/lib/iaAuthenticatedFetch';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '@/lib/firebase';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
@@ -42,60 +43,56 @@ const CadastroPremium = () => {
   const motivoStarterModulo2 = searchParams.get('motivo') === 'starter_modulo2';
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      
-      if (user) {
-        // Sempre definir email e userId do auth, mesmo se o documento do Firestore não existir
-        const baseUserData = {
-          email: user.email || '',
-          userId: user.uid,
-          planType: null as string | null,
-          isPremium: false
-        };
+    const auth = getAuth();
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setUserData({ email: '', userId: '', planType: null, isPremium: false });
+        return;
+      }
 
+      const baseUserData = {
+        email: user.email || '',
+        userId: user.uid,
+        planType: null as string | null,
+        isPremium: false,
+      };
+
+      try {
+        const db = getFirestore();
+        const userDoc = await getDocFromServer(doc(db, 'usuarios', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserData({
+            ...baseUserData,
+            planType: data.planType || null,
+            isPremium: data.isPremium || false,
+          });
+        } else {
+          setUserData(baseUserData);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
         try {
           const db = getFirestore();
-          const userDoc = await getDocFromServer(doc(db, 'usuarios', user.uid));
+          const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUserData({
               ...baseUserData,
               planType: data.planType || null,
-              isPremium: data.isPremium || false
+              isPremium: data.isPremium || false,
             });
           } else {
-            // Se o documento não existe, ainda definir os dados básicos do auth
             setUserData(baseUserData);
           }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          // Fallback para cache se getDocFromServer falhar
-          try {
-            const db = getFirestore();
-            const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
-            if (userDoc.exists()) {
-              const data = userDoc.data();
-              setUserData({
-                ...baseUserData,
-                planType: data.planType || null,
-                isPremium: data.isPremium || false
-              });
-            } else {
-              // Se o documento não existe, ainda definir os dados básicos do auth
-              setUserData(baseUserData);
-            }
-          } catch (fallbackError) {
-            console.error('Error fetching user data (fallback):', fallbackError);
-            // Mesmo em caso de erro, definir os dados básicos do auth
-            setUserData(baseUserData);
-          }
+        } catch (fallbackError) {
+          console.error('Error fetching user data (fallback):', fallbackError);
+          setUserData(baseUserData);
         }
       }
-    };
+    });
 
-    fetchUserData();
+    return () => unsub();
   }, []);
 
   // Verificar retorno do Stripe e disparar eventos de conversão
@@ -163,19 +160,29 @@ const CadastroPremium = () => {
       return;
     }
 
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user?.email || !user.uid) {
-      alert('Por favor, faça login para assinar um plano.');
-      return;
-    }
-
-    const userId = userData.userId || user.uid;
-    const userEmail = userData.email || user.email;
+    const returnTo = `${window.location.pathname}${window.location.search}`;
 
     setLoading(true);
     try {
+      let user;
+      try {
+        user = await ensureAuthenticatedUser({ navigate, returnTo, waitMs: 10000, forceRefresh: true });
+      } catch (e) {
+        if (e instanceof IaHttpError && e.status === 401) {
+          setLoading(false);
+          return;
+        }
+        throw e;
+      }
+
+      if (!user.email) {
+        navigate(loginRedirectPath(returnTo));
+        setLoading(false);
+        return;
+      }
+
+      const userId = user.uid;
+      const userEmail = user.email;
       const planIdMap: Record<CheckoutPlanType, string> = {
         basico: 'proponente',
         essencial: 'produtora',
