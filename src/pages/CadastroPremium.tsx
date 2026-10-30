@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '@/lib/firebase';
 import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import { Check, Star, Users, Building2, Crown } from 'lucide-react';
 import { trackSubscriptionCompleted } from '@/lib/analytics';
@@ -181,7 +182,7 @@ const CadastroPremium = () => {
       };
 
       try {
-        const functions = getFunctions(undefined, 'us-central1');
+        const functions = getFunctions(app, 'us-central1');
         const createCheckoutCallable = httpsCallable(functions, 'createCheckout');
         const result = await createCheckoutCallable({
           planId: planIdMap[planType],
@@ -193,7 +194,10 @@ const CadastroPremium = () => {
           return;
         }
       } catch (callableErr) {
-        console.warn('[CadastroPremium] createCheckout callable indisponível, usando HTTP:', callableErr);
+        console.warn(
+          '[CadastroPremium] createCheckout callable indisponível, usando criarAssinaturaPremiumStripe:',
+          callableErr,
+        );
       }
 
       const data = await createCheckout({

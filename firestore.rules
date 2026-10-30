@@ -46,9 +46,19 @@ service cloud.firestore {
       );
     }
 
+    function billingFieldNames() {
+      return [
+        'plan', 'planStatus', 'entitlements', 'creditos', 'credits', 'isPremium', 'planType',
+        'stripeSubscriptionId', 'stripeCustomerId', 'lastCreditRefill', 'lastCreditRefillAt'
+      ];
+    }
+
+    function hasBillingFields() {
+      return request.resource.data.keys().hasAny(billingFieldNames());
+    }
+
     function isBillingFieldChanged() {
-      let billingFields = ['plan', 'planStatus', 'entitlements', 'creditos', 'credits', 'isPremium', 'planType'];
-      return billingFields.hasAny(request.resource.data.diff(resource.data).affectedKeys());
+      return billingFieldNames().hasAny(request.resource.data.diff(resource.data).affectedKeys());
     }
 
     function fornecedorSelfLinkKeysOnly() {
@@ -270,24 +280,6 @@ service cloud.firestore {
       return resource.data.get('creditos', 0);
     }
 
-    function creditDebitOnly() {
-      return canBillingUsuario(userId)
-        && request.resource.data.creditos is number
-        && request.resource.data.creditos >= 0
-        && request.resource.data.creditos <= usuarioCreditosAtuais()
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['creditos', 'updatedAt']);
-    }
-
-    /** Conta nova ou legado com `creditos: 0` — pacote inicial de 30 (marketing). */
-    function creditStarterGrantOnly() {
-      return userId == request.auth.uid
-        && usuarioCreditosAtuais() == 0
-        && request.resource.data.creditos == 30
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['creditos', 'updatedAt']);
-    }
-
     function modulo2IaUsageKeysOnly() {
       return canBillingUsuario(userId)
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -298,19 +290,21 @@ service cloud.firestore {
       allow read: if canReadUsuario(userId);
 
       allow create: if isSignedIn() && (
-        isValidUsuarioCreate(userId)
-        || isPlatformAdmin()
+        isPlatformAdmin()
         || isOwnerUpdatingTeamMember(userId)
         || isManagerUpdatingTeamMember(userId)
         || (
           canInviteToEmpresa()
           && request.resource.data.invitedBy == request.auth.uid
           && request.resource.data.status == 'pending'
+          && !hasBillingFields()
         )
+        || (isValidUsuarioCreate(userId) && !hasBillingFields())
         || (
           userId == request.auth.uid
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.email is string
+          && !hasBillingFields()
         )
       );
 
@@ -326,8 +320,6 @@ service cloud.firestore {
             || empresaLinkKeysOnly()
             || fornecedorNivelSyncOnly()
             || gestorFornecedorNivelSyncOnly()
-            || creditDebitOnly()
-            || creditStarterGrantOnly()
             || modulo2IaUsageKeysOnly()
             || fornecedorSelfLinkKeysOnly()
           )

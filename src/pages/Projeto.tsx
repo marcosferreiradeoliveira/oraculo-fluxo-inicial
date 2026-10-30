@@ -1162,10 +1162,9 @@ const Projeto = () => {
         if (user) {
           try {
             const result = await consumirCreditos(user.uid, 'analise_projeto', {
-              skipIfPremium: true,
               onCreditsUpdated: (newBalance) => {
                 setCreditos(newBalance);
-              }
+              },
             });
             
             if (!result.success) {

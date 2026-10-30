@@ -494,9 +494,7 @@ const GerarTextos = () => {
             // Debit credits for text generation (1 credit)
             if (user) {
               try {
-                const result = await consumirCreditos(user.uid, 'gerar_texto', {
-                  skipIfPremium: true,
-                });
+                const result = await consumirCreditos(user.uid, 'gerar_texto');
                 
                 if (!result.success) {
                   console.warn('[GerarTextos] Aviso ao descontar créditos:', result.error);
@@ -619,9 +617,7 @@ const GerarTextos = () => {
           // Debit credits for text generation (1 credit)
           if (user) {
             try {
-              const result = await consumirCreditos(user.uid, 'gerar_texto', {
-                skipIfPremium: true,
-              });
+              const result = await consumirCreditos(user.uid, 'gerar_texto');
               
               if (!result.success) {
                 console.warn('[GerarTextos] Aviso ao descontar créditos (streaming):', result.error);
