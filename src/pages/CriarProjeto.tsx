@@ -129,7 +129,7 @@ const verificarLimiteProjetos = async (userId: string): Promise<{ podeCriar: boo
     let mensagem = '';
     if (!podeCriar && (planType === 'essencial' || planType === 'basico' || planType === 'free')) {
       const nomePlano =
-        planType === 'essencial' ? 'Essencial' : planType === 'basico' ? 'Básico' : 'Starter (gratuito)';
+        planType === 'essencial' ? 'Produtora' : planType === 'basico' ? 'Proponente' : 'Starter (gratuito)';
       mensagem = `Você atingiu o limite de ${limiteProjetos} projeto${limiteProjetos === 1 ? '' : 's'} do plano ${nomePlano}. Para criar mais projetos, faça upgrade do seu plano.`;
     }
     
@@ -1422,7 +1422,7 @@ const CriarProjeto = () => {
                           Projetos criados: <span className="font-bold">{limiteProjetos.projetosAtivos}/{limiteProjetos.limite}</span>
                         </p>
                         <p className="text-xs text-gray-600 mt-1">
-                          Plano {limiteProjetos.planType === 'essencial' ? 'Essencial' : 'Básico'} – Limite de {limiteProjetos.limite} projetos. Apagar não libera novas vagas.
+                          Plano {limiteProjetos.planType === 'essencial' ? 'Produtora' : 'Proponente'} – Limite de {limiteProjetos.limite} projetos. Apagar não libera novas vagas.
                         </p>
                       </div>
                       {limiteProjetos.projetosAtivos >= limiteProjetos.limite && (

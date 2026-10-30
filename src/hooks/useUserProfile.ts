@@ -48,11 +48,11 @@ export function etapaLabel(index: number): string {
 
 function planLabelFromType(planType: string | null | undefined, isPremium: boolean): string {
   const pt = (planType || '').toLowerCase();
-  if (pt === 'essencial') return 'Essencial';
-  if (pt === 'basico') return 'Básico';
-  if (pt === 'premium' || isPremium) return 'Premium';
+  if (pt === 'essencial') return 'Produtora';
+  if (pt === 'basico') return 'Proponente';
+  if (pt === 'premium' || isPremium) return 'Institucional';
   if (pt === 'free') return 'Starter';
-  return isPremium ? 'Premium' : 'Starter';
+  return isPremium ? 'Institucional' : 'Starter';
 }
 
 export function useUserProfile() {

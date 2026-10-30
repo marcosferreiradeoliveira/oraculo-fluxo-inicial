@@ -229,13 +229,13 @@ const CadastroPremium = () => {
       monthlyPrice: 'R$ 99,00',
       monthlyPeriod: '/mês',
       annualInstallment: 'R$ 89,10',
-      annualStrikethrough: 'R$ 1.188,00',
-      annualCashLine: 'ou R$ 1.069,20 à vista',
+      annualStrikethrough: 'R$ 99,00/mês',
+      annualCashLine: 'Total: R$ 1.069,20/ano',
       features: [
         'Importação automática e detalhamento de Editais',
         'Acesso ao Polo de Conhecimento (e-books, podcasts)',
         'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
-        '💳 50 créditos/mês (renovam no dia 1º)',
+        '💳 50 créditos/mês — recarga mensal, não acumula',
       ],
       buttonText: 'Escolher Plano',
       icon: Users,
@@ -246,17 +246,17 @@ const CadastroPremium = () => {
       planType: 'essencial' as const,
       subtitle: 'Produtora pequena/média',
       description: 'Até 5 usuários, infinitos projetos',
-      focus: 'Criação + Finance + Gestor (captação, execução e conformidade)',
+      focus: 'Criação + Prestação de Contas + Gestor',
       monthlyPrice: 'R$ 349,00',
       monthlyPeriod: '/mês',
       annualInstallment: 'R$ 314,10',
-      annualStrikethrough: 'R$ 4.188,00',
-      annualCashLine: 'ou R$ 3.769,20 à vista',
+      annualStrikethrough: 'R$ 349,00/mês',
+      annualCashLine: 'Total: R$ 3.769,20/ano',
       features: [
-        'Todas as funcionalidades do Proponente com infinitos projetos',
-        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
+        'Todas as funcionalidades do Proponente com projetos ilimitados',
+        '✨ Acesso aos 3 apps: Criação, Prestação de Contas e Gestor',
         'Gestão completa de captação, execução e conformidade',
-        '💳 200 créditos/mês (renovam no dia 1º)',
+        '💳 200 créditos/mês — recarga mensal, não acumula',
       ],
       buttonText: 'Escolher Plano',
       icon: Building2,
@@ -266,15 +266,15 @@ const CadastroPremium = () => {
       name: 'Institucional',
       planType: 'premium' as const,
       subtitle: 'Agências e produtoras grandes',
-      description: 'Usuários ilimitados, projetos ilimitados',
-      focus: 'Criação + Finance + Gestor (performance e auditoria rigorosa)',
+      description: 'Até 20 usuários, projetos ilimitados',
+      focus: 'Criação + Prestação de Contas + Gestor (performance e auditoria)',
       features: [
         'Todas as funcionalidades da Produtora',
-        '✨ Acesso aos 3 módulos: Criação, Finance e Gestor',
+        '✨ Acesso aos 3 apps: Criação, Prestação de Contas e Gestor',
         'Export para prestação de contas',
         'Customização de critérios para avaliação de notas com IA',
         'Desenvolvimento de módulos customizados',
-        '💳 500 créditos/mês (renovam no dia 1º)',
+        '💳 500 créditos/mês — recarga mensal, não acumula',
       ],
       buttonText: 'Solicitar Contato',
       icon: Crown,
@@ -316,7 +316,7 @@ const CadastroPremium = () => {
                 Escolha o plano ideal para o seu perfil e acelere seus projetos culturais
               </p>
               <p className="text-sm text-gray-500 max-w-2xl mx-auto mb-8">
-                💡 <strong>Plano Starter:</strong> 30 créditos iniciais. <strong>Planos pagos:</strong> créditos mensais que renovam no dia 1º e não acumulam.
+                💡 <strong>Plano Starter:</strong> 30 créditos iniciais. <strong>Planos pagos:</strong> recarga mensal de créditos (não acumula).
               </p>
               
               {/* Toggle Anual/Mensal */}
@@ -341,7 +341,7 @@ const CadastroPremium = () => {
                 </span>
                 {isAnnual && (
                   <span className="ml-2 inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                    Mais vantajoso · 10% off
+                    10% de desconto
                   </span>
                 )}
               </div>
@@ -428,7 +428,7 @@ const CadastroPremium = () => {
                         </ul>
                       </div>
 
-                      {/* Módulo Prestação de Contas - Apenas para Essencial */}
+                      {/* Módulo Prestação de Contas — Produtora */}
                       {plan.name === 'Produtora' && (
                         <div className="mb-8 p-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
                           <h4 className="text-lg font-bold text-gray-900 mb-4">Módulo Prestação de Contas</h4>

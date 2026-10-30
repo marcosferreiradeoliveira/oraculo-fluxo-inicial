@@ -271,11 +271,11 @@ const GerenciarAssinatura = () => {
   const getPlanName = (planType: string) => {
     switch (planType) {
       case 'premium':
-        return 'Premium Enterprise';
+        return 'Institucional';
       case 'essencial':
-        return 'Essencial';
+        return 'Produtora';
       case 'basico':
-        return 'Básico';
+        return 'Proponente';
       default:
         return 'Desconhecido';
     }
@@ -284,7 +284,7 @@ const GerenciarAssinatura = () => {
   const getPlanPrice = (planType: string) => {
     switch (planType) {
       case 'premium':
-        return 'R$ 1,00';
+        return 'Sob consulta';
       case 'essencial':
         return 'R$ 349,00';
       case 'basico':
@@ -298,21 +298,21 @@ const GerenciarAssinatura = () => {
     switch (planType) {
       case 'premium':
         return [
-          'Todas as funcionalidades do Essencial',
+          'Todas as funcionalidades da Produtora',
+          'Acesso aos 3 apps: Criação, Prestação de Contas e Gestor',
           'Export para prestação de contas',
           'Customização de critérios para avaliação de notas com IA',
           'Desenvolvimento de módulos customizados',
-          'Usuários Ilimitados',
-          'Projetos Ilimitados',
+          'Até 20 usuários',
+          '500 créditos/mês — recarga mensal, não acumula',
         ];
       case 'essencial':
         return [
-          'Todas as funcionalidades do Básico',
-          'Geração Automática e Inteligente de textos de projeto (justificativa/objetivos)',
-          'Auditoria financeira prévia: Comparação do orçamento com índices de mercado',
-          'Módulo Execução completo (Controle de rubricas, importação de notas fiscais)',
+          'Todas as funcionalidades do Proponente',
+          'Acesso aos 3 apps: Criação, Prestação de Contas e Gestor',
           'Até 5 usuários',
-          'Infinitos projetos',
+          'Projetos ilimitados',
+          '200 créditos/mês — recarga mensal, não acumula',
         ];
       case 'basico':
         return [
@@ -321,6 +321,7 @@ const GerenciarAssinatura = () => {
           'Avaliação Inteligente do Projeto com notas e sugestões iniciais',
           '1 usuário',
           'Até 3 projetos ativos/ano',
+          '50 créditos/mês — recarga mensal, não acumula',
         ];
       default:
         return [];

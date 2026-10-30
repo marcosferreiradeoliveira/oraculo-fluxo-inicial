@@ -538,11 +538,11 @@ const Conta = () => {
                       <div className="text-center">
                         <Badge className={userData?.isPremium ? "bg-gradient-to-r from-oraculo-gold to-oraculo-magenta text-white mb-2" : "bg-gray-500 text-white mb-2"}>
                           {userData?.isPremium 
-                            ? (userData?.planType === 'essencial' 
-                                ? 'Plano Essencial' 
-                                : userData?.planType === 'premium' 
-                                  ? 'Plano Premium Enterprise' 
-                                  : 'Plano Básico')
+                            ? (userData?.planType === 'essencial'
+                                ? 'Plano Produtora'
+                                : userData?.planType === 'premium'
+                                  ? 'Plano Institucional'
+                                  : 'Plano Proponente')
                             : 'Plano Gratuito'}
                         </Badge>
                         <p className="text-2xl font-bold text-gray-900">
@@ -550,7 +550,7 @@ const Conta = () => {
                             ? (userData?.planType === 'essencial' 
                                 ? 'R$ 349,00/mês' 
                                 : userData?.planType === 'premium' 
-                                  ? 'R$ 1,00/mês' 
+                                  ? 'Preço sob consulta' 
                                   : 'R$ 99,00/mês')
                             : 'Gratuito'}
                         </p>
