@@ -1688,7 +1688,7 @@ exports.criarAssinaturaPremiumStripe = onRequest(
       let customerName = '';
       try {
         const userDoc = await db.collection('usuarios').doc(userId).get();
-        if (userDoc.exists()) {
+        if (userDoc.exists) {
           const userData = userDoc.data();
           customerName = userData.nome_completo || '';
           console.log('[criarAssinaturaPremiumStripe] Nome do usuário:', customerName);
