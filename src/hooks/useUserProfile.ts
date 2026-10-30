@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { deriveEntitlements, type Entitlements } from '@/lib/entitlements';
+import { deriveEntitlements, type Entitlements, type PlanId } from '@/lib/entitlements';
 
 export type PremiumProjectSummary = {
   id: string;
@@ -19,6 +19,7 @@ export type HomeDashboardMetrics = {
 export type UserProfileState = {
   nome: string;
   isPremium: boolean;
+  plan: PlanId | null;
   planType: string | null;
   creditos: number;
   metrics: HomeDashboardMetrics;
@@ -46,13 +47,35 @@ export function etapaLabel(index: number): string {
   return 'Em andamento';
 }
 
-function planLabelFromType(planType: string | null | undefined, isPremium: boolean): string {
+const PLAN_LABEL: Record<PlanId, string> = {
+  free: 'Gratuito',
+  proponente: 'Proponente',
+  produtora: 'Produtora',
+  institucional: 'Institucional',
+};
+
+function normalizePlanId(raw: unknown): PlanId | null {
+  const p = typeof raw === 'string' ? raw.toLowerCase().trim() : '';
+  if (p === 'free' || p === 'proponente' || p === 'produtora' || p === 'institucional') {
+    return p;
+  }
+  return null;
+}
+
+/** Rótulo exibido — prioriza `plan`; legado só via planType (sem isPremium). */
+export function planLabelFromProfile(
+  plan: PlanId | null | undefined,
+  planType: string | null | undefined,
+): string {
+  if (plan && PLAN_LABEL[plan]) return PLAN_LABEL[plan];
+
   const pt = (planType || '').toLowerCase();
-  if (pt === 'essencial') return 'Essencial';
-  if (pt === 'basico') return 'Básico';
-  if (pt === 'premium' || isPremium) return 'Premium';
-  if (pt === 'free') return 'Starter';
-  return isPremium ? 'Premium' : 'Starter';
+  if (pt === 'basico') return 'Proponente';
+  if (pt === 'essencial' || pt === 'intermediario') return 'Produtora';
+  if (pt === 'premium' || pt === 'avancado') return 'Institucional';
+  if (pt === 'free') return 'Gratuito';
+
+  return 'Gratuito';
 }
 
 export function useUserProfile() {
@@ -126,9 +149,12 @@ export function useUserProfile() {
           isAdmin: data.isAdmin === true,
         });
 
+        const plan = normalizePlanId(data.plan);
+
         setProfile({
           nome,
           isPremium,
+          plan,
           planType: (data.planType as string) ?? null,
           creditos: typeof data.creditos === 'number' ? data.creditos : Number(data.creditos ?? 0),
           metrics,
@@ -151,7 +177,7 @@ export function useUserProfile() {
     loading,
     isPremium: profile?.isPremium === true,
     profile,
-    planLabel: planLabelFromType(profile?.planType, profile?.isPremium === true),
+    planLabel: planLabelFromProfile(profile?.plan, profile?.planType),
   };
 }
 
