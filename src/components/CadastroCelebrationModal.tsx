@@ -53,7 +53,7 @@ export function CadastroCelebrationModal({ open, payload, onClose }: Props) {
             <DialogDescription asChild>
               <div className="rounded-2xl border-2 border-oraculo-blue/20 bg-gradient-to-r from-oraculo-blue/10 to-oraculo-purple/10 p-5 text-base font-semibold leading-relaxed text-gray-800">
                 Parabéns, você ganhou{' '}
-                <span className="text-oraculo-purple">15 créditos</span> gratuitamente para testar a
+                <span className="text-oraculo-purple">30 créditos</span> gratuitamente para testar a
                 plataforma!
               </div>
             </DialogDescription>

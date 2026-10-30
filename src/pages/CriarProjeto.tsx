@@ -368,7 +368,11 @@ const CriarProjeto = () => {
         }
 
         const docRef = await addDoc(collection(db, 'projetos'), projetoData);
-        await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        try {
+          await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        } catch (countErr) {
+          console.warn('[CriarProjeto] projetos_criados_count (landing auto-avaliar):', countErr);
+        }
         trackProjectCreated({ projectId: docRef.id, hasEdital: !!editalId });
 
         clearLandingAutoAvaliarPending();
@@ -476,7 +480,11 @@ const CriarProjeto = () => {
         }
 
         const docRef = await addDoc(collection(db, 'projetos'), projetoData);
-        await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        try {
+          await updateDoc(doc(db, 'usuarios', user.uid), { projetos_criados_count: increment(1) });
+        } catch (countErr) {
+          console.warn('[CriarProjeto] projetos_criados_count (continuar prévia):', countErr);
+        }
         trackProjectCreated({ projectId: docRef.id, hasEdital: !!editalId });
         clearPendingAnalisePreview();
         clearCriarProjetoDraft();
@@ -1270,7 +1278,11 @@ const CriarProjeto = () => {
       if (pendingCombina) clearPendingAnalisePreview();
 
       const userRef = doc(db, 'usuarios', user.uid);
-      await updateDoc(userRef, { projetos_criados_count: increment(1) });
+      try {
+        await updateDoc(userRef, { projetos_criados_count: increment(1) });
+      } catch (countErr) {
+        console.warn('[CriarProjeto] projetos_criados_count (submit):', countErr);
+      }
       
       // Track project created
       trackProjectCreated({
@@ -1631,7 +1643,7 @@ const CriarProjeto = () => {
                       </p>
                     ) : (
                       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
-                        Para ver o parecer completo você precisa de uma conta gratuita (15 créditos). A
+                        Para ver o parecer completo você precisa de uma conta gratuita (30 créditos). A
                         prévia abaixo é gerada antes do cadastro.
                       </p>
                     )}
@@ -1693,7 +1705,7 @@ const CriarProjeto = () => {
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/55 backdrop-blur-[2px] px-6 py-8 text-center gap-4">
                             <Lock className="h-11 w-11 text-oraculo-purple shrink-0" aria-hidden />
                             <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 leading-snug max-w-md mx-auto">
-                              Ver avaliação completa: crie sua conta grátis (15 créditos)
+                              Ver avaliação completa: crie sua conta grátis (30 créditos)
                             </p>
                             <Link
                               to={cadastroAposPreviewUrl}

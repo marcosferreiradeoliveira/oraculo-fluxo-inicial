@@ -10,15 +10,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'marcosferreira@mobcontent.com.br'
+        && request.auth.token.email_verified == true;
+    }
+
     function isAuth() {
       return isSignedIn();
     }
 
     function isPlatformAdmin() {
-      return isSignedIn() && request.auth.token.email.lower() in [
-        'marcosferreira@mobcontent.com.br',
-        'mobcontent.mda@gmail.com'
-      ];
+      return isSignedIn()
+        && request.auth.token.email.lower() == 'marcosferreira@mobcontent.com.br'
+        && request.auth.token.email_verified == true;
     }
 
     function authEmailLower() {
@@ -33,23 +38,16 @@ service cloud.firestore {
       return request.auth.token.email != null && docEmailLower() == authEmailLower();
     }
 
-    function canReadUsuario(userId) {
-      return isSignedIn() && (
-        userId == request.auth.uid
-        || (resource != null && resource.data.get('uid', '') == request.auth.uid)
-        || (resource != null && emailsMatch())
-        || (resource != null && resource.data.get('fornecedorOwnerUid', '') == request.auth.uid)
-        || isPlatformAdmin()
-        || isOwnerUpdatingTeamMember(userId)
-        || isManagerUpdatingTeamMember(userId)
-        || canInviteToEmpresa()
-      );
+    function canReadOwnUsuario(userId) {
+      return isSignedIn() && (userId == request.auth.uid || isAdmin());
     }
 
     function billingFieldNames() {
       return [
         'plan', 'planStatus', 'entitlements', 'creditos', 'credits', 'isPremium', 'planType',
-        'stripeSubscriptionId', 'stripeCustomerId', 'lastCreditRefill', 'lastCreditRefillAt'
+        'stripeSubscriptionId', 'stripeCustomerId', 'lastCreditRefill', 'lastCreditRefillAt',
+        'trialCredits', 'role',
+        'fornecedorId', 'fornecedorOwnerUid', 'fornecedorNivelAcesso'
       ];
     }
 
@@ -58,16 +56,7 @@ service cloud.firestore {
     }
 
     function isBillingFieldChanged() {
-      return billingFieldNames().hasAny(request.resource.data.diff(resource.data).affectedKeys());
-    }
-
-    function fornecedorSelfLinkKeysOnly() {
-      return userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly([
-            'role', 'fornecedorId', 'fornecedorOwnerUid', 'fornecedorNivelAcesso',
-            'mustChangePassword', 'createdAt', 'updatedAt'
-          ]);
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(billingFieldNames());
     }
 
     // ─── Finance / Criação: empresas, membros, convites ───────────────────
@@ -192,8 +181,18 @@ service cloud.firestore {
         .hasOnly([
           'nome_completo', 'whatsapp', 'empresa', 'equipeBio', 'portfolio', 'dadosCadastrais',
           'dadosCadastraisPessoa', 'dadosCadastraisEmpresa',
-          'defaultEmpresaId', 'empresaIds', 'updatedAt'
+          'defaultEmpresaId', 'empresaIds', 'updatedAt',
+          'origem', 'data_cadastro', 'createdAt', 'perfil_dados_coletados', 'nomeCompletoInicial',
+          'attribution',
+          'lastLoginAt', 'ultimo_login', 'email', 'name', 'uid', 'financeiroEmail', 'photoURL',
+          'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id',
+          'guiasBaixados', 'portfolioResumoAvaliacao', 'equipeResumoAvaliacao', 'contextoResumoAtualizadoEm'
         ]);
+    }
+
+    function projetosCountIncrementOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['projetos_criados_count'])
+        && request.resource.data.projetos_criados_count == resource.data.get('projetos_criados_count', 0) + 1;
     }
 
     function empresaLinkKeysOnly() {
@@ -252,14 +251,7 @@ service cloud.firestore {
         && userId == request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email is string
-        && request.resource.data.nome_completo is string
-        && request.resource.data.role is string;
-    }
-
-    function fornecedorNivelSyncOnly() {
-      return userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['fornecedorNivelAcesso', 'updatedAt']);
+        && !hasBillingFields();
     }
 
     function gestorFornecedorNivelSyncOnly() {
@@ -270,10 +262,7 @@ service cloud.firestore {
     }
 
     function canBillingUsuario(userId) {
-      return canReadUsuario(userId) && (
-        userId == request.auth.uid
-        || resource.data.get('uid', '') == request.auth.uid
-      );
+      return isSignedIn() && userId == request.auth.uid;
     }
 
     function usuarioCreditosAtuais() {
@@ -281,53 +270,42 @@ service cloud.firestore {
     }
 
     function modulo2IaUsageKeysOnly() {
-      return canBillingUsuario(userId)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['modulo2IaIniciadosAno', 'modulo2IaIniciadosCount', 'updatedAt']);
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['modulo2IaIniciadosAno', 'modulo2IaIniciadosCount', 'updatedAt']);
     }
 
     match /usuarios/{userId} {
-      allow read: if canReadUsuario(userId);
+      allow read: if canReadOwnUsuario(userId);
 
-      allow create: if isSignedIn() && (
-        isPlatformAdmin()
-        || isOwnerUpdatingTeamMember(userId)
-        || isManagerUpdatingTeamMember(userId)
+      allow create: if isAdmin()
         || (
-          canInviteToEmpresa()
-          && request.resource.data.invitedBy == request.auth.uid
-          && request.resource.data.status == 'pending'
+          isSignedIn()
+          && userId == request.auth.uid
           && !hasBillingFields()
-        )
-        || (isValidUsuarioCreate(userId) && !hasBillingFields())
-        || (
-          userId == request.auth.uid
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.email is string
-          && !hasBillingFields()
-        )
-      );
+          && (
+            isValidUsuarioCreate(userId)
+            || (
+              request.resource.data.uid == request.auth.uid
+              && request.resource.data.email is string
+            )
+          )
+        );
 
-      allow update: if isSignedIn() && (
-        isPlatformAdmin()
-        || isOwnerUpdatingTeamMember(userId)
-        || isManagerUpdatingTeamMember(userId)
+      allow update: if isAdmin()
         || (
-          canReadUsuario(userId)
+          isSignedIn()
+          && userId == request.auth.uid
+          && !isBillingFieldChanged()
           && (
             loginTouchKeysOnly()
             || profileEditKeysOnly()
             || empresaLinkKeysOnly()
-            || fornecedorNivelSyncOnly()
-            || gestorFornecedorNivelSyncOnly()
             || modulo2IaUsageKeysOnly()
-            || fornecedorSelfLinkKeysOnly()
+            || projetosCountIncrementOnly()
           )
-        )
-        || (request.auth.uid == userId && !isBillingFieldChanged())
-      );
+        );
 
-      allow delete: if isPlatformAdmin();
+      allow delete: if isAdmin() || isPlatformAdmin();
     }
 
     function authUsuarioData() {
@@ -740,37 +718,106 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    match /users/{id} {
-      allow read, write: if isSignedIn();
+    function analysisOwnerUid(data) {
+      return data.get('userId', data.get('user_id', data.get('uid', '')));
+    }
+
+    function analysisOwnerUnchanged() {
+      return analysisOwnerUid(request.resource.data) == analysisOwnerUid(resource.data);
+    }
+
+    function projectUserUid(data) {
+      return data.get('userId', data.get('uid', ''));
+    }
+
+    function isProductionProjectOwner(projectId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/production_projects/$(projectId))
+        && get(/databases/$(database)/documents/production_projects/$(projectId)).data.userId
+          == request.auth.uid;
+    }
+
+    function canAccessProjectUserRecord(data) {
+      return isAdmin()
+        || projectUserUid(data) == request.auth.uid
+        || (data.get('projectId', '') is string
+            && data.projectId != ''
+            && isProductionProjectOwner(data.projectId));
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin()
+        || (
+          isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.get('id', uid) == request.auth.uid
+        );
+      allow update, delete: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid);
     }
 
     match /project_users/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && canAccessProjectUserRecord(resource.data);
+      allow create: if isSignedIn() && canAccessProjectUserRecord(request.resource.data);
+      allow update, delete: if isSignedIn() && canAccessProjectUserRecord(resource.data);
     }
 
-    match /guias/{id} {
+    match /guias/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+      match /{sub=**} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
     }
 
     match /analyses/{id} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read: if isSignedIn()
+        && (isAdmin() || analysisOwnerUid(resource.data) == request.auth.uid);
+      allow create: if isSignedIn()
+        && (isAdmin() || analysisOwnerUid(request.resource.data) == request.auth.uid);
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (
+          analysisOwnerUid(resource.data) == request.auth.uid
+          && analysisOwnerUnchanged()
+        )
+      );
+      allow delete: if isSignedIn()
+        && (isAdmin() || analysisOwnerUid(resource.data) == request.auth.uid);
     }
 
-    match /podcasts/{id} {
+    match /podcasts/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+      match /{sub=**} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
     }
 
-    match /podcast_episodios/{id} {
+    match /podcast_episodios/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+      match /{sub=**} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
     }
 
     match /editais/{editalId} {
-      allow get, list, read: if true;
-      allow create, update, delete: if isSignedIn() || isPlatformAdmin();
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+      match /{sub=**} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    match /remarketing_leads/{docId} {
+      allow create: if request.resource.data.email is string && request.resource.data.email.size() >= 5;
+      allow read, update, delete: if isPlatformAdmin();
     }
 
     match /newsletter_emails/{docId} {

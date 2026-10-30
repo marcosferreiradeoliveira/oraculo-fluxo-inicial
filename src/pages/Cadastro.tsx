@@ -76,7 +76,7 @@ function CadastroBeneficiosAside({ compact }: { compact?: boolean }) {
           }`}
         >
           <p className={`font-semibold text-gray-900 ${compact ? 'text-sm' : 'text-base'}`}>
-            Cadastro gratuito · 15 créditos para começar
+            Cadastro gratuito · 30 créditos para começar
           </p>
           <p className={`text-gray-600 mt-1 ${compact ? 'text-xs' : 'text-sm'}`}>
             Crie sua conta em poucos minutos e continue de onde parou.
@@ -524,7 +524,7 @@ const Cadastro = () => {
             ) : cadastroFunnel ? (
               <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-oraculo-blue/30 bg-oraculo-blue/5 px-3 py-1.5 text-sm font-semibold text-oraculo-purple">
                 <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
-                15 créditos grátis, sem cartão
+                30 créditos grátis, sem cartão
               </p>
             ) : (
               <p className="text-oraculo-blue font-semibold text-base md:text-lg mb-6">
